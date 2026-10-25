@@ -164,12 +164,24 @@ Track deployment readiness, benchmark execution, hallway testing, README, demo v
 - [ ] **Step 36 Submit** — `PENDING`
   - Devpost form, public repo, submission links. Requires Steps 31 (deploy), 35 (video) and the public repo push first.
 
+### Oct 26 fix-list pass (19 findings from FIX_PROMPTS.md)
+- [x] Provider migrated to Nebius Token Factory (llm.ts defaults, env names, model IDs, copy, smoke:models script). Live verification pending `NEBIUS_API_KEY` in `.env` (not set by the agent).
+- [x] Model/pipeline errors visible end to end: LlmError classification, `<stage>_model_error` events, fix-attempt `output_tail`, worker failed-stage fix, run-page error panel with cause copy + Retry (new `/api/runs/:id/rerun` route), timeline auto-expands failures, amber fallback labels.
+- [x] Live updates fixed: SSE closes only on pipeline completion (was: report_started), client derives current stage from events, refetches via refs, replay-mode crash fixed (stored events play at recorded speed), polling fallback after 20s.
+- [x] Mascot on every page (hidden only on /dev/components), breakpoint-correct size, page tips, minimise button (persisted).
+- [x] Watcher live-first: ffmpeg installed; pipeline extracts frames and calls the live Watcher whenever a video + key exist; fixture fallback now carries the reason and a model-error event; uploaded videos no longer dead-end.
+- [x] Frontend: per-stage tokens/duration/model in timeline (real event payloads), fallback status pill, benchmark aggregates from real data, dev-only queued hint, health per-role model status + home notice.
+- [x] Security: sandbox fail-closed (REPLAY_ALLOW_HOST_SANDBOX policy) + env allowlist (test-proven), path-traversal/symlink/protected-file guard on patches (test-proven), socket-based client IP, body-limit + upload magic bytes, run listing privacy (sample-only, no notes/paths), UUID validation, SSE caps + idle timeout, 24h artifact retention, security headers (CSP/nosniff/referrer/permissions/frame), report skipHtml, non-root Dockerfile + ffmpeg, dompurify/postcss/drizzle patched via overrides (audit: 1 high left, zod 4 major migration deferred and documented), repo hygiene (skill-hub files gitignored, temp files removed).
+- [x] docs/SECURITY.md written with threat model, verified controls, open items (Docker sandbox wiring, zod 4, shared rate-limit store).
+- Verification: typecheck 9/9; agents 68/68, api 23/23, video 10/10, sandbox 2/2, demo-shop 11/11, web e2e 10/10 (after fixing the CSP hydration break and the listing-schema mismatch the new tests caught).
+
 ### Submission readiness checklist (evidence-based)
 - [x] Working product: web UI + API + worker + CLI pipeline, real red-to-green verified
 - [x] Benchmark results with methodology and honest failures
 - [x] README runnable by a stranger (verified commands)
 - [x] MIT LICENSE + THIRD_PARTY_NOTICES (AGPL mascot dependency documented)
-- [ ] Public repo push, deployed public URL, demo video
+- [x] Public repo push: github.com/priyanshu2007-cmd/Replay @ 521105b (gitleaks clean on history, 2026-10-25)
+- [ ] Deployed public URL, demo video
 - [ ] Watcher live-vision unblocked (new NVIDIA key + `brew install ffmpeg`)
 
 ---

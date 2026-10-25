@@ -18,8 +18,19 @@ import { packRepository, RepoBundle } from './packer.js';
 import { fixtureToBugReport, locateSuspects, LocatorDeps, SampleFixtureSchema } from './locator.js';
 import { executeReproductionTest, generateReproduction, ReproducerDeps } from './reproducer.js';
 import { verifyReproduction, VerifierDeps } from './verifier.js';
+import { redactSecretText, resolveApiKey, resolveModel } from './llm.js';
+import { analyzeBugVideo } from './watcher.js';
+import { VideoProcessor } from '@replay/video';
 import { applyPatchToDirectory, FixerDeps, proposeFix } from './fixer.js';
 import { generateReport, ReporterDeps } from './reporter.js';
+
+/** Last N lines of process output for error events; secrets redacted. */
+function outputTail(res: { stdout?: string; stderr?: string }, lines = 40): string {
+  const text = `${res.stderr ?? ''}\n${res.stdout ?? ''}`.trim();
+  if (!text) return '';
+  return redactSecretText(text.split('\n').slice(-lines).join('\n')).slice(0, 4000);
+}
+
 
 export interface PipelineOptions {
   targetRepoRoot: string;
@@ -34,6 +45,7 @@ export interface PipelineOptions {
 }
 
 export interface PipelineDeps {
+  watcherDeps?: import('./watcher.js').WatcherDeps;
   locatorDeps?: LocatorDeps;
   reproducerDeps?: ReproducerDeps;
   verifierDeps?: VerifierDeps;
@@ -144,35 +156,107 @@ export async function runPipeline(
     video_path: options.videoPath,
   });
 
-  if (options.bugReport) {
-    bugReport = options.bugReport;
-    videoAnalysis = 'none';
-  } else if (sampleId) {
-    // Check if sample expected.json exists
+  // Load the sample fixture when available: it is the fallback and the
+  // ground truth a live Watcher result is compared against.
+  let fixtureJson: string | undefined;
+  if (sampleId) {
     const candidatePaths = [
       path.resolve(`samples/${sampleId}/expected.json`),
       path.resolve(targetRepoRoot, `../../samples/${sampleId}/expected.json`),
     ];
-    let fixtureJson: string | undefined;
     for (const p of candidatePaths) {
       if (fs.existsSync(p)) {
         fixtureJson = await fs.promises.readFile(p, 'utf8');
         break;
       }
     }
+  }
 
-    if (fixtureJson) {
+  const liveWatcherPossible =
+    !!options.videoPath &&
+    (await VideoProcessor.checkFfmpeg()) &&
+    !!resolveApiKey('watcher');
+
+  if (liveWatcherPossible) {
+    // Live vision: extract frames and send them to the Watcher model.
+    const framesDir = path.join(artifactsDir, 'frames');
+    const extracted = await VideoProcessor.extractFrames(options.videoPath!, framesDir);
+    const stride = Math.ceil(extracted.length / 40) || 1;
+    const selected = extracted.filter((_, i) => i % stride === 0).slice(0, 40);
+    const watcherFrames = await Promise.all(
+      selected.map(async (f) => ({
+        timestampS: f.timestampS,
+        jpegBase64: (await fs.promises.readFile(f.filePath)).toString('base64'),
+      })),
+    );
+    try {
+      const watcherRes = await analyzeBugVideo({
+        frames: watcherFrames,
+        route: sampleId ? `/?bug=${sampleId}` : undefined,
+      }, deps.watcherDeps);
+      bugReport = {
+        defect_found: watcherRes.report.defect_found,
+        summary: watcherRes.report.summary,
+        steps: watcherRes.report.steps.map((st) => ({
+          timestamp_s: st.timestamp_s,
+          description: st.description,
+          visible_text: st.visible_text,
+        })),
+        first_failure_timestamp_s: watcherRes.report.first_failure_timestamp_s,
+        expected_behavior: watcherRes.report.expected_behavior,
+        actual_behavior: watcherRes.report.actual_behavior,
+        visible_text: watcherRes.report.visible_text,
+        route: watcherRes.report.route,
+        confidence: watcherRes.report.confidence,
+      } as BugReport;
+      videoAnalysis = 'live';
+      if (sampleId && fixtureJson) {
+        const expected = SampleFixtureSchema.parse(JSON.parse(fixtureJson));
+        const matches = Math.abs(expected.failure_timestamp_s - bugReport.first_failure_timestamp_s) <= 2;
+        await collector.emit('watch', 'watch_fixture_comparison', 'watcher', {
+          matches_fixture: matches,
+          expected_failure_timestamp_s: expected.failure_timestamp_s,
+          live_failure_timestamp_s: bugReport.first_failure_timestamp_s,
+        });
+      }
+    } catch (err: any) {
+      // Live vision failed: fall back to the fixture, with the error on record.
+      await collector.emit('watch', 'watch_model_error', 'watcher', {
+        code: err?.code ?? 'unknown',
+        model: err?.model ?? resolveModel('watcher'),
+        message: err?.message ?? String(err),
+      });
+      if (!fixtureJson) throw err;
       const parsedFixture = SampleFixtureSchema.parse(JSON.parse(fixtureJson));
       bugReport = fixtureToBugReport(parsedFixture);
       videoAnalysis = 'fixture_assisted';
-      blockedStages.push('Live Watcher omitted: using fixture-assisted metadata clip');
+      blockedStages.push(`Live Watcher failed (${err?.code ?? 'unknown'}): using fixture metadata`);
       await collector.emit('watch', 'watch_fixture_fallback', 'watcher', {
-        reason: 'Using verified fixture clip metadata',
+        reason: `Live Watcher failed: ${err?.code ?? 'unknown'}`,
         sample_id: sampleId,
       });
-    } else {
-      throw new Error(`Sample fixture not found for ID: ${sampleId}`);
     }
+  } else if (options.bugReport) {
+    bugReport = options.bugReport;
+    videoAnalysis = 'none';
+  } else if (sampleId && fixtureJson) {
+    const parsedFixture = SampleFixtureSchema.parse(JSON.parse(fixtureJson));
+    bugReport = fixtureToBugReport(parsedFixture);
+    videoAnalysis = 'fixture_assisted';
+    const reason = !(await VideoProcessor.checkFfmpeg())
+      ? 'ffmpeg not installed'
+      : !resolveApiKey('watcher')
+        ? 'no watcher API key configured'
+        : 'no video path';
+    blockedStages.push(`Live Watcher unavailable: ${reason}`);
+    await collector.emit('watch', 'watch_fixture_fallback', 'watcher', {
+      reason: `Using verified fixture clip metadata (${reason})`,
+      sample_id: sampleId,
+    });
+  } else if (options.videoPath) {
+    throw new Error(
+      `Cannot analyze the uploaded video: ffmpeg or the watcher API key is missing. Install ffmpeg (brew install ffmpeg) and set NEBIUS_API_KEY.`,
+    );
   } else {
     throw new Error('Pipeline requires either bugReport, sampleId, or valid videoPath input.');
   }
@@ -196,6 +280,9 @@ export async function runPipeline(
   await collector.emit('locate', 'locate_completed', 'locator', {
     suspects_count: locatorOutput.suspects.length,
     top_suspect: locatorOutput.suspects[0] ?? null,
+    tokens: locatorRes.metrics.totalTokens,
+    duration_ms: locatorRes.metrics.durationMs,
+    model: locatorRes.model,
   });
 
   // --- STAGE 4: REPRODUCE ---
@@ -244,6 +331,9 @@ export async function runPipeline(
   await collector.emit('reproduce', 'reproduce_completed', 'reproducer', {
     test_name: reproducerOutput.test_name,
     assertion: reproducerOutput.assertion,
+    tokens: reproRes.metrics.totalTokens,
+    duration_ms: reproRes.metrics.durationMs,
+    model: reproRes.model,
   });
 
   // --- STAGE 5: VERIFY (Reproduction Gate) ---
@@ -264,10 +354,22 @@ export async function runPipeline(
   );
   const verifierOutput = verifierRes.output;
 
+  if (verifierRes.modelError) {
+    await collector.emit('verify', 'verify_model_error', 'verifier', {
+      code: verifierRes.modelError.code,
+      model: verifierRes.modelError.model,
+      status: verifierRes.modelError.status ?? null,
+      message: verifierRes.modelError.message,
+    });
+  }
+
   await collector.emit('verify', 'verify_completed', 'verifier', {
     classification: verifierOutput.classification,
     same_defect: verifierOutput.same_defect,
     reason: verifierOutput.reason,
+    tokens: verifierRes.metrics.totalTokens,
+    duration_ms: verifierRes.metrics.durationMs,
+    model: verifierRes.modelError ? 'deterministic-fallback' : verifierRes.model,
   });
 
   // If reproduction is not genuine, stop immediately: NEVER fix an unverified bug
@@ -291,6 +393,15 @@ export async function runPipeline(
 
     const reporterRes = await generateReport(reportData, deps.reporterDeps);
     await persistReportArtifacts(runId, reporterRes.output, artifactsDir);
+
+    if (reporterRes.modelError) {
+      await collector.emit('report', 'report_model_error', 'reporter', {
+        code: reporterRes.modelError.code,
+        model: reporterRes.modelError.model,
+        status: reporterRes.modelError.status ?? null,
+        message: reporterRes.modelError.message,
+      });
+    }
 
     await collector.emit('report', 'report_completed', 'reporter', {
       status: 'unreproduced',
@@ -322,6 +433,7 @@ export async function runPipeline(
   await collector.emit('fix', 'fix_started', 'fixer');
 
   let lastFixerOutput: FixerOutput | undefined;
+  let fixerMetrics: { totalTokens: number } | undefined;
   let reproAfterFixPassed = false;
   let baselineRegressionPassed = false;
   let attempt = 0;
@@ -341,6 +453,7 @@ export async function runPipeline(
       deps.fixerDeps
     );
     lastFixerOutput = fixRes.output;
+    fixerMetrics = fixRes.metrics;
 
     if (!lastFixerOutput.fixed) {
       await collector.emit('fix', 'fix_attempt_failed', 'fixer', {
@@ -360,6 +473,7 @@ export async function runPipeline(
         await collector.emit('fix', 'fix_attempt_failed', 'fixer', {
           attempt,
           reason: 'Vite build failed after patch',
+          output_tail: outputTail(buildRes),
         });
         continue;
       }
@@ -389,6 +503,7 @@ export async function runPipeline(
         await collector.emit('fix', 'fix_attempt_failed', 'fixer', {
           attempt,
           reason: 'Reproduction test still failed after patch',
+          output_tail: outputTail(postFixRepro),
         });
         continue;
       }
@@ -410,6 +525,7 @@ export async function runPipeline(
         await collector.emit('fix', 'fix_attempt_failed', 'fixer', {
           attempt,
           reason: 'Baseline regression suite broke after patch',
+          output_tail: outputTail(baselineRes),
         });
         continue;
       }
@@ -437,6 +553,7 @@ export async function runPipeline(
     status: finalStatus,
     attempts: attempt,
     is_fixed: isFixed,
+    tokens: fixerMetrics?.totalTokens ?? 0,
   });
 
   // --- STAGE 7: REPORT ---
@@ -461,6 +578,15 @@ export async function runPipeline(
 
   const reporterRes = await generateReport(reportData, deps.reporterDeps);
   await persistReportArtifacts(runId, reporterRes.output, artifactsDir);
+
+  if (reporterRes.modelError) {
+    await collector.emit('report', 'report_model_error', 'reporter', {
+      code: reporterRes.modelError.code,
+      model: reporterRes.modelError.model,
+      status: reporterRes.modelError.status ?? null,
+      message: reporterRes.modelError.message,
+    });
+  }
 
   await collector.emit('report', 'report_completed', 'reporter', {
     status: finalStatus,

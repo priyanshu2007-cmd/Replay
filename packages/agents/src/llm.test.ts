@@ -4,9 +4,9 @@ import { AGENT_MODEL_DEFAULTS, resolveApiKey, resolveModel, LlmClient, AgentRole
 
 const ROLES: AgentRole[] = ['watcher', 'verifier', 'locator', 'reproducer', 'fixer', 'reporter'];
 const ENV_VARS = [
-  'NVIDIA_API_KEY',
-  'NVIDIA_BASE_URL',
-  ...ROLES.map(r => `NVIDIA_API_KEY_${r.toUpperCase()}`),
+  'NEBIUS_API_KEY',
+  'NEBIUS_BASE_URL',
+  ...ROLES.map(r => `NEBIUS_API_KEY_${r.toUpperCase()}`),
   ...ROLES.map(r => `MODEL_${r.toUpperCase()}`),
 ];
 
@@ -26,15 +26,15 @@ function withCleanEnv<T>(fn: () => T): T {
   }
 }
 
-test('role map covers all six roles with exact NVIDIA Build catalog defaults', () => {
+test('role map covers all six roles with exact Token Factory catalog defaults', () => {
   withCleanEnv(() => {
     assert.deepEqual(Object.keys(AGENT_MODEL_DEFAULTS).sort(), [...ROLES].sort());
-    assert.equal(resolveModel('watcher'), 'nvidia/nemotron-3.5-super-vl-120b-a12b');
-    assert.equal(resolveModel('verifier'), 'nvidia/nemotron-3.5-super-vl-120b-a12b');
-    assert.equal(resolveModel('locator'), 'nvidia/nemotron-3.5-lightning-30b-a3b');
-    assert.equal(resolveModel('reproducer'), 'nvidia/nemotron-3-ultra-550b-a55b');
-    assert.equal(resolveModel('fixer'), 'nvidia/nemotron-3-ultra-550b-a55b');
-    assert.equal(resolveModel('reporter'), 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning');
+    assert.equal(resolveModel('watcher'), 'nvidia/Nemotron-3.5-Super-VL');
+    assert.equal(resolveModel('verifier'), 'nvidia/Nemotron-3.5-Super-VL');
+    assert.equal(resolveModel('locator'), 'nvidia/Nemotron-3_5-Lightning');
+    assert.equal(resolveModel('reproducer'), 'nvidia/Nemotron-3-Ultra-550b-a55b');
+    assert.equal(resolveModel('fixer'), 'nvidia/Nemotron-3-Ultra-550b-a55b');
+    assert.equal(resolveModel('reporter'), 'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B');
   });
 });
 
@@ -43,20 +43,20 @@ test('MODEL_<ROLE> env overrides the default model id', () => {
     process.env.MODEL_LOCATOR = 'custom/model-id';
     assert.equal(resolveModel('locator'), 'custom/model-id');
     delete process.env.MODEL_LOCATOR;
-    assert.equal(resolveModel('locator'), 'nvidia/nemotron-3.5-lightning-30b-a3b');
+    assert.equal(resolveModel('locator'), 'nvidia/Nemotron-3_5-Lightning');
   });
 });
 
-test('key resolution: per-role key wins, NVIDIA_API_KEY is the fallback, none yields undefined', () => {
+test('key resolution: per-role key wins, NEBIUS_API_KEY is the fallback, none yields undefined', () => {
   withCleanEnv(() => {
     assert.equal(resolveApiKey(), undefined);
     assert.equal(resolveApiKey('watcher'), undefined);
 
-    process.env.NVIDIA_API_KEY_LOCATOR = 'role-key';
+    process.env.NEBIUS_API_KEY_LOCATOR = 'role-key';
     assert.equal(resolveApiKey('locator'), 'role-key');
     assert.equal(resolveApiKey('watcher'), undefined);
 
-    process.env.NVIDIA_API_KEY = 'global-key';
+    process.env.NEBIUS_API_KEY = 'global-key';
     assert.equal(resolveApiKey('watcher'), 'global-key');
     assert.equal(resolveApiKey(), 'global-key');
     assert.equal(resolveApiKey('locator'), 'role-key');
@@ -65,7 +65,7 @@ test('key resolution: per-role key wins, NVIDIA_API_KEY is the fallback, none yi
 
 test('LlmClient refuses to construct without any NVIDIA key', () => {
   withCleanEnv(() => {
-    assert.throws(() => new LlmClient(), /NVIDIA_API_KEY/);
+    assert.throws(() => new LlmClient(), /NEBIUS_API_KEY/);
   });
 });
 

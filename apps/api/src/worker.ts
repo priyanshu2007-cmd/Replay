@@ -1,9 +1,10 @@
+import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { runPipeline, PipelineOptions, PipelineRunResult } from '@replay/agents';
-import { RunEvent, RunState } from '@replay/shared';
+import { RunEvent, RunStage, RunState } from '@replay/shared';
 import { getRunRepository, RunRecord, RunRepository, isKnownSampleId } from './runs.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -83,6 +84,36 @@ export class Worker {
 
     // Start poll loop
     this.scheduleNextPoll(0);
+
+    // Retention: uploaded videos and run artifacts are transient evidence.
+    const cleanup = () => this.cleanupOldArtifacts();
+    void cleanup();
+    this.cleanupTimer = setInterval(cleanup, 60 * 60 * 1000);
+  }
+
+  private cleanupTimer: NodeJS.Timeout | null = null;
+
+  /** Delete uploads and run artifacts older than 24 hours (plan retention). */
+  async cleanupOldArtifacts(now = Date.now()): Promise<number> {
+    const cutoff = now - 24 * 60 * 60 * 1000;
+    let removed = 0;
+    const dirs = [
+      path.join(this.repoRoot, 'artifacts', 'uploads'),
+      path.join(this.repoRoot, 'artifacts', 'runs'),
+    ];
+    for (const dir of dirs) {
+      const entries = await fs.readdir(dir).catch(() => []);
+      for (const entry of entries) {
+        const full = path.join(dir, entry);
+        const stat = await fs.stat(full).catch(() => null);
+        if (stat && stat.mtimeMs < cutoff) {
+          await fs.rm(full, { recursive: true, force: true }).catch(() => {});
+          removed++;
+        }
+      }
+    }
+    if (removed > 0) console.log(`[Replay Worker] Cleaned ${removed} artifacts older than 24h`);
+    return removed;
   }
 
   private scheduleNextPoll(delayMs = this.pollIntervalMs): void {
@@ -164,6 +195,8 @@ export class Worker {
       },
     });
 
+    let lastEventStage: RunStage = run.stage;
+
     try {
       const pipelineOptions: PipelineOptions = {
         targetRepoRoot: targetRepo,
@@ -173,6 +206,7 @@ export class Worker {
         runId: run.id,
         artifactsDir: path.resolve(this.repoRoot, `artifacts/runs/${run.id}`),
         onEvent: async (event: RunEvent) => {
+          lastEventStage = event.stage;
           await this.repo.addEvent(run.id, {
             seq: event.seq,
             stage: event.stage,
@@ -225,17 +259,22 @@ export class Worker {
 
       await this.repo.updateRun(run.id, {
         state: 'failed',
+        stage: lastEventStage,
         durationMs,
         completedAt: new Date(),
         workerLock: null,
       });
 
       await this.repo.addEvent(run.id, {
-        stage: run.stage,
+        stage: lastEventStage,
         agent: 'Worker',
         event_type: 'pipeline_failed',
         payload: {
           error: err?.message || String(err),
+          code: err?.code ?? null,
+          role: err?.role ?? null,
+          model: err?.model ?? null,
+          stage: lastEventStage,
           durationMs,
         },
       });
@@ -255,6 +294,10 @@ export class Worker {
     if (this.staleTimer) {
       clearInterval(this.staleTimer);
       this.staleTimer = null;
+    }
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
     }
     this.stopHeartbeat();
 

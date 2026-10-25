@@ -52,7 +52,7 @@ export const RunSummarySchema = z.object({
   stage: RunStageSchema,
   isSample: z.boolean(),
   videoKey: z.string(),
-  note: z.string().nullable(),
+  note: z.string().nullable().optional(),
   durationMs: z.number().nullable(),
   createdAt: Iso,
   updatedAt: Iso,
@@ -130,6 +130,14 @@ export const HealthSchema = z.object({
   status: z.string(),
   availableSamples: z.array(z.string()),
   limits: z.object({ maxUploadBytes: z.number(), allowedMimeTypes: z.array(z.string()) }),
+  models: z
+    .object({
+      keyConfigured: z.boolean(),
+      roles: z.record(z.string()),
+      note: z.string().optional(),
+    })
+    .partial({ roles: true, note: true })
+    .optional(),
 });
 
 export const CreateRunResponseSchema = z.object({
@@ -176,14 +184,19 @@ export function listRuns(limit = 50): Promise<{ runs: RunSummary[] }> {
   return request(`/api/runs?limit=${limit}`, z.object({ runs: z.array(RunSummarySchema) }));
 }
 
-export async function checkHealth(): Promise<boolean> {
+export interface HealthStatus {
+  ok: boolean;
+  modelsKeyConfigured?: boolean;
+}
+
+export async function checkHealth(): Promise<HealthStatus> {
   try {
     const res = await fetch(`${API_BASE}/api/health`, { cache: 'no-store', signal: AbortSignal.timeout(3000) });
-    if (!res.ok) return false;
-    HealthSchema.partial({ availableSamples: true, limits: true }).parse(await res.json());
-    return true;
+    if (!res.ok) return { ok: false };
+    const parsed = HealthSchema.partial({ availableSamples: true, limits: true }).parse(await res.json());
+    return { ok: true, modelsKeyConfigured: parsed.models?.keyConfigured };
   } catch {
-    return false;
+    return { ok: false };
   }
 }
 
@@ -202,6 +215,14 @@ export async function uploadVideo(file: File, note?: string): Promise<CreateRunR
   body.set('file', file);
   if (note) body.set('note', note);
   return request('/api/runs', CreateRunResponseSchema, { method: 'POST', body });
+}
+
+export function rerunRun(id: string): Promise<CreateRunResponse> {
+  return request(`/api/runs/${encodeURIComponent(id)}/rerun`, CreateRunResponseSchema, { method: 'POST' });
+}
+
+export function pollEvents(id: string): Promise<{ events: RunEvent[] }> {
+  return request(`/api/runs/${encodeURIComponent(id)}/events-page`, z.object({ events: z.array(RunEventSchema) }));
 }
 
 export function sseUrl(runId: string): string {

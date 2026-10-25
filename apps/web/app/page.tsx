@@ -20,6 +20,7 @@ export default function HomePage() {
   const [samples, setSamples] = useState<Sample[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [modelsKeyMissing, setModelsKeyMissing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -32,9 +33,10 @@ export default function HomePage() {
         setSamples(replaySamples ?? []);
         return;
       }
-      const healthy = await checkHealth();
+      const health = await checkHealth();
       if (cancelled) return;
-      if (!healthy) {
+      setModelsKeyMissing(health.ok && health.modelsKeyConfigured === false);
+      if (!health.ok) {
         const replaySamples = await listReplaySamples();
         if (cancelled) return;
         setMode({ kind: replaySamples ? 'replay' : 'offline' });
@@ -81,13 +83,19 @@ export default function HomePage() {
           <p className="text-[13px] text-secondary">{offlineReason}</p>
         </div>
       )}
+      {modelsKeyMissing && (
+        <p className="mt-4 rounded-s border border-border-subtle bg-panel px-3 py-2 text-[12px] text-muted">
+          Live model analysis is not configured on this backend (no model API key set). Sample runs will use
+          recorded fixtures for the Watch stage.
+        </p>
+      )}
       <section className="grid gap-8 py-10 md:grid-cols-7 md:py-14">
         <div className="flex flex-col justify-center gap-4 md:col-span-4">
           <h1 className="text-display text-primary">Drop a bug video. Get a failing test and a verified fix.</h1>
           <p className="max-w-[52ch] text-[16px] leading-relaxed text-secondary">
             Replay watches the recording, writes a Playwright test that fails the same way, patches the code, and
-            proves the fix by running the test again. Every result comes from a real run in a sandbox, with Nemotron
-            models on NVIDIA Build.
+            proves the fix by running the test again. Every result comes from a real run in a sandbox, with NVIDIA Nemotron models on
+            Nebius Token Factory.
           </p>
         </div>
         <div className="md:col-span-3">

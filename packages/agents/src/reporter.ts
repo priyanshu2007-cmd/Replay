@@ -13,7 +13,7 @@ import {
   RunState,
   VerifierOutput,
 } from '@replay/shared';
-import { LlmClient, ModelMetrics, resolveApiKey, resolveModel } from './llm.js';
+import { LlmClient, LlmError, ModelMetrics, resolveApiKey, resolveModel, toLlmError } from './llm.js';
 
 export const REPORTER_PROMPT_VERSION = 'v1';
 
@@ -59,6 +59,8 @@ export interface ReporterResult {
   metrics?: ModelMetrics;
   promptVersion: string;
   model?: string;
+  /** Set when the live model call failed and the deterministic fallback was used. */
+  modelError?: LlmError;
 }
 
 const ReporterLlmResponseSchema = z.object({
@@ -245,6 +247,7 @@ export async function generateReport(
     : `The defect could not be completely resolved within the allowed execution bounds.`;
 
   let metrics: ModelMetrics | undefined;
+  let reporterModelError: LlmError | undefined;
   const model = deps.model ?? resolveModel('reporter');
 
   if (!deps.skipLlm) {
@@ -262,8 +265,9 @@ export async function generateReport(
         title = res.data.title;
         executiveSummary = res.data.executive_summary;
         metrics = res.metrics;
-      } catch {
-        // Fall back gracefully to deterministic summary on model failure
+      } catch (err) {
+        // Surface the model failure with the deterministic summary, never silently.
+        reporterModelError = toLlmError(err, 'reporter', model);
       }
     }
   }
@@ -308,5 +312,6 @@ export async function generateReport(
     metrics,
     promptVersion: REPORTER_PROMPT_VERSION,
     model,
+    modelError: reporterModelError,
   };
 }

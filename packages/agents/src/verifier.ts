@@ -10,7 +10,7 @@ import {
   VerifierOutput,
   VerifierOutputSchema,
 } from '@replay/shared';
-import { LlmClient, ModelMetrics, resolveApiKey, resolveModel } from './llm.js';
+import { LlmClient, LlmError, ModelMetrics, resolveApiKey, resolveModel, toLlmError } from './llm.js';
 import { ReproExecutionResult } from './reproducer.js';
 
 export const VERIFIER_PROMPT_VERSION = 'v1';
@@ -48,6 +48,8 @@ export interface VerifierResult {
   metrics: ModelMetrics;
   promptVersion: string;
   model: string;
+  /** Set when the live model call failed and the deterministic fallback was used. */
+  modelError?: LlmError;
 }
 
 /** Construct messages sent to the Verifier model. */
@@ -206,13 +208,16 @@ export async function verifyReproduction(
         promptVersion: VERIFIER_PROMPT_VERSION,
         model,
       };
-    } catch {
-      // Model call unavailable or failed: fallback to deterministic verdict
+    } catch (err) {
+      // Model call unavailable or failed: emit the error with the fallback verdict,
+      // never silently. The UI labels this stage as a fallback.
+      const modelError = toLlmError(err, 'verifier', model);
       return {
         output: deterministic,
         metrics: { promptTokens: 0, completionTokens: 0, totalTokens: 0, durationMs: 0, model: 'deterministic-fallback' },
         promptVersion: VERIFIER_PROMPT_VERSION,
         model: 'deterministic-fallback',
+        modelError,
       };
     }
   }

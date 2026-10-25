@@ -55,6 +55,21 @@ export default function BenchmarkPage() {
         </p>
       )}
 
+      {runs !== null && runs.length > 0 && (() => {
+        const reproduced = runs.filter((r) => ['fixed', 'reproduced_only'].includes(r.state)).length;
+        const fixed = runs.filter((r) => r.state === 'fixed').length;
+        const durations = runs.map((r) => r.durationMs).filter((d): d is number => d !== null).sort((a, b) => a - b);
+        const median = durations.length > 0 ? durations[Math.floor(durations.length / 2)]! : null;
+        return (
+          <div className="mt-4 flex flex-wrap gap-6 rounded-m border border-border-subtle bg-panel px-4 py-3 font-mono text-[13px] text-secondary">
+            <span>{runs.length} runs</span>
+            <span>reproduced {Math.round((reproduced / runs.length) * 100)}%</span>
+            <span>fixed {Math.round((fixed / runs.length) * 100)}%</span>
+            {median !== null && <span>median {(median / 1000).toFixed(1)}s</span>}
+          </div>
+        );
+      })()}
+
       {runs !== null && runs.length > 0 && (
         <div className="mt-6 overflow-x-auto rounded-m border border-border-subtle">
           <table className="w-full min-w-[640px] border-collapse text-left">

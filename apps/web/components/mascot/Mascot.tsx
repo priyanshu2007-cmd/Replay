@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { AvatarSurface, type AvatarSurfaceHandle } from './AvatarSurface';
 import { validateAvatarDefinition } from '@bible-strong/avatar-core';
 import definitionJson from './avatar.avatar.json';
-import { MASCOT, STATE_ANIMATION, STAGE_ANIMATION, TIPS, type MascotEvent } from './mascot.config';
+import { MASCOT, PAGE_TIPS, STATE_ANIMATION, STAGE_ANIMATION, TIPS, type MascotEvent } from './mascot.config';
 
 const parsed = validateAvatarDefinition(definitionJson);
 
@@ -21,6 +21,8 @@ export default function Mascot() {
   const controller = useRef<AvatarSurfaceHandle>(null);
   const [broken, setBroken] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [minimised, setMinimised] = useState(false);
+  const [desktop, setDesktop] = useState(true);
   const [tip, setTip] = useState<string | null>(null);
   const shownTips = useRef<Set<string>>(new Set());
   const priorityUntil = useRef(0);
@@ -36,6 +38,32 @@ export default function Mascot() {
     mq.addEventListener('change', update);
     return () => mq.removeEventListener('change', update);
   }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const update = () => setDesktop(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
+  useEffect(() => {
+    try {
+      setMinimised(localStorage.getItem('replay-mascot-min') === '1');
+    } catch {
+      // storage unavailable
+    }
+  }, []);
+
+  // One short page tip per page per session.
+  useEffect(() => {
+    const tip = PAGE_TIPS[pathname];
+    if (!tip || shownTips.current.has(`page:${pathname}`)) return;
+    shownTips.current.add(`page:${pathname}`);
+    setTip(tip);
+    if (tipTimer.current) clearTimeout(tipTimer.current);
+    tipTimer.current = setTimeout(() => setTip(null), 6000);
+  }, [pathname]);
 
   const play = useCallback(
     (animation: Animation, priority: keyof typeof PRIORITY) => {
@@ -124,7 +152,7 @@ export default function Mascot() {
   );
 
   const hidden =
-    broken || !definition || MASCOT.hiddenRoutes.some((route) => pathname.startsWith(route));
+    broken || !definition || minimised || MASCOT.hiddenRoutes.some((route) => pathname.startsWith(route));
 
   if (hidden) return null;
 
@@ -138,27 +166,45 @@ export default function Mascot() {
           {tip}
         </div>
       )}
-      <button
-        type="button"
-        aria-label={MASCOT.ariaLabel}
-        onClick={() => {
-          play('playful', 'mascot');
-          setTip(null);
-        }}
-        className="block h-20 w-20 cursor-pointer rounded-full transition-transform duration-150 ease-out active:scale-95 motion-reduce:transition-none md:h-[104px] md:w-[104px]"
-      >
-        <AvatarSurface
-          ref={controller}
-          definition={definition}
-          defaultAnimation={reducedMotion ? undefined : 'waking'}
-          defaultExpression={reducedMotion ? 'neutral' : undefined}
-          reducedMotion={reducedMotion}
-          size={MASCOT.mobileSize}
-          ariaLabel=""
-          onError={() => setBroken(true)}
-          onAnimationEnd={onAnimationEnd}
-        />
-      </button>
+      <div className="flex items-end gap-1">
+        <button
+          type="button"
+          aria-label={MASCOT.ariaLabel}
+          data-animation={controller.current?.getState().activeAnimation ?? 'idle'}
+          onClick={() => {
+            play('playful', 'mascot');
+            setTip(null);
+          }}
+          className="block h-20 w-20 cursor-pointer rounded-full transition-transform duration-150 ease-out active:scale-95 motion-reduce:transition-none md:h-[104px] md:w-[104px]"
+        >
+          <AvatarSurface
+            ref={controller}
+            definition={definition}
+            defaultAnimation={reducedMotion ? undefined : 'waking'}
+            defaultExpression={reducedMotion ? 'neutral' : undefined}
+            reducedMotion={reducedMotion}
+            size={desktop ? MASCOT.desktopSize : MASCOT.mobileSize}
+            ariaLabel=""
+            onError={() => setBroken(true)}
+            onAnimationEnd={onAnimationEnd}
+          />
+        </button>
+        <button
+          type="button"
+          aria-label="Hide Reel"
+          onClick={() => {
+            setMinimised(true);
+            try {
+              localStorage.setItem('replay-mascot-min', '1');
+            } catch {
+              // storage unavailable
+            }
+          }}
+          className="h-6 w-6 rounded-s text-muted transition-colors duration-150 ease-out hover:text-primary"
+        >
+          x
+        </button>
+      </div>
     </div>
   );
 }

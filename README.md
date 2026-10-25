@@ -10,7 +10,8 @@ from a real execution. When a stage cannot verify something, the run says so
 (`reproduced_only`, `unreproduced`, `failed`) instead of pretending.
 
 Built for the Nebius x NVIDIA Global AI Hackathon (Track A). Models: NVIDIA
-Nemotron, served by NVIDIA Build (`https://integrate.api.nvidia.com/v1`).
+Nemotron, served by Nebius Token Factory
+(`https://api.tokenfactory.nebius.com/v1/`), as the rules require.
 
 ## How it works
 
@@ -22,15 +23,15 @@ video ──▶ Ingest ──▶ Watch ──▶ Locate ──▶ Reproduce ─�
                         └──── deterministic gates, no AI ────────┘
 ```
 
-| Stage | Model (NVIDIA Build) | Job | Gate |
+| Stage | Model (Nebius Token Factory) | Job | Gate |
 | --- | --- | --- | --- |
 | Ingest | ffmpeg | Timestamped frames from the recording | Frames extracted |
-| Watch | `nemotron-3.5-super-vl-120b-a12b` | User steps, expected vs actual, failure frame | Zod-validated BugReport |
-| Locate | `nemotron-3.5-lightning-30b-a3b` | Ranked suspect files and line ranges | Only real paths (search_code/read_file) |
-| Reproduce | `nemotron-3-ultra-550b-a55b` | One Playwright test that fails like the video | Assertion failure, not timeout (max 4 attempts) |
-| Verify | `nemotron-3.5-super-vl-120b-a12b` | Video frame vs test screenshot: same defect? | Verdict recorded, never assumed |
-| Fix | `nemotron-3-ultra-550b-a55b` | Minimal patch via validated diff | Repro test passes + baseline suite passes (max 3 attempts) |
-| Report | `nemotron-3-nano-omni-30b-a3b-reasoning` | Markdown bug report from recorded evidence | No facts outside the run record |
+| Watch | `nvidia/Nemotron-3.5-Super-VL` | User steps, expected vs actual, failure frame | Zod-validated BugReport |
+| Locate | `nvidia/Nemotron-3_5-Lightning` | Ranked suspect files and line ranges | Only real paths (search_code/read_file) |
+| Reproduce | `nvidia/Nemotron-3-Ultra-550b-a55b` | One Playwright test that fails like the video | Assertion failure, not timeout (max 4 attempts) |
+| Verify | `nvidia/Nemotron-3.5-Super-VL` | Video frame vs test screenshot: same defect? | Verdict recorded, never assumed |
+| Fix | `nvidia/Nemotron-3-Ultra-550b-a55b` | Minimal patch via validated diff | Repro test passes + baseline suite passes (max 3 attempts) |
+| Report | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | Markdown bug report from recorded evidence | No facts outside the run record |
 
 Watch runs fixture-assisted today (see Known limitations): when the vision
 model or ffmpeg is unavailable, the run continues from the sample's
@@ -61,7 +62,7 @@ docs/         Build plan, implementation decisions, design docs
 ## Prerequisites
 
 - Node.js 22+ and pnpm 10+ (`corepack enable`)
-- A NVIDIA Build API key: https://build.nvidia.com/settings/api-keys
+- A Nebius Token Factory API key (https://console.tokenfactory.nebius.com), from the Nebius Builder Program
 - Optional: Docker (compose stack), Supabase (persistence + replay mode),
   ffmpeg (live video frame extraction)
 
@@ -75,8 +76,8 @@ cp .env.example .env
 
 | Variable | Used by | Purpose |
 | --- | --- | --- |
-| `NVIDIA_API_KEY` | agents, api | NVIDIA Build key (per-role `NVIDIA_API_KEY_<ROLE>` overrides supported) |
-| `NVIDIA_BASE_URL` | agents, api | Defaults to `https://integrate.api.nvidia.com/v1` |
+| `NEBIUS_API_KEY` | agents, api | Token Factory key (per-role `NEBIUS_API_KEY_<ROLE>` overrides supported) |
+| `NEBIUS_BASE_URL` | agents, api | Defaults to `https://api.tokenfactory.nebius.com/v1/` |
 | `MODEL_<ROLE>` | agents | Model id per role (watcher, verifier, locator, reproducer, fixer, reporter) |
 | `DATABASE_URL` | api, worker | Postgres/Supabase connection string; omit to use the in-memory repository |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | api, storage | Server-side artifact storage; omit for local disk |
@@ -130,7 +131,7 @@ Supabase replay is configured.
 pnpm test                                   # every package
 pnpm --filter @replay/demo-shop test        # 6 baseline + 5 bug-fixture Playwright tests
 pnpm --filter @replay/web test              # frontend e2e (builds + starts web and api)
-pnpm smoke                                  # live model smoke test (all roles, vision, tools, JSON)
+pnpm smoke:models                           # live model smoke per role against Token Factory
 pnpm eval:locator                           # Locator vs 5 fixtures (top-3 accuracy)
 pnpm eval:reproducer                        # Reproducer vs fixtures
 pnpm eval:pipeline                          # end-to-end fix-and-verify on cart-nan
@@ -154,9 +155,11 @@ the Watcher/Locator receive the route as context.
 ## Benchmark results
 
 Method: `pnpm replay <sampleId>` per sample on 2026-10-25, local machine,
-NVIDIA Build models live for Locate/Reproduce/Verify/Fix/Report. The Watch
-stage ran fixture-assisted (dead designated API key + ffmpeg unavailable at
-run time). Success = run status `fixed`: reproduction failed for the planted
+models live for Locate/Reproduce/Verify/Fix/Report (then on the NVIDIA Build
+endpoint; the provider has since moved to Nebius Token Factory, pending a
+re-run with a `NEBIUS_API_KEY`). The Watch stage ran fixture-assisted (dead
+designated API key; ffmpeg is installed now, and live vision activates as
+soon as a valid model key is set). Success = run status `fixed`: reproduction failed for the planted
 defect, patch applied, reproduction test passed afterward, baseline suite
 passed.
 
@@ -172,6 +175,10 @@ Aggregate (denominator = 5): 5/5 reproduced for the correct defect, 5/5
 Locator top-1 suspect correct, 3/5 fixed end to end. The two REPRODUCED_ONLY
 runs failed post-fix verification honestly (patch applied, reproduction test
 still failing after the attempt budget) and are reported as-is.
+
+Security controls and the full threat model live in `docs/SECURITY.md`
+(sandbox fail-closed policy, path-traversal guards, rate limiting, upload
+content sniffing, run privacy, security headers, artifact retention).
 
 ## Security boundaries
 
@@ -190,10 +197,10 @@ still failing after the attempt budget) and are reported as-is.
 
 ## Known limitations
 
-- Watch runs fixture-assisted unless (a) ffmpeg is installed
-  (`brew install ffmpeg`) and (b) a working Watcher/Verifier NVIDIA key is
-  configured. The current designated Watcher key returns HTTP 403 (revoked or
-  never activated); live vision was verified earlier with a different key.
+- Watch runs fixture-assisted until a valid `NEBIUS_API_KEY` is configured.
+  ffmpeg is installed; the pipeline extracts frames and calls the live Watcher
+  automatically the moment a working key exists, falling back to fixtures with
+  a visible `watch_model_error` event if the call fails.
 - Replay mode against Supabase is implemented but was not exercised against a
   real project (no credentials configured); the frontend shows an honest
   offline state instead.

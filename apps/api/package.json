@@ -20,9 +20,9 @@
     "@replay/storage": "workspace:*",
     "@replay/video": "workspace:*",
     "dotenv": "^16.4.7",
-    "drizzle-orm": "^0.39.3",
+    "drizzle-orm": "^0.45.4",
     "hono": "^4.7.2",
-    "zod": "^3.24.1"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",

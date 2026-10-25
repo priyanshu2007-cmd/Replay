@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { STAGES, type RunEvent, type RunStage } from '@/lib/api';
 import { ModelBadge, STAGE_MODEL } from '@/components/ui/badge';
@@ -64,13 +64,26 @@ export function Timeline({ events, currentStage }: { events: RunEvent[]; current
     const started = list.some((e) => e.event_type.endsWith('_started') || e.event_type === 'run_created');
     const completed = list.some((e) => e.event_type.endsWith('_completed'));
     // A fixture fallback means the live model was unavailable for this stage:
-    // the run continues on fixtures, which is a blocked live dependency, not a failure.
+    // the run continues on fixtures, shown as amber "fallback", never green.
     const fixtureFallback = list.some((e) => e.event_type.endsWith('_fixture_fallback'));
+    // A stage failed when a model error or attempt error landed there, or the
+    // pipeline failed while this stage was the last one running.
+    const stageError = list.some(
+      (e) => e.event_type.endsWith('_model_error') || e.event_type === 'fix_attempt_error',
+    );
+    if (stageError || (pipelineFailed && currentStage === stage && !completed)) return 'failed';
     if (completed && fixtureFallback) return 'blocked';
     if (completed) return 'done';
-    if (started) return pipelineFailed && currentStage === stage ? 'failed' : 'running';
+    if (started) return 'running';
     return 'pending';
   }
+
+  // Auto-expand a stage the moment it fails; collapse again on recovery.
+  useEffect(() => {
+    const failed = STAGES.find((stage) => statusOf(stage) === 'failed');
+    if (failed) setOpenStage(failed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [events]);
 
   function elapsedOf(stage: RunStage): string | null {
     const list = byStage.get(stage) ?? [];
@@ -80,6 +93,12 @@ export function Timeline({ events, currentStage }: { events: RunEvent[]; current
     return fmtMs(new Date(end.timestamp).getTime() - new Date(start.timestamp).getTime());
   }
 
+  function tokensOf(stage: RunStage): number | null {
+    const end = (byStage.get(stage) ?? []).find((e) => e.event_type.endsWith('_completed'));
+    const tokens = end?.payload?.tokens;
+    return typeof tokens === 'number' && tokens > 0 ? tokens : null;
+  }
+
   return (
     <section aria-label="Agent timeline" className="rounded-m border border-border-subtle bg-panel">
       <ol className="divide-y divide-border-subtle">
@@ -87,6 +106,7 @@ export function Timeline({ events, currentStage }: { events: RunEvent[]; current
           const status = statusOf(stage);
           const stageEvents = byStage.get(stage) ?? [];
           const elapsed = elapsedOf(stage);
+          const tokens = tokensOf(stage);
           const open = openStage === stage;
           return (
             <li key={stage} className={status === 'pending' ? 'opacity-50' : ''}>
@@ -105,8 +125,11 @@ export function Timeline({ events, currentStage }: { events: RunEvent[]; current
                 <span className="w-20 font-mono text-[13px] text-primary">{stage}</span>
                 {STAGE_MODEL[stage] && <ModelBadge model={STAGE_MODEL[stage]!} />}
                 <span className="ml-auto flex items-center gap-3 font-mono text-[12px] text-secondary">
+                  {tokens !== null && <span className="text-muted">{tokens.toLocaleString()} tok</span>}
                   {elapsed && <span>{elapsed}</span>}
-                  <span className="capitalize">{status === 'done' ? 'done' : status}</span>
+                  <span className={status === 'failed' ? 'text-fail-text' : ''}>
+                  {status === 'blocked' ? 'fallback' : status}
+                </span>
                 </span>
               </div>
               {open && stageEvents.length > 0 && (

@@ -6,14 +6,51 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
+export class SandboxUnavailableError extends Error {
+  readonly code = 'sandbox_unavailable';
+  constructor(message: string) {
+    super(message);
+    this.name = 'SandboxUnavailableError';
+  }
+}
+
+/**
+ * Host execution of untrusted (model-generated) code is only allowed outside
+ * production, or with an explicit REPLAY_ALLOW_HOST_SANDBOX=1 escape hatch.
+ * Production without Docker fails the fix stage with sandbox_unavailable.
+ */
+function hostExecutionAllowed(): boolean {
+  if (process.env.REPLAY_ALLOW_HOST_SANDBOX === '1') return true;
+  if (process.env.REPLAY_ALLOW_HOST_SANDBOX === '0') return false;
+  return process.env.NODE_ENV !== 'production';
+}
+
 export interface IsolatedWorkspace {
   workDir: string;
   exec(command: string, args: string[], env?: Record<string, string>): Promise<{ exitCode: number; stdout: string; stderr: string; durationMs: number }>;
   cleanup(): Promise<void>;
 }
 
+/**
+ * Explicit environment allowlist for sandboxed processes. Untrusted code never
+ * receives the host environment: no API keys, no database URLs, no tokens.
+ */
+const SANDBOX_ENV_ALLOWLIST: Record<string, string> = {
+  PATH: process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin',
+  HOME: process.env.HOME ?? '/tmp',
+  LANG: process.env.LANG ?? 'en_US.UTF-8',
+  TMPDIR: process.env.TMPDIR ?? '/tmp',
+  CI: '1',
+};
+
 export class IsolatedWorkspaceSandbox {
   static async create(sourceDir: string): Promise<IsolatedWorkspace> {
+    if (!hostExecutionAllowed()) {
+      throw new SandboxUnavailableError(
+        'Host sandbox execution is disabled in production. Run the fix stage with Docker available, or set REPLAY_ALLOW_HOST_SANDBOX=1 explicitly for local development.',
+      );
+    }
+
     const absSourceDir = path.resolve(sourceDir);
     const tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'replay-workspace-'));
     const entries = await fs.promises.readdir(absSourceDir, { withFileTypes: true });
@@ -50,7 +87,8 @@ export class IsolatedWorkspaceSandbox {
         try {
           const res = await execFileAsync(command, args, {
             cwd: tmp,
-            env: { ...process.env, ...env },
+            // Allowlist only: untrusted code must never see host secrets.
+            env: { ...SANDBOX_ENV_ALLOWLIST, ...env },
             timeout: 60_000,
           });
           return { exitCode: 0, stdout: res.stdout, stderr: res.stderr, durationMs: Date.now() - start };
@@ -112,6 +150,9 @@ export class DockerSandbox {
       '--network', networkMode,
       '--memory', '2g',
       '--cpus', '2.0',
+      '--pids-limit', '256',
+      '--security-opt', 'no-new-privileges',
+      '--cap-drop', 'ALL',
     ];
 
     if (options.bindMounts) {

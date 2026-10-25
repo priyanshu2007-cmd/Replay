@@ -1,27 +1,27 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
 
-export const NVIDIA_BASE_URL_DEFAULT = 'https://integrate.api.nvidia.com/v1';
+export const NEBIUS_BASE_URL_DEFAULT = 'https://api.tokenfactory.nebius.com/v1/';
 
 export type AgentRole = 'watcher' | 'verifier' | 'locator' | 'reproducer' | 'fixer' | 'reporter';
 
 export interface AgentModelConfig {
-  /** Default NVIDIA Build catalog model ID; override via MODEL_<ROLE> env. */
+  /** Default Token Factory model ID; override via MODEL_<ROLE> env. */
   model: string;
-  /** Env var holding this role's designated NVIDIA API key. */
+  /** Env var holding this role's API key override. */
   apiKeyEnv: string;
 }
 
 // Central role→model map: the single source of truth every agent reads.
-// Keys are paired with models, not roles: verifier shares the watcher's key/model,
-// fixer shares the reproducer's. Resolution is per-call so tests can vary env safely.
+// IDs are the Token Factory catalog entries from the build plan; verify live
+// with `pnpm smoke:models` once NEBIUS_API_KEY is set.
 export const AGENT_MODEL_DEFAULTS: Record<AgentRole, AgentModelConfig> = {
-  watcher: { model: 'nvidia/nemotron-3.5-super-vl-120b-a12b', apiKeyEnv: 'NVIDIA_API_KEY_WATCHER' },
-  verifier: { model: 'nvidia/nemotron-3.5-super-vl-120b-a12b', apiKeyEnv: 'NVIDIA_API_KEY_VERIFIER' },
-  locator: { model: 'nvidia/nemotron-3.5-lightning-30b-a3b', apiKeyEnv: 'NVIDIA_API_KEY_LOCATOR' },
-  reproducer: { model: 'nvidia/nemotron-3-ultra-550b-a55b', apiKeyEnv: 'NVIDIA_API_KEY_REPRODUCER' },
-  fixer: { model: 'nvidia/nemotron-3-ultra-550b-a55b', apiKeyEnv: 'NVIDIA_API_KEY_FIXER' },
-  reporter: { model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', apiKeyEnv: 'NVIDIA_API_KEY_REPORTER' },
+  watcher: { model: 'nvidia/Nemotron-3.5-Super-VL', apiKeyEnv: 'NEBIUS_API_KEY_WATCHER' },
+  verifier: { model: 'nvidia/Nemotron-3.5-Super-VL', apiKeyEnv: 'NEBIUS_API_KEY_VERIFIER' },
+  locator: { model: 'nvidia/Nemotron-3_5-Lightning', apiKeyEnv: 'NEBIUS_API_KEY_LOCATOR' },
+  reproducer: { model: 'nvidia/Nemotron-3-Ultra-550b-a55b', apiKeyEnv: 'NEBIUS_API_KEY_REPRODUCER' },
+  fixer: { model: 'nvidia/Nemotron-3-Ultra-550b-a55b', apiKeyEnv: 'NEBIUS_API_KEY_FIXER' },
+  reporter: { model: 'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B', apiKeyEnv: 'NEBIUS_API_KEY_REPORTER' },
 };
 
 export function resolveModel(role: AgentRole): string {
@@ -33,7 +33,49 @@ export function resolveApiKey(role?: AgentRole): string | undefined {
     const roleKey = process.env[AGENT_MODEL_DEFAULTS[role].apiKeyEnv];
     if (roleKey) return roleKey;
   }
-  return process.env.NVIDIA_API_KEY || undefined;
+  return process.env.NEBIUS_API_KEY || undefined;
+}
+
+/** Provider errors are surfaced, classified and redacted, never swallowed. */
+export type LlmErrorCode = 'auth' | 'model_not_found' | 'rate_limited' | 'unreachable' | 'bad_output' | 'unknown';
+
+export class LlmError extends Error {
+  constructor(
+    message: string,
+    readonly code: LlmErrorCode,
+    readonly role: AgentRole | 'unknown',
+    readonly model: string,
+    readonly status?: number,
+    readonly retryable = false,
+  ) {
+    super(redactSecretText(message));
+    this.name = 'LlmError';
+  }
+}
+
+const SECRET_PATTERNS: RegExp[] = [
+  /\b(?:sk|nvapi|napi)[-_][A-Za-z0-9_-]{8,}/g,
+  /Bearer\s+\S+/gi,
+  /\beyJ[A-Za-z0-9_-]{10,}/g,
+];
+
+export function redactSecretText(text: string): string {
+  return SECRET_PATTERNS.reduce((acc, p) => acc.replace(p, '[redacted]'), text);
+}
+
+/** Classify a raw provider/SDK error into an LlmError with a stable code. */
+export function toLlmError(err: unknown, role: AgentRole | 'unknown', model: string): LlmError {
+  const e = err as { status?: number; code?: string; message?: string; name?: string };
+  const status = e?.status;
+  const raw = String(e?.message ?? err);
+  if (status === 401 || status === 403) return new LlmError(raw || 'API key rejected', 'auth', role, model, status);
+  if (status === 404) return new LlmError(raw || 'Model not found', 'model_not_found', role, model, status);
+  if (status === 429) return new LlmError(raw || 'Rate limited', 'rate_limited', role, model, status, true);
+  if (status && status >= 500) return new LlmError(raw, 'unreachable', role, model, status, true);
+  if (e?.name === 'TimeoutError' || /timeout|ECONNREFUSED|ENOTFOUND|fetch failed|network/i.test(raw)) {
+    return new LlmError(raw, 'unreachable', role, model, undefined, true);
+  }
+  return new LlmError(raw, 'unknown', role, model, status);
 }
 
 export interface LlmConfig {
@@ -73,10 +115,10 @@ export class LlmClient {
 
   constructor(config?: LlmConfig) {
     const apiKey = config?.apiKey || resolveApiKey();
-    const baseURL = config?.baseURL || process.env.NVIDIA_BASE_URL || NVIDIA_BASE_URL_DEFAULT;
+    const baseURL = config?.baseURL || process.env.NEBIUS_BASE_URL || NEBIUS_BASE_URL_DEFAULT;
 
     if (!apiKey) {
-      throw new Error('NVIDIA_API_KEY (or a per-role NVIDIA_API_KEY_<ROLE>) is required to initialize LlmClient');
+      throw new Error('NEBIUS_API_KEY (or a per-role NEBIUS_API_KEY_<ROLE>) is required to initialize LlmClient');
     }
 
     this.openai = new OpenAI({

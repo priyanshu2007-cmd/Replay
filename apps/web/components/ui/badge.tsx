@@ -11,10 +11,10 @@ export function Badge({ children, className = '' }: { children: ReactNode; class
 }
 
 const MODEL_SHORT: Record<string, string> = {
-  'nemotron-3.5-super-vl-120b-a12b': 'nemotron-3.5-super-vl',
-  'nemotron-3.5-lightning-30b-a3b': 'nemotron-3.5-lightning',
-  'nemotron-3-ultra-550b-a55b': 'nemotron-3-ultra',
-  'nemotron-3-nano-omni-30b-a3b-reasoning': 'nemotron-3-nano',
+  'Nemotron-3.5-Super-VL': 'Super VL',
+  'Nemotron-3_5-Lightning': 'Lightning',
+  'Nemotron-3-Ultra-550b-a55b': 'Ultra 550B',
+  'NVIDIA-Nemotron-3-Nano-30B-A3B': 'Nano 30B',
 };
 
 /** Model badge: mono, shortened catalog id. Never invents a model name. */
@@ -24,10 +24,10 @@ export function ModelBadge({ model }: { model: string }) {
 }
 
 export const STAGE_MODEL: Record<string, string> = {
-  watch: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
-  verify: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
-  locate: 'nvidia/nemotron-3.5-lightning-30b-a3b',
-  reproduce: 'nvidia/nemotron-3-ultra-550b-a55b',
-  fix: 'nvidia/nemotron-3-ultra-550b-a55b',
-  report: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
+  watch: 'nvidia/Nemotron-3.5-Super-VL',
+  verify: 'nvidia/Nemotron-3.5-Super-VL',
+  locate: 'nvidia/Nemotron-3_5-Lightning',
+  reproduce: 'nvidia/Nemotron-3-Ultra-550b-a55b',
+  fix: 'nvidia/Nemotron-3-Ultra-550b-a55b',
+  report: 'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B',
 };

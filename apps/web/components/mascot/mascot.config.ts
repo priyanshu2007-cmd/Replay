@@ -33,6 +33,13 @@ export const TIPS: Record<string, string> = {
   fix: 'The patch only counts when the test and the suite both pass.',
   fixed: 'Verified: the reproduction test and the existing suite both pass.',
   unreproduced: 'No reproduction means no fix claims. The evidence stays in the report.',
+  failed: 'The run failed and said so. Check the error panel for the cause.',
+};
+
+export const PAGE_TIPS: Record<string, string> = {
+  '/': 'Pick a sample and watch the run go from a red failing test to a verified fix.',
+  '/benchmark': 'Every recorded run is here, including the failures.',
+  '/how': 'Each stage has one model and one deterministic gate. Nothing passes without proof.',
 };
 
 export const MASCOT = {
@@ -42,5 +49,5 @@ export const MASCOT = {
   mobileSize: 80,
   inactivityMs: 30_000,
   /** Routes where the mascot stays out of the way. */
-  hiddenRoutes: ['/how', '/dev/components'],
+  hiddenRoutes: ['/dev/components'],
 };

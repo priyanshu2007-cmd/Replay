@@ -22,12 +22,12 @@
     "eval:pipeline": "tsx ../../eval/eval-pipeline.mts"
   },
   "dependencies": {
+    "@replay/sandbox": "workspace:*",
     "@replay/shared": "workspace:*",
     "@replay/storage": "workspace:*",
-    "@replay/sandbox": "workspace:*",
     "@replay/video": "workspace:*",
     "openai": "^4.85.4",
-    "zod": "^3.24.1"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",

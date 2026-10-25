@@ -245,3 +245,29 @@ test('buildFixerMessages constructs deterministic user message with context', ()
   assert.ok(userContent.includes('Cart total becomes NaN'));
   assert.ok(userContent.includes('handleQuantityChange'));
 });
+
+// --- Workspace path guard (security) ---
+import { resolveSafeWorkspacePath } from './fixer.js';
+
+test('resolveSafeWorkspacePath rejects traversal, absolute escapes and protected files', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'replay-guard-'));
+  await fs.mkdir(path.join(root, 'src'), { recursive: true });
+  await fs.writeFile(path.join(root, 'src', 'App.tsx'), 'x');
+  await fs.writeFile(path.join(root, 'package.json'), '{}');
+  await fs.writeFile(path.join(root, '.env'), 'SECRET=1');
+
+  // Valid path resolves inside the root
+  const ok = await resolveSafeWorkspacePath(root, 'src/App.tsx');
+  assert.equal(ok, await fs.realpath(path.resolve(root, 'src/App.tsx')));
+
+  // Traversal escapes rejected
+  await assert.rejects(resolveSafeWorkspacePath(root, '../../etc/passwd'), /outside the workspace/);
+  await assert.rejects(resolveSafeWorkspacePath(root, 'src/../../../etc/passwd'), /outside the workspace/);
+  await assert.rejects(resolveSafeWorkspacePath(root, '/etc/passwd'), /outside the workspace/);
+
+  // Protected files rejected
+  await assert.rejects(resolveSafeWorkspacePath(root, 'package.json'), /protected file/);
+  await assert.rejects(resolveSafeWorkspacePath(root, '.env'), /protected/);
+  await assert.rejects(resolveSafeWorkspacePath(root, 'node_modules/x/index.js'), /protected path/);
+  await assert.rejects(resolveSafeWorkspacePath(root, 'tests/anything.spec.ts'), /protected path/);
+});

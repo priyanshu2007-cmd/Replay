@@ -20,20 +20,25 @@ export function StatusPill({
   state,
   large = false,
   announce = false,
+  fallback = false,
 }: {
   state: RunState;
   large?: boolean;
   announce?: boolean;
+  /** Any stage ran on recorded fixtures instead of the live model: amber honesty label. */
+  fallback?: boolean;
 }) {
   const config = CONFIG[state];
+  const fallbackStyle = fallback ? ' border-progress text-progress' : '';
   return (
     <span
       aria-live={announce ? 'polite' : undefined}
       className={`inline-flex items-center rounded-s border bg-panel font-mono font-medium uppercase tracking-wide transition-colors duration-200 ease-out ${
         large ? 'h-9 px-3 text-[14px]' : 'h-7 px-2 text-[12px]'
-      } ${config.className}`}
+      } ${config.className}${fallbackStyle}`}
     >
       {config.label}
+      {fallback && <span className="ml-1.5 text-progress">+ FALLBACK</span>}
     </span>
   );
 }

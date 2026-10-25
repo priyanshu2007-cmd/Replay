@@ -49,3 +49,8 @@ artifacts/
 
 # Local skills corpora (not part of the Replay product)
 ECC/
+
+# Skill-hub working files (not part of the Replay product)
+ANTIGRAVITY_MASTER_PROMPT.txt
+AI_BRAIN.md
+SESSION_MEMORY.md

@@ -199,17 +199,18 @@ describe('Replay API Server', () => {
   });
 
   describe('Run Listing and Retrieval', () => {
-    test('GET /api/runs lists runs in descending created order', async () => {
-      await repo.createRun({ videoKey: 'cart-nan', note: 'First' });
-      await repo.createRun({ videoKey: 'double-discount', note: 'Second' });
+    test('GET /api/runs lists only sample runs, without notes', async () => {
+      await repo.createRun({ videoKey: 'cart-nan', note: 'First', isSample: true });
+      await repo.createRun({ videoKey: 'double-discount', note: 'Second', isSample: true });
+      await repo.createRun({ videoKey: '/abs/path/upload.webm', note: 'Private upload', isSample: false });
 
       const res = await app.request('/api/runs');
       assert.equal(res.status, 200);
 
       const data: any = await res.json();
-      assert.equal(data.total, 2);
-      assert.equal(data.runs[0].note, 'Second');
-      assert.equal(data.runs[1].note, 'First');
+      assert.equal(data.total, 2, 'non-sample runs must not be listed');
+      assert.equal(data.runs[0].note, undefined, 'notes must not appear in public listings');
+      assert.ok(!JSON.stringify(data).includes('/abs/path'), 'absolute paths must never leak');
     });
 
     test('GET /api/runs/:id retrieves run details and outputs', async () => {

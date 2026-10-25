@@ -27,11 +27,14 @@ RUN pnpm --filter @replay/shared^... build && pnpm --filter @replay/api build
 
 FROM base AS runtime
 ENV NODE_ENV=production
+RUN apk add --no-cache ffmpeg
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/packages ./packages
 COPY --from=build /app/targets ./targets
 COPY --from=build /app/samples ./samples
 WORKDIR /app
+RUN addgroup -S replay && adduser -S replay -G replay
+USER replay
 EXPOSE 3001
 CMD ["node", "apps/api/dist/server.js"]

@@ -7,6 +7,7 @@ import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
+import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import {
   getRunRepository,
@@ -73,6 +74,15 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
     maxAge: 86400,
   }));
 
+  // Reject oversized request bodies before any parsing (upload limit + headroom).
+  app.use('*', bodyLimit({
+    maxSize: MAX_UPLOAD_BYTES + 64 * 1024,
+    onError: (c) => c.json({
+      error: 'Payload too large',
+      message: `Request body exceeds the ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB upload limit.`,
+    }, 413),
+  }));
+
   // Health Endpoint (supports both /health and /api/health)
   const healthHandler = (c: any) => {
     return c.json({
@@ -83,9 +93,20 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
         api: 'healthy',
         database: process.env.DATABASE_URL ? 'configured' : 'fallback-memory',
         storage: process.env.SUPABASE_URL ? 'configured' : 'local-disk',
-        nvidia: process.env.NVIDIA_API_KEY || process.env.NVIDIA_API_KEY_LOCATOR ? 'configured' : 'missing',
+        nebius: process.env.NEBIUS_API_KEY || process.env.NEBIUS_API_KEY_LOCATOR ? 'configured' : 'missing',
       },
       availableSamples: KNOWN_SAMPLE_IDS,
+      models: {
+        provider: 'nebius-token-factory',
+        keyConfigured: Boolean(process.env.NEBIUS_API_KEY || process.env.NEBIUS_API_KEY_LOCATOR),
+        roles: {
+          watcher: process.env.NEBIUS_API_KEY || process.env.NEBIUS_API_KEY_WATCHER ? 'key-present' : 'no-key',
+          locator: process.env.NEBIUS_API_KEY || process.env.NEBIUS_API_KEY_LOCATOR ? 'key-present' : 'no-key',
+          reproducer: process.env.NEBIUS_API_KEY || process.env.NEBIUS_API_KEY_REPRODUCER ? 'key-present' : 'no-key',
+          reporter: process.env.NEBIUS_API_KEY || process.env.NEBIUS_API_KEY_REPORTER ? 'key-present' : 'no-key',
+        },
+        note: 'Live model verification: pnpm smoke:models',
+      },
       limits: {
         maxUploadBytes: MAX_UPLOAD_BYTES,
         allowedMimeTypes: Array.from(ALLOWED_MIME_TYPES),
@@ -125,7 +146,11 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
   // Create a Run (JSON or Multipart Form)
   app.post('/api/runs', async (c) => {
     try {
-      const clientIp = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'local';
+      const incoming = c.env as unknown as { incoming?: { socket?: { remoteAddress?: string } } } | undefined;
+      const clientIp =
+        incoming?.incoming?.socket?.remoteAddress?.replace(/^::ffff:/, '') ||
+        c.req.header('x-forwarded-for')?.split(',').pop()!.trim() ||
+        'local';
       if (runRateLimited(clientIp)) {
         return c.json({
           error: 'Rate limit exceeded',
@@ -186,6 +211,17 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
 
         const size = (file as any).size;
         const mimeType = (file as any).type || 'application/octet-stream';
+
+        // Content sniffing: the client MIME type is not trusted.
+        const head = Buffer.from(await (file as any).slice(0, 16).arrayBuffer());
+        const isWebm = head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3;
+        const isMp4MovMkv = head.subarray(4, 8).toString('latin1') === 'ftyp';
+        if (!isWebm && !isMp4MovMkv) {
+          return c.json({
+            error: 'Unsupported media type',
+            message: 'File content does not look like a supported video (WebM/MP4/MOV/MKV).',
+          }, 415);
+        }
 
         if (size > MAX_UPLOAD_BYTES) {
           return c.json({
@@ -315,7 +351,7 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
     const limitQuery = c.req.query('limit');
     const limit = limitQuery ? Math.min(Math.max(Number(limitQuery) || 50, 1), 100) : 50;
 
-    const runsList = await repo.listRuns(limit);
+    const runsList = (await repo.listRuns(limit)).filter((r) => r.isSample);
     return c.json({
       runs: runsList.map((r) => ({
         id: r.id,
@@ -323,8 +359,8 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
         state: r.state,
         stage: r.stage,
         isSample: r.isSample,
-        videoKey: r.videoKey,
-        note: r.note,
+        // Opaque key: sample ids only; uploaded absolute paths never leave the server.
+        videoKey: isKnownSampleId(r.videoKey) ? r.videoKey : 'upload',
         durationMs: r.durationMs,
         createdAt: r.createdAt.toISOString(),
         updatedAt: r.updatedAt.toISOString(),
@@ -337,6 +373,9 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
   // Get Single Run Details
   app.get('/api/runs/:id', async (c) => {
     const id = c.req.param('id');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return c.json({ error: 'Invalid run id', message: 'Run id must be a UUID' }, 400);
+    }
     const run = await repo.getRun(id);
 
     if (!run) {
@@ -373,8 +412,59 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
     });
   });
 
-  // Server-Sent Events (SSE) Stream
+  // Polling fallback for the events stream (used when SSE is unavailable).
+  app.get('/api/runs/:id/events-page', async (c) => {
+    const id = c.req.param('id');
+    const run = await repo.getRun(id);
+    if (!run) {
+      return c.json({ error: 'Run not found', message: `No run found with ID ${id}` }, 404);
+    }
+    const events = await repo.getEvents(id);
+    return c.json({ events });
+  });
+
+  // Rerun an existing run: re-queue the same video/target as a fresh run.
+  app.post('/api/runs/:id/rerun', async (c) => {
+    const id = c.req.param('id');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return c.json({ error: 'Invalid run id', message: 'Run id must be a UUID' }, 400);
+    }
+    const run = await repo.getRun(id);
+    if (!run) {
+      return c.json({ error: 'Run not found', message: `No run found with ID ${id}` }, 404);
+    }
+    const created = await repo.createRun({
+      targetId: run.targetId,
+      videoKey: run.videoKey,
+      note: run.note ?? undefined,
+      isSample: run.isSample,
+    });
+    await repo.addEvent(created.id, {
+      stage: 'ingest',
+      agent: 'API',
+      event_type: 'run_created',
+      payload: { rerun_of: id, isSample: run.isSample, videoKey: run.videoKey },
+    });
+    return c.json({
+      id: created.id,
+      state: created.state,
+      stage: created.stage,
+    }, 201);
+  });
+
+  // Server-Sent Events (SSE) Stream — capped per client to bound resources.
+  const sseConnections = new Map<string, number>();
+  const SSE_CAP_PER_IP = 5;
+  const SSE_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+
   app.get('/api/runs/:id/events', async (c) => {
+    const incoming = c.env as unknown as { incoming?: { socket?: { remoteAddress?: string } } } | undefined;
+    const clientIp = incoming?.incoming?.socket?.remoteAddress || c.req.header('x-forwarded-for')?.split(',').pop()!.trim() || 'local';
+    const open = sseConnections.get(clientIp) ?? 0;
+    if (open >= SSE_CAP_PER_IP) {
+      return c.json({ error: 'Too many connections', message: 'SSE connection limit reached. Close other run views.' }, 429);
+    }
+    sseConnections.set(clientIp, open + 1);
     const id = c.req.param('id');
     const run = await repo.getRun(id);
 
@@ -407,8 +497,10 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
 
       // 2. Subscribe to live events
       let unsubscribeHandler: (() => void) | undefined;
+      let finishStream: (() => void) | undefined;
 
       const eventPromise = new Promise<void>((resolve) => {
+        finishStream = resolve;
         unsubscribeHandler = repo.subscribeEvents(id, async (liveEvent) => {
           try {
             await stream.writeSSE({
@@ -417,11 +509,11 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
               id: String(liveEvent.seq),
             });
 
-            // If pipeline or run completes, close stream
+            // Close only when the pipeline actually finished. report_started also
+            // has stage 'report'; closing on it would cut off the final events.
             if (
               liveEvent.event_type === 'pipeline_completed' ||
-              liveEvent.event_type === 'pipeline_failed' ||
-              liveEvent.stage === 'report'
+              liveEvent.event_type === 'pipeline_failed'
             ) {
               await stream.writeSSE({
                 event: 'stream_closed',
@@ -453,11 +545,23 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
       stream.onAbort(() => {
         clearInterval(pingInterval);
         unsubscribeHandler?.();
+        sseConnections.set(clientIp, Math.max(0, (sseConnections.get(clientIp) ?? 1) - 1));
       });
 
+      const idleTimer = setTimeout(() => {
+        try {
+          void stream.writeSSE({ event: 'stream_closed', data: JSON.stringify({ reason: 'idle_timeout' }), id: 'done' });
+        } catch {
+          // stream already gone
+        }
+        finishStream?.();
+      }, SSE_IDLE_TIMEOUT_MS);
+
       await eventPromise;
+      clearTimeout(idleTimer);
       clearInterval(pingInterval);
       unsubscribeHandler?.();
+      sseConnections.set(clientIp, Math.max(0, (sseConnections.get(clientIp) ?? 1) - 1));
     });
   });
 

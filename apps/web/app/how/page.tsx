@@ -67,7 +67,7 @@ export default function HowPage() {
           </table>
         </div>
         <p className="mt-3 text-[13px] text-muted">
-          Models run on NVIDIA Build. A reproduction only counts when the test fails with the right assertion, and a
+          Models run on NVIDIA Nemotron via Nebius Token Factory. A reproduction only counts when the test fails with the right assertion, and a
           fix only counts when the reproduction test and the existing suite both pass.
         </p>
       </section>

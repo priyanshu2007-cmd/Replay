@@ -155,6 +155,46 @@ export async function proposeFix(input: FixerInput, deps: FixerDeps = {}): Promi
   };
 }
 
+
+/** Paths an agent-provided patch may never touch, relative to the workspace root. */
+const PROTECTED_PATH_PARTS = ['node_modules', '.git', 'tests'];
+const PROTECTED_PATH_PATTERNS: RegExp[] = [
+  /(^|\/)(package(-lock)?\.json|pnpm-lock\.yaml|yarn\.lock|package-lock\.json)$/,
+  /(^|\/)\.env/,
+  /(^|\/)playwright\.config\.[cm]?ts$/,
+  /(^|\/)vite\.config\.[cm]?ts$/,
+  /(^|\/)tsconfig(\.\w+)?\.json$/,
+];
+
+/**
+ * Resolve an agent-supplied file path inside the workspace and refuse anything
+ * that escapes it (traversal, absolute paths, symlinks, protected files).
+ */
+export async function resolveSafeWorkspacePath(workDir: string, relativePath: string): Promise<string> {
+  const rootReal = await fs.promises.realpath(workDir);
+  if (path.isAbsolute(relativePath)) {
+    throw new Error(`Rejected absolute path outside the workspace: ${relativePath}`);
+  }
+  const candidate = path.resolve(rootReal, relativePath);
+  if (candidate !== rootReal && !candidate.startsWith(rootReal + path.sep)) {
+    throw new Error(`Rejected path outside the workspace: ${relativePath}`);
+  }
+  const relFromRoot = path.relative(rootReal, candidate);
+  const parts = relFromRoot.split(path.sep);
+  if (parts.some((p) => PROTECTED_PATH_PARTS.includes(p))) {
+    throw new Error(`Rejected protected path: ${relativePath}`);
+  }
+  if (PROTECTED_PATH_PATTERNS.some((re) => re.test('/' + relFromRoot.split(path.sep).join('/')))) {
+    throw new Error(`Rejected protected file: ${relativePath}`);
+  }
+  // Symlink escape check: the real path must still live inside the workspace.
+  const real = await fs.promises.realpath(candidate).catch(() => null);
+  if (real && real !== candidate && !real.startsWith(rootReal + path.sep)) {
+    throw new Error(`Rejected symlink escape: ${relativePath}`);
+  }
+  return candidate;
+}
+
 /**
  * Apply a FixerOutput patch to a directory (such as an isolated sandbox workspace).
  */
@@ -162,8 +202,7 @@ export async function applyPatchToDirectory(
   workDir: string,
   output: FixerOutput
 ): Promise<{ applied: boolean; filePath: string; originalContent: string; newContent: string }> {
-  const targetFile = output.target_file.replace(/^\/+/, '');
-  const fullPath = path.join(workDir, targetFile);
+  const fullPath = await resolveSafeWorkspacePath(workDir, output.target_file);
 
   const stat = await fs.promises.stat(fullPath).catch(() => null);
   if (!stat || !stat.isFile()) {
@@ -204,7 +243,7 @@ export async function applyPatchToDirectory(
       }
 
       if (matchIdx === -1) {
-        throw new Error(`Cannot apply patch: original snippet not found in ${targetFile}`);
+        throw new Error(`Cannot apply patch: original snippet not found in ${output.target_file}`);
       }
 
       const origMatchLine = origLines[matchIdx] ?? '';
@@ -246,7 +285,7 @@ export async function applyPatchToDirectory(
   }
 
   if (newContent === originalContent) {
-    throw new Error(`Patch produced no content changes for ${targetFile}`);
+    throw new Error(`Patch produced no content changes for ${output.target_file}`);
   }
 
   await fs.promises.writeFile(fullPath, newContent, 'utf8');
