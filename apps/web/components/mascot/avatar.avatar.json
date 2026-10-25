@@ -1,0 +1,221 @@
+{
+  "schema": "bible-strong/avatar-definition",
+  "schemaVersion": 1,
+  "name": "Reel",
+  "body": {
+    "primary": { "type": "cube", "width": 1, "height": 1, "depth": 1, "roundness": 0.35 },
+    "nodes": []
+  },
+  "colors": { "body": "#24b29f", "eyes": "#0c1a17" },
+  "expressions": {
+    "neutral": {
+      "head": { "x": 0, "y": 0, "z": 0 },
+      "eyes": {
+        "left": { "width": 0.2, "height": 0.3, "x": 0, "y": 0.08, "angle": 0 },
+        "right": { "width": 0.2, "height": 0.3, "x": 0, "y": 0.08, "angle": 0 },
+        "spacing": 0.44
+      },
+      "perspective": 2,
+      "motion": { "eyes": "microSaccades", "body": "slowDrift" }
+    },
+    "wide": {
+      "head": { "x": 0, "y": 0, "z": 0 },
+      "eyes": {
+        "left": { "width": 0.22, "height": 0.38, "x": 0, "y": 0.1, "angle": 0 },
+        "right": { "width": 0.22, "height": 0.38, "x": 0, "y": 0.1, "angle": 0 },
+        "spacing": 0.44
+      },
+      "perspective": 2,
+      "motion": { "eyes": "microSaccades", "body": "none" }
+    },
+    "look-left": {
+      "head": { "x": -0.05, "y": 0, "z": 0 },
+      "eyes": {
+        "left": { "width": 0.2, "height": 0.3, "x": -0.05, "y": 0.08, "angle": 0 },
+        "right": { "width": 0.2, "height": 0.3, "x": -0.05, "y": 0.08, "angle": 0 },
+        "spacing": 0.44
+      },
+      "perspective": 2,
+      "motion": { "eyes": "none", "body": "none" }
+    },
+    "look-right": {
+      "head": { "x": 0.05, "y": 0, "z": 0 },
+      "eyes": {
+        "left": { "width": 0.2, "height": 0.3, "x": 0.05, "y": 0.08, "angle": 0 },
+        "right": { "width": 0.2, "height": 0.3, "x": 0.05, "y": 0.08, "angle": 0 },
+        "spacing": 0.44
+      },
+      "perspective": 2,
+      "motion": { "eyes": "none", "body": "none" }
+    },
+    "focused": {
+      "head": { "x": 0, "y": 0, "z": 0.03 },
+      "eyes": {
+        "left": { "width": 0.21, "height": 0.22, "x": 0, "y": 0.06, "angle": 0 },
+        "right": { "width": 0.21, "height": 0.22, "x": 0, "y": 0.06, "angle": 0 },
+        "spacing": 0.44
+      },
+      "perspective": 2,
+      "motion": { "eyes": "microSaccades", "body": "none" }
+    },
+    "up": {
+      "head": { "x": 0, "y": 0.08, "z": 0 },
+      "eyes": {
+        "left": { "width": 0.2, "height": 0.3, "x": 0, "y": 0.22, "angle": 0 },
+        "right": { "width": 0.2, "height": 0.3, "x": 0, "y": 0.22, "angle": 0 },
+        "spacing": 0.44
+      },
+      "perspective": 2,
+      "motion": { "eyes": "none", "body": "none" }
+    },
+    "tilt-confused": {
+      "head": { "x": 0, "y": 0, "z": 0.06 },
+      "eyes": {
+        "left": { "width": 0.2, "height": 0.28, "x": 0, "y": 0.08, "angle": -10 },
+        "right": { "width": 0.2, "height": 0.28, "x": 0, "y": 0.08, "angle": 10 },
+        "spacing": 0.44
+      },
+      "perspective": 2,
+      "motion": { "eyes": "none", "body": "none" }
+    },
+    "happy": {
+      "head": { "x": 0, "y": 0.02, "z": 0 },
+      "eyes": {
+        "left": { "width": 0.22, "height": 0.34, "x": 0, "y": 0.14, "angle": 0 },
+        "right": { "width": 0.22, "height": 0.34, "x": 0, "y": 0.14, "angle": 0 },
+        "spacing": 0.44
+      },
+      "perspective": 2,
+      "motion": { "eyes": "microSaccades", "body": "none" }
+    },
+    "sleepy": {
+      "head": { "x": 0, "y": -0.04, "z": 0 },
+      "eyes": {
+        "left": { "width": 0.2, "height": 0.1, "x": 0, "y": 0.02, "angle": 0 },
+        "right": { "width": 0.2, "height": 0.1, "x": 0, "y": 0.02, "angle": 0 },
+        "spacing": 0.44
+      },
+      "perspective": 2,
+      "motion": { "eyes": "none", "body": "none" }
+    },
+    "closed": {
+      "head": { "x": 0, "y": -0.06, "z": 0 },
+      "eyes": {
+        "left": { "width": 0.2, "height": 0.02, "x": 0, "y": 0.0, "angle": 0 },
+        "right": { "width": 0.2, "height": 0.02, "x": 0, "y": 0.0, "angle": 0 },
+        "spacing": 0.44
+      },
+      "perspective": 2,
+      "motion": { "eyes": "none", "body": "none" }
+    },
+    "waking-pose": {
+      "head": { "x": 0, "y": 0.04, "z": 0 },
+      "eyes": {
+        "left": { "width": 0.22, "height": 0.4, "x": 0, "y": 0.12, "angle": 0 },
+        "right": { "width": 0.22, "height": 0.4, "x": 0, "y": 0.12, "angle": 0 },
+        "spacing": 0.44
+      },
+      "perspective": 2,
+      "motion": { "eyes": "none", "body": "none" }
+    },
+    "playful-pose": {
+      "head": { "x": 0, "y": 0.03, "z": -0.05 },
+      "eyes": {
+        "left": { "width": 0.22, "height": 0.34, "x": 0, "y": 0.13, "angle": -6 },
+        "right": { "width": 0.22, "height": 0.34, "x": 0, "y": 0.13, "angle": 6 },
+        "spacing": 0.44
+      },
+      "perspective": 2,
+      "motion": { "eyes": "none", "body": "none" }
+    }
+  },
+  "expressionOrder": [
+    "neutral", "wide", "look-left", "look-right", "focused", "up",
+    "tilt-confused", "happy", "sleepy", "closed", "waking-pose", "playful-pose"
+  ],
+  "animations": {
+    "idle": {
+      "playbackMode": "loop",
+      "steps": [{ "expression": "neutral", "holdMs": 1600, "transitionMs": 200, "transition": "smooth" }],
+      "blink": { "enabled": true, "initialDelayMs": 2200, "minIntervalMs": 2600, "maxIntervalMs": 5200, "durationMs": 140 }
+    },
+    "waking": {
+      "playbackMode": "once",
+      "steps": [
+        { "expression": "waking-pose", "holdMs": 450, "transitionMs": 250, "transition": "spring" },
+        { "expression": "neutral", "holdMs": 400, "transitionMs": 250, "transition": "smooth" }
+      ],
+      "blink": { "enabled": false, "initialDelayMs": 0, "minIntervalMs": 3000, "maxIntervalMs": 6000, "durationMs": 140 }
+    },
+    "listening": {
+      "playbackMode": "loop",
+      "steps": [{ "expression": "wide", "holdMs": 1400, "transitionMs": 250, "transition": "smooth" }],
+      "blink": { "enabled": true, "initialDelayMs": 2400, "minIntervalMs": 2800, "maxIntervalMs": 5200, "durationMs": 140 }
+    },
+    "searching": {
+      "playbackMode": "pingPong",
+      "steps": [
+        { "expression": "look-left", "holdMs": 700, "transitionMs": 200, "transition": "smooth" },
+        { "expression": "look-right", "holdMs": 700, "transitionMs": 200, "transition": "smooth" }
+      ],
+      "blink": { "enabled": false, "initialDelayMs": 0, "minIntervalMs": 3000, "maxIntervalMs": 6000, "durationMs": 140 }
+    },
+    "working": {
+      "playbackMode": "loop",
+      "steps": [{ "expression": "focused", "holdMs": 1500, "transitionMs": 250, "transition": "smooth" }],
+      "blink": { "enabled": true, "initialDelayMs": 2600, "minIntervalMs": 3000, "maxIntervalMs": 5600, "durationMs": 140 }
+    },
+    "thinking": {
+      "playbackMode": "loop",
+      "steps": [{ "expression": "up", "holdMs": 1600, "transitionMs": 250, "transition": "smooth" }],
+      "blink": { "enabled": false, "initialDelayMs": 0, "minIntervalMs": 3000, "maxIntervalMs": 6000, "durationMs": 140 }
+    },
+    "curious": {
+      "playbackMode": "loop",
+      "steps": [{ "expression": "wide", "holdMs": 1200, "transitionMs": 250, "transition": "smooth" }],
+      "blink": { "enabled": true, "initialDelayMs": 2200, "minIntervalMs": 2600, "maxIntervalMs": 5000, "durationMs": 140 }
+    },
+    "confused": {
+      "playbackMode": "loop",
+      "steps": [{ "expression": "tilt-confused", "holdMs": 1500, "transitionMs": 250, "transition": "smooth" }],
+      "blink": { "enabled": false, "initialDelayMs": 0, "minIntervalMs": 3000, "maxIntervalMs": 6000, "durationMs": 140 }
+    },
+    "celebrate": {
+      "playbackMode": "once",
+      "steps": [
+        { "expression": "happy", "holdMs": 350, "transitionMs": 200, "transition": "spring" },
+        { "expression": "waking-pose", "holdMs": 300, "transitionMs": 200, "transition": "spring" },
+        { "expression": "happy", "holdMs": 400, "transitionMs": 200, "transition": "spring" },
+        { "expression": "neutral", "holdMs": 300, "transitionMs": 250, "transition": "smooth" }
+      ],
+      "blink": { "enabled": false, "initialDelayMs": 0, "minIntervalMs": 3000, "maxIntervalMs": 6000, "durationMs": 140 }
+    },
+    "happy": {
+      "playbackMode": "loop",
+      "steps": [{ "expression": "happy", "holdMs": 1200, "transitionMs": 250, "transition": "smooth" }],
+      "blink": { "enabled": true, "initialDelayMs": 2400, "minIntervalMs": 2800, "maxIntervalMs": 5200, "durationMs": 140 }
+    },
+    "drowsy": {
+      "playbackMode": "once",
+      "steps": [{ "expression": "sleepy", "holdMs": 1200, "transitionMs": 600, "transition": "smooth" }],
+      "blink": { "enabled": false, "initialDelayMs": 0, "minIntervalMs": 3000, "maxIntervalMs": 6000, "durationMs": 140 }
+    },
+    "sleeping": {
+      "playbackMode": "loop",
+      "steps": [{ "expression": "closed", "holdMs": 2000, "transitionMs": 400, "transition": "smooth" }],
+      "blink": { "enabled": false, "initialDelayMs": 0, "minIntervalMs": 3000, "maxIntervalMs": 6000, "durationMs": 140 }
+    },
+    "playful": {
+      "playbackMode": "once",
+      "steps": [
+        { "expression": "playful-pose", "holdMs": 600, "transitionMs": 200, "transition": "spring" },
+        { "expression": "neutral", "holdMs": 400, "transitionMs": 250, "transition": "smooth" }
+      ],
+      "blink": { "enabled": false, "initialDelayMs": 0, "minIntervalMs": 3000, "maxIntervalMs": 6000, "durationMs": 140 }
+    }
+  },
+  "animationOrder": [
+    "idle", "waking", "listening", "searching", "working", "thinking",
+    "curious", "confused", "celebrate", "happy", "drowsy", "sleeping", "playful"
+  ]
+}

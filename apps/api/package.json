@@ -1,0 +1,31 @@
+{
+  "name": "@replay/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx watch src/server.ts",
+    "worker": "tsx watch src/worker.ts",
+    "start": "node dist/server.js",
+    "test": "node --test-concurrency=1 --import tsx --test src/**/*.test.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.8",
+    "@replay/agents": "workspace:*",
+    "@replay/db": "workspace:*",
+    "@replay/sandbox": "workspace:*",
+    "@replay/shared": "workspace:*",
+    "@replay/storage": "workspace:*",
+    "@replay/video": "workspace:*",
+    "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.39.3",
+    "hono": "^4.7.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "typescript": "^5.7.3"
+  }
+}

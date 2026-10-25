@@ -1,0 +1,32 @@
+{
+  "name": "replay-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Replay — Drop a bug video. Get a failing test and a verified fix.",
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter=\"!apps/web\" build",
+    "build:all": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "smoke": "tsx scripts/smoke.ts",
+    "eval:watcher": "pnpm --filter @replay/agents eval:watcher",
+    "eval:locator": "pnpm --filter @replay/agents eval:locator",
+    "eval:reproducer": "pnpm --filter @replay/agents eval:reproducer",
+    "eval:pipeline": "pnpm --filter @replay/agents eval:pipeline",
+    "eval": "tsx eval/run-benchmark.ts",
+    "replay": "tsx packages/agents/src/cli.ts",
+    "dev:api": "pnpm --filter @replay/api dev",
+    "dev:worker": "pnpm --filter @replay/api worker",
+    "dev:web": "pnpm --filter @replay/web dev"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

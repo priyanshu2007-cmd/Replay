@@ -1,0 +1,10 @@
+{
+  "id": "string-sort",
+  "title": "String-based sort places $100 before $20",
+  "failure_timestamp_s": 6.0,
+  "guilty_file": "src/App.tsx",
+  "guilty_symbol": "handleSortChange",
+  "expected_behavior": "Selecting Price: Low to High sorts numerically: Desk Mat ($15), Ergonomic Mouse ($20), Studio Headset ($50), Mechanical Keyboard ($100).",
+  "observed_behavior": "Products are sorted lexicographically by string representation: Mechanical Keyboard ($100) appears before Ergonomic Mouse ($20).",
+  "route": "/#shop"
+}

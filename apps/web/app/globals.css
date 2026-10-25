@@ -1,0 +1,125 @@
+@import "tailwindcss";
+
+/*
+ * Replay tokens. One source of truth: these CSS variables drive both themes.
+ * No hex or hsl values in components. Dark is the default; html.light flips
+ * the same variables. Values and computed contrast ratios are documented in
+ * docs/design/ui-ux-design.md.
+ */
+
+:root {
+  --canvas: 240 10% 3.9%;
+  --panel: 240 4% 7%;
+  --raised: 240 4% 10%;
+  --border-subtle: 240 4% 14%;
+  --border-strong: 240 4% 20%;
+  --text-primary: 0 0% 98%;
+  --text-secondary: 240 5% 64.9%;
+  --text-muted: 240 5% 52%;
+  --accent: 172 66% 42%;
+  --accent-ink: 180 100% 3.9%;
+  --fail-fill: 0 72% 51%;
+  --fail-text: 0 84% 71%;
+  --pass: 142 71% 45%;
+  --progress: 38 92% 50%;
+  --radius-s: 6px;
+  --radius-m: 10px;
+}
+
+html.light {
+  --canvas: 0 0% 100%;
+  --panel: 240 5% 98%;
+  --raised: 0 0% 100%;
+  --border-subtle: 240 6% 90%;
+  --border-strong: 240 6% 82%;
+  --text-primary: 240 6% 10%;
+  --text-secondary: 240 4% 32%;
+  --text-muted: 240 4% 40%;
+  --accent: 172 66% 30%;
+  --accent-ink: 0 0% 100%;
+  --fail-fill: 0 74% 42%;
+  --fail-text: 0 74% 36%;
+  --pass: 142 72% 29%;
+  --progress: 32 95% 38%;
+}
+
+@theme inline {
+  --color-canvas: hsl(var(--canvas));
+  --color-panel: hsl(var(--panel));
+  --color-raised: hsl(var(--raised));
+  --color-border-subtle: hsl(var(--border-subtle));
+  --color-border-strong: hsl(var(--border-strong));
+  --color-primary: hsl(var(--text-primary));
+  --color-secondary: hsl(var(--text-secondary));
+  --color-muted: hsl(var(--text-muted));
+  --color-accent: hsl(var(--accent));
+  --color-accent-ink: hsl(var(--accent-ink));
+  --color-fail-fill: hsl(var(--fail-fill));
+  --color-fail-text: hsl(var(--fail-text));
+  --color-pass: hsl(var(--pass));
+  --color-progress: hsl(var(--progress));
+  --radius-s: var(--radius-s);
+  --radius-m: var(--radius-m);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  html.light {
+    color-scheme: light;
+  }
+  body {
+    background-color: hsl(var(--canvas));
+    color: hsl(var(--text-primary));
+    font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  ::selection {
+    background-color: hsl(var(--accent) / 0.35);
+  }
+  :focus-visible {
+    outline: 2px solid hsl(var(--accent));
+    outline-offset: 2px;
+  }
+  /* Numbers that compare must align: tokens, costs, durations */
+  .font-mono,
+  code,
+  pre,
+  kbd {
+    font-variant-numeric: tabular-nums;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Display tracking, per the type scale in ui-ux-design.md */
+  .text-display {
+    font-size: 40px;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+  }
+  @media (max-width: 640px) {
+    .text-display {
+      font-size: 28px;
+    }
+  }
+  .text-page {
+    font-size: 28px;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    font-weight: 600;
+  }
+}

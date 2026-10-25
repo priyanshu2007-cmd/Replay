@@ -1,0 +1,10 @@
+{
+  "id": "cart-nan",
+  "title": "Cart total becomes NaN after clearing quantity field",
+  "failure_timestamp_s": 8.0,
+  "guilty_file": "src/App.tsx",
+  "guilty_symbol": "handleQuantityChange",
+  "expected_behavior": "Clearing or backspacing the quantity input field should treat the value as 0 or remove the item, keeping the total as a valid currency number.",
+  "observed_behavior": "Clearing the quantity input field causes the cart total and subtotal to display '$NaN'.",
+  "route": "/#cart"
+}

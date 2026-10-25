@@ -1,0 +1,10 @@
+{
+  "id": "quantity-reset",
+  "title": "Quantity resets after page navigation",
+  "failure_timestamp_s": 13.0,
+  "guilty_file": "src/App.tsx",
+  "guilty_symbol": "activeTab",
+  "expected_behavior": "Modifying item quantity to 5, switching tabs to Catalog, and returning to Cart retains quantity at 5.",
+  "observed_behavior": "Switching to Catalog and returning to Cart resets item quantity back to 1.",
+  "route": "/#cart"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "empty-email",
+  "title": "Checkout accepts an empty email address",
+  "failure_timestamp_s": 9.0,
+  "guilty_file": "src/App.tsx",
+  "guilty_symbol": "handleCheckout",
+  "expected_behavior": "Clicking Complete Purchase with empty email shows validation error 'Please provide a valid email address.' and blocks order placement.",
+  "observed_behavior": "Checkout proceeds without email validation and shows Order Confirmed for an empty email address.",
+  "route": "/#checkout"
+}

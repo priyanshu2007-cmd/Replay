@@ -1,0 +1,36 @@
+{
+  "name": "@replay/agents",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test-concurrency=1 --import tsx --test src/llm.test.ts src/watcher.test.ts src/packer.test.ts src/locator.test.ts src/reproducer.test.ts src/verifier.test.ts src/fixer.test.ts src/reporter.test.ts src/pipeline.test.ts",
+
+    "eval:watcher": "tsx ../../eval/eval-watcher.mts",
+    "eval:locator": "tsx ../../eval/eval-locator.mts",
+    "eval:reproducer": "tsx ../../eval/eval-reproducer.mts",
+    "eval:pipeline": "tsx ../../eval/eval-pipeline.mts"
+  },
+  "dependencies": {
+    "@replay/shared": "workspace:*",
+    "@replay/storage": "workspace:*",
+    "@replay/sandbox": "workspace:*",
+    "@replay/video": "workspace:*",
+    "openai": "^4.85.4",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "typescript": "^5.7.3"
+  }
+}

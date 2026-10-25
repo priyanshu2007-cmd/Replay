@@ -1,0 +1,1827 @@
+
+
+=== PAGE 1 ===
+
+Replay — Hackathon Build Plan
+ Oct 25, 2026  ·  @Someone
+Overview
+Replay turns a screen recording of a web-app bug into a reproducing Playwright test and a
+verified fix, in about 60 seconds. It enters Track A (Coding and Agentic Engineering) and
+the submission is due Oct 30, 2026, 10:30 PM IST.
+The pitch: QA testers and users report bugs as videos ("it broke when I did this").
+Developers then spend 30–90 minutes reproducing the bug before they can even start
+fixing it. Replay does the reproduction for them, and proves it with a test.
+The 30-second wow moment: drag in a 20-second bug video. The UI scrubs to the exact
+frame where it breaks, highlights the guilty file, shows a red failing test, then a patch, then
+the same test going green.
+Scope rule: Replay never claims a fix works unless a real test run says so. Every result
+shown is from an actual execution in a sandbox.
+Definition of done for the hackathon: 4 planted bugs in a demo app reproduced and fixed
+end-to-end (target ≥ 3 of 4 green on a live run), one honest attempt on a real open-source
+app with its success rate shown, public URL, public repo, ≤ 3-minute video.
+Judging criterion How Replay wins it
+Technological implementation Three NVIDIA Nemotron models on Nebius Token
+Factory, each with one clear job (vision, long-
+context code search, reasoning/fixing), plus real
+test execution in a sandbox
+Design Video timeline beside a live agent trace and a red →
+green test panel; first result in under 2 minutes
+with sample bugs preloaded
+Potential impact Every web team triages video bug reports; metric =
+minutes from report to reproducing test
+Quality of idea Video → executable test is new; the test is proof,
+not an AI claim
+Replay — Hackathon Build Plan
+Page 1 of 39
+
+=== PAGE 2 ===
+
+Tech stack
+Total cost: $0. Use TypeScript end to end, open-source libraries only, and free tiers that
+need no subscription. The only paid service the rules force on you, Nebius Token Factory,
+is covered by free credits from the Nebius Builder Program: $25 Token Factory + $25 AI
+Cloud credits on joining, and another $25 of each about 30 days later (program terms).
+Join it today and check whether signup asks for a card.
+Layer Choice Cost Notes
+Language TypeScript, Node 22 LTS Free One language for UI,
+API, agents and
+generated tests
+AI inference Nebius Token Factory
+(Nemotron models)
+$0 with Builder
+Program credits
+Required by the rules;
+at well under $0.50 per
+run, $25 covers 50+
+runs
+Frontend Next.js 15 + Tailwind CSS
++ shadcn/ui
+Free Hosted on Vercel
+Hobby (free, no card)
+UI extras Framer Motion, Monaco
+Editor ( @monaco-
+editor/react ), native
+<video>
+Free (MIT) Timeline animation,
+test and diff viewers
+Backend API +
+worker
+Hono on Node Free (MIT) SSE streaming for the
+live trace
+Agent
+orchestration
+Your own ~300-line loop Free No LangChain; clear
+for judges
+LLM client openai  npm SDK Free (Apache-
+2.0)
+Token Factory is
+OpenAI-compatible
+Validation Zod Free (MIT) Validates every agent's
+JSON
+Video ffmpeg Free Frame extraction
+Repo packing Repomix Free (MIT) Packs the target repo
+for Lightning
+Code search ripgrep Free Agent tool
+Tests Playwright Test Free (Apache-
+2.0)
+Generated and
+baseline tests
+Replay — Hackathon Build Plan
+Page 2 of 39
+
+=== PAGE 3 ===
+
+Replay mode: the key to running on $0
+A free stack can't keep a backend running all the way through judging. So every finished
+run is saved in Supabase with its full event log, and the frontend can replay any stored
+run at real speed with no backend running. Judges always see real runs, recorded from
+actual executions. When the Nebius VM is on, they can also start live runs. The README
+explains how to run everything locally with docker compose up .
+Layer Choice Cost Notes
+Sandbox Docker Engine (Linux
+VM) or Docker Desktop
+(free for personal use)
+Free One container per run
+Database Supabase free tier
+(Postgres) + Drizzle
+ORM
+Free, no card Runs, events, artifacts;
+also powers replay
+mode
+File storage Supabase Storage (free
+tier)
+Free Videos, frames,
+screenshots, traces
+Live backend
+host
+Nebius AI Cloud CPU VM $0 with Builder
+Program AI Cloud
+credits
+Turn it on for demo and
+judging windows only,
+to stretch credits
+Fallback host Your MacBook +
+Cloudflare Quick Tunnel
+( cloudflared )
+Free, no account Public HTTPS URL to
+your laptop for demos
+HTTPS on the
+VM
+Caddy + sslip.io Free No domain purchase
+needed
+Keep-alive GitHub Actions
+scheduled workflow
+Free for public
+repos
+Pings Supabase
+weekly so the free
+project doesn't pause
+Video recording
+and editing
+OBS Studio or
+QuickTime; DaVinci
+Resolve or CapCut free
+Free Demo video
+Replay — Hackathon Build Plan
+Page 3 of 39
+
+=== PAGE 4 ===
+
+System architecture
+The browser uploads the video straight to Supabase Storage, the API queues a run in
+Supabase Postgres, and the worker drives the seven stages, calling Nemotron models on
+Token Factory and running tests in the sandbox.
+End-to-end flow
+1. Browser requests a presigned URL and uploads the video to Supabase Storage (or
+picks a sample).
+2. POST /api/runs  creates a queued run; the browser opens the SSE stream for that run.
+3. Worker claims the run, extracts frames with ffmpeg and stores them.
+4. Watch: Super VL reads the frames → BugReport  (steps, failure frame, expected vs
+actual).
+5. Locate: Lightning reads the packed repo + BugReport → ranked suspects and
+selectors.
+6. Reproduce: Ultra writes a Playwright test and runs it in the sandbox until it fails for the
+right reason.
+7. Verify: Super VL compares the test screenshot with the failure frame.
+Replay architecture · Vercel, Supabase, Nebius VM or laptop, Token Factory
+Replay — Hackathon Build Plan
+Page 4 of 39
+
+=== PAGE 5 ===
+
+8. Fix: Ultra patches the code; the repro test and the existing suite must both pass.
+9. Report: Nano writes the bug report from the recorded run; the run is marked with its
+real outcome.
+Every model call and tool call becomes a run_events  row and an SSE message, which is
+what the run view animates.
+Agents
+Replay is a pipeline of five agents plus deterministic gates, not a free-form multi-agent
+chat. Each agent has one job, one model, a fixed set of tools and a Zod-validated JSON
+output. A step only advances when its gate passes.
+Replay — Hackathon Build Plan
+Page 5 of 39
+
+=== PAGE 6 ===
+
+Deterministic gates (no AI)
+1. Repro gate: the test must fail with an assertion error, not a timeout, selector-not-found
+or syntax error. Otherwise the Reproducer retries (max 4).
+2. Same-symptom check: the failing test's final screenshot and the video's failure frame
+are sent to Super VL with one question: "Do these show the same defect? yes/no +
+reason." This is the side-by-side evidence card in the UI.
+3. Fix gate: the repro test must pass and the existing test suite must still pass. Otherwise
+the Fixer retries (max 3).
+# Agent Job Model (Nebius Token
+Factory)
+Tools Output
+0 Ingest (no
+AI)
+Video →
+timestamped
+frames
+— ffmpeg frames[]  with
+timestamps,
+stored in Object
+Storage
+1 Watcher Watch the
+frames; extract
+user steps,
+expected vs
+actual, the exact
+failure frame
+nvidia/Nemotron-
+3.5-Super-VL
+get_frames(start,
+end)  to zoom into a
+time range
+BugReport
+JSON
+2 Locator Read the whole
+repo +
+BugReport; rank
+suspect files and
+lines
+nvidia/Nemotron-
+3_5-Lightning  (1M
+context)
+search_code ,
+read_file
+Suspects[]
+with file, line
+range,
+confidence,
+reason
+3 Reproducer Write a
+Playwright test
+that fails for the
+same reason the
+video shows
+nvidia/Nemotron-3-
+Ultra-550b-a55b
+read_file ,
+write_test ,
+run_test
+Failing test +
+failure log +
+screenshot
+4 Fixer Patch the code
+so the test
+passes without
+breaking other
+tests
+nvidia/Nemotron-3-
+Ultra-550b-a55b
+read_file ,
+apply_patch ,
+run_test , run_suite
+Unified diff +
+green test log
+5 Reporter Write the bug
+report / PR
+description from
+recorded
+evidence only
+nvidia/NVIDIA-
+Nemotron-3-Nano-
+30B-A3B
+none (input = run
+record)
+Markdown
+report
+Replay — Hackathon Build Plan
+Page 6 of 39
+
+=== PAGE 7 ===
+
+4. Honesty rule: if any gate is never met, the run ends as unreproduced  or unfixed  and
+the UI says so. Metrics only count real outcomes.
+Agent skills (tools) and what each does
+Why these models
+Super VL is the only vision-language Nemotron that reads images and video frames at
+1M context, so it can take a full bug clip at once.
+Lightning is cheap and fast with 1M context, so the whole demo repo fits in one prompt
+instead of a vector database.
+Ultra is the strongest Nemotron for multi-step reasoning and tool use, which is where
+test writing and fixing fail most.
+Nano is the cheapest model, enough for summarizing recorded facts.
+This split is your model-selection story for the judges: each model earns its place on cost,
+context or capability.
+Tool Used by What it does Safety
+get_frames(start_s,
+end_s, fps)
+Watcher Returns more frames for a time
+range at higher density
+Read-only
+search_code(pattern,
+glob?)
+Locator,
+Reproducer,
+Fixer
+ripgrep over the target repo;
+returns file:line:snippet, max 50 hits
+Read-only
+read_file(path,
+start?, end?)
+Locator,
+Reproducer,
+Fixer
+Returns file content with line
+numbers
+Path must stay
+inside the repo
+write_test(name,
+code)
+Reproducer Writes
+tests/replay/<name>.spec.ts
+Only writes inside
+tests/replay/
+run_test(name) Reproducer,
+Fixer
+Runs one Playwright test in the
+sandbox; returns status, error, last
+screenshot URL, duration
+60 s timeout, no
+network except the
+app
+apply_patch(diff) Fixer Applies a unified diff with git
+apply --check  first
+Rejects edits to
+tests or config
+run_suite() Fixer Runs the existing tests 120 s timeout
+Replay — Hackathon Build Plan
+Page 7 of 39
+
+=== PAGE 8 ===
+
+Prompts
+Every agent gets a short system prompt with: its single job, the exact output schema, the
+rules it must not break, and what to do when unsure. Keep temperature low (0.1–0.2) and
+always request JSON. Store prompts as versioned files in packages/agents/prompts/  so
+you can show them in the README.
+1. Watcher (Super VL)
+You are the Watcher in Replay, a system that reproduces web-app bugs from 
+screen recordings.
+You receive frames from a screen recording, each labelled with its timestamp 
+in seconds, plus an optional note from the reporter.
+Your job: describe exactly what the user did and where the app misbehaved.
+Rules:
+- Only describe what is visible in the frames. Never guess at code or causes.
+- List user actions in order, each with the timestamp of the frame where it 
+happens.
+- Quote on-screen text exactly (button labels, error messages, values).
+- Identify the single frame where the defect is first visible.
+- If you need a closer look at a time range, call get_frames.
+- If no defect is visible, set defect_found to false.
+Return only JSON matching this schema:
+{
+  "defect_found": boolean,
+  "summary": string,                // one sentence, e.g. "Cart total shows 
+NaN after clearing quantity"
+  "steps": [{"t": number, "action": string, "target": string, "value": 
+string|null}],
+  "failure_frame_t": number,
+  "expected": string,
+  "actual": string,
+  "visible_text": string[],
+  "page_url_or_route": string|null,
+  "confidence": number              // 0 to 1
+}
+Replay — Hackathon Build Plan
+Page 8 of 39
+
+=== PAGE 9 ===
+
+2. Locator (Lightning)
+You are the Locator in Replay. You receive the full source of a web app 
+(packed as files with paths and line numbers) and a BugReport produced from a 
+screen recording.
+Your job: find the code most likely responsible for the defect.
+Rules:
+- Trace from the UI the user touched (labels and text in the BugReport) to 
+the components, handlers and state logic involved.
+- Rank at most 5 suspects. Each must point to a real file and line range from 
+the source you were given.
+- Explain each suspect in one sentence that links the code to the visible 
+symptom.
+- Never invent files, functions or line numbers. Use search_code or read_file 
+to confirm.
+Return only JSON:
+{
+  "suspects": [{"file": string, "start_line": number, "end_line": number, 
+"symbol": string, "confidence": number, "reason": string}],
+  "selectors": [{"element": string, "selector": string}],   // data-testid / 
+role / label the test can use
+  "route": string                                              // URL path 
+where the bug happens
+}
+Replay — Hackathon Build Plan
+Page 9 of 39
+
+=== PAGE 10 ===
+
+3. Reproducer (Ultra)
+You are the Reproducer in Replay. You receive a BugReport (what the video 
+shows), the Locator's suspects and selectors, and tools to read code, write a 
+Playwright test and run it.
+Your job: write ONE Playwright test (TypeScript, @playwright/test) that fails 
+because of the same defect the video shows.
+Rules:
+- Follow the user's steps from the BugReport in order.
+- Prefer getByRole, getByLabel and getByTestId over CSS selectors.
+- End with an assertion that encodes the EXPECTED behaviour, so it fails on 
+the current code.
+- Base URL is http://localhost:5173. Do not use external network.
+- After writing, call run_test. A valid reproduction fails with an assertion 
+error that matches the BugReport's "actual" behaviour.
+- If the test fails for another reason (timeout, selector not found, syntax), 
+read the error, fix the test and run again.
+- Never weaken the assertion just to make the run look right.
+- You have at most 4 runs.
+When done, return only JSON:
+{"status": "reproduced" | "not_reproduced", "test_name": string, "assertion": 
+string, "failure_message": string, "notes": string}
+Replay — Hackathon Build Plan
+Page 10 of 39
+
+=== PAGE 11 ===
+
+4. Fixer (Ultra)
+You are the Fixer in Replay. You receive the BugReport, the suspects, a 
+failing reproduction test and its failure output, and tools to read files, 
+apply a patch and run tests.
+Your job: make the smallest correct change to the application code so the 
+reproduction test passes and the existing tests still pass.
+Rules:
+- Change application code only. Never edit tests, Playwright config or 
+package files.
+- Produce a unified diff and apply it with apply_patch.
+- Fix the root cause, not the symptom (e.g. parse input to a number; do not 
+hide NaN with a string replace).
+- After each patch, call run_test on the reproduction test, then run_suite.
+- If something fails, read the output and revise. You have at most 3 patch 
+attempts.
+When done, return only JSON:
+{"status": "fixed" | "not_fixed", "diff": string, "root_cause": string, 
+"files_changed": string[], "risk": "low" | "medium" | "high"}
+5. Same-symptom check (Super VL)
+Image A is a frame from a user's bug recording. Image B is the final 
+screenshot of an automated test.
+Do both images show the same defect? Compare the specific broken element and 
+value, not the page layout.
+Return only JSON: {"same_defect": boolean, "reason": string}
+6. Reporter (Nano)
+You write bug reports for developers. You receive a Replay run record with 
+the video summary, steps, failing test, diff and real test results.
+Write a concise GitHub issue + PR description in Markdown: title, steps to 
+reproduce, expected vs actual, root cause, fix, test evidence.
+Use only facts present in the run record. Do not add numbers or claims that 
+are not in it.
+Prompting tips that matter here
+Put frames in the Watcher message as an ordered list of image_url  parts, each
+preceded by a text part like t=12.5s .
+Replay — Hackathon Build Plan
+Page 11 of 39
+
+=== PAGE 12 ===
+
+For the Locator, put the packed repo first and the BugReport last, so the question sits
+next to the answer it needs.
+If a model returns invalid JSON, retry once with the Zod error appended ("Your output
+failed validation: …").
+Log every prompt, response, token count and latency to run_events ; this becomes
+the live trace and your README evidence.
+Prompt guide
+Use this guide to write, test and fix every agent prompt yourself, with help from any AI
+assistant. A good agent prompt is not clever wording. It is a precise contract: inputs, one
+job, rules, tools, output schema and what to do when unsure. Then it is tested against your
+sample bugs and changed one thing at a time.
+The 7-part skeleton for every agent prompt
+1. Role: one line. "You are the Locator in Replay, a system that reproduces web-app bugs
+from screen recordings."
+2. Inputs: exactly what the agent receives and in what format (frames with timestamps,
+packed repo, BugReport JSON).
+3. Job: one sentence, one outcome. If you need "and", it might be two agents.
+4. Rules: 4–8 short bullets. Include the failure you fear most ("Never invent file paths",
+"Never weaken the assertion").
+5. Tools: when to call each tool and the limit ("at most 4 runs").
+6. Output: the exact JSON schema with types and one-line comments. Say "Return only
+JSON."
+7. When unsure: what to return instead of guessing ( defect_found: false , status:
+"not_reproduced" , a confidence  field).
+Meta-prompt 1: draft an agent prompt
+Paste this into Claude, ChatGPT or Gemini (free tiers are fine) and fill the brackets.
+Replay — Hackathon Build Plan
+Page 12 of 39
+
+=== PAGE 13 ===
+
+You are an expert in writing system prompts for LLM agents that call tools 
+and return strict JSON.
+Write a system prompt for this agent:
+- System: Replay — turns a screen recording of a web-app bug into a failing 
+Playwright test and a verified fix.
+- Agent name: [Watcher | Locator | Reproducer | Fixer | Verifier | Reporter]
+- Model: [e.g. NVIDIA Nemotron 3 Ultra via an OpenAI-compatible API]
+- Inputs it receives: [describe exactly, with an example]
+- Its single job: [one sentence]
+- Tools it can call: [name, arguments, what it returns, limits]
+- Output: strict JSON matching this Zod schema: [paste schema]
+- Failure modes I am worried about: [e.g. invents line numbers; writes tests 
+that fail on timeouts]
+- What it must do when unsure: [e.g. return status "not_reproduced" with 
+notes]
+Requirements for the prompt you write:
+1. Use this structure: Role, Inputs, Job, Rules, Tools, Output, When unsure.
+2. Rules are short, concrete and testable. No vague words like "carefully" or 
+"thoroughly".
+3. Include one short example of a valid output.
+4. Keep it under 350 words.
+5. After the prompt, list 5 test cases (inputs + what a correct answer looks 
+like) I can use to check it.
+Meta-prompt 2: fix a prompt that fails
+Use this after a run goes wrong. Give it real evidence, not a description.
+Replay — Hackathon Build Plan
+Page 13 of 39
+
+=== PAGE 14 ===
+
+This system prompt for an LLM agent is producing wrong results.
+<prompt>
+[paste current prompt]
+</prompt>
+<input>
+[paste the exact input it received, trimmed if huge]
+</input>
+<bad_output>
+[paste what it returned]
+</bad_output>
+<expected>
+[what a correct output would have been, and why]
+</expected>
+Diagnose the most likely cause in 2–3 sentences. Then propose the smallest 
+change to the prompt (add, remove or reword at most 3 lines) that fixes this 
+without breaking other cases. Show the changed lines as a diff, then the full 
+revised prompt.
+Meta-prompt 3: get help building one step
+Use this when you ask an AI coding assistant to build a step from the Build steps section.
+I'm building Replay for a hackathon (TypeScript monorepo: Next.js web, Hono 
+API/worker, packages/agents, packages/sandbox, Supabase Postgres + Storage, 
+Nemotron models via Nebius Token Factory's OpenAI-compatible API at 
+https://api.tokenfactory.nebius.com/v1/).
+Build step [number and name] from my plan:
+- What to build: [paste the step's description]
+- Done when: [paste the step's done-when]
+- Files that already exist and matter: [paste or list]
+- Constraints: free/open-source libraries only; strict TypeScript; Zod for 
+all external data; no secrets in code.
+Give me: the files to create or change (full contents), the commands to run, 
+and a quick way to test that "done when" is met. Ask me if anything essential 
+is missing before writing code.
+Replay — Hackathon Build Plan
+Page 14 of 39
+
+=== PAGE 15 ===
+
+How to test prompts (do this, it's what makes them work)
+1. Keep a golden set: for each sample video, an expected.json  with the failure time (±2
+s), the guilty file and the expected outcome.
+2. Write pnpm eval:watcher  and pnpm eval:locator  scripts that run the agent on
+every sample and print a score (e.g. "4/5 failure frames correct").
+3. Change one thing at a time and re-run the eval. Keep prompts in git so you can see
+which change helped.
+4. Save each prompt version's score in a short table in the README; judges like seeing
+that you measured.
+Common symptoms and the prompt fix
+NVIDIA models on Nebius Token Factory
+All five Nemotron models below are listed on Token Factory, and the API is OpenAI-
+compatible, so one client covers all of them. Prices and IDs below were read from the
+public catalog on Oct 20, 2026 (BenchLM); confirm them in the Token Factory console
+Symptom Likely cause Fix in the prompt
+Invents files or line
+numbers
+Not forced to verify "Every file and line must come from
+the source given or a read_file result.
+Use search_code to confirm."
+Returns prose instead
+of JSON
+Schema buried or vague Put the schema last, say "Return only
+JSON", add one valid example; retry
+with the Zod error
+Test fails on timeout,
+not the bug
+Unclear what counts as
+success
+State the repro gate explicitly and
+give the selectors from the Locator
+Weakens the assertion
+to "pass"
+Goal ambiguous "Never weaken or remove the
+assertion. A failing test is the goal at
+this step."
+Fix hides the symptom No root-cause rule Add a do/don't example ("parse to
+number, don't string-replace NaN")
+Watcher picks wrong
+frame
+Frames too sparse or
+unlabeled
+Label every frame with t=..s ; let it
+call get_frames  for a closer look
+Long, rambling answers No length limit "Each reason is one sentence." Lower
+temperature to 0.1
+Replay — Hackathon Build Plan
+Page 15 of 39
+
+=== PAGE 16 ===
+
+before you code.
+Cost per run (estimate): roughly 40 frames + 200K tokens of repo context + 4–7 tool-loop
+turns comes to well under $0.50 per run. Log real token counts per run and show the
+actual cost in the UI rather than this estimate.
+Client setup
+Base URL is https://api.tokenfactory.nebius.com/v1/  with your key in
+NEBIUS_API_KEY  (Token Factory quickstart).
+// packages/agents/src/llm.ts
+import OpenAI from "openai";
+export const nebius = new OpenAI({
+  baseURL: "https://api.tokenfactory.nebius.com/v1/",
+  apiKey: process.env.NEBIUS_API_KEY,
+});
+export const MODELS = {
+  vision: "nvidia/Nemotron-3.5-Super-VL",
+  longContext: "nvidia/Nemotron-3_5-Lightning",
+  reasoning: "nvidia/Nemotron-3-Ultra-550b-a55b",
+  cheap: "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+} as const;
+Role in Replay Model ID Input / Output
+($ per 1M
+tokens)
+Context Listed
+speed
+Watcher, same-
+symptom check
+nvidia/Nemotron-3.5-
+Super-VL
+$0.30 / $0.90 1.05M 282
+tok/s
+Locator nvidia/Nemotron-3_5-
+Lightning
+$0.06 / $0.24 1.05M 314
+tok/s
+Reproducer, Fixer nvidia/Nemotron-3-
+Ultra-550b-a55b
+$1.00 / $3.00 1.05M 523
+tok/s
+Reporter nvidia/NVIDIA-
+Nemotron-3-Nano-30B-
+A3B
+$0.06 / $0.24 262K 60 tok/s
+Fallback for
+Reproducer/Fixer
+nvidia/nemotron-3-
+super-120b-a12b
+$0.30 / $0.90 262K 127
+tok/s
+Replay — Hackathon Build Plan
+Page 16 of 39
+
+=== PAGE 17 ===
+
+Sending video frames to the vision model
+Token Factory accepts images as a URL or as base64 in image_url  parts (vision example).
+Don't rely on raw video upload: extract frames with ffmpeg and send them as images. This
+works on any VL model, including the Nano 2 VL fallback.
+# 2 frames per second + extra frames on scene changes, 1280px wide
+ffmpeg -i bug.mp4 -vf "fps=2,scale=1280:-1" frames/f_%04d.jpg
+ffmpeg -i bug.mp4 -vf "select='gt(scene,0.15)',showinfo,scale=1280:-1" -vsync 
+vfr frames/scene_%04d.jpg
+const content = [
+  { type: "text", text: `Reporter note: ${note ?? "none"}` },
+  ...frames.flatMap((f) => [
+    { type: "text", text: `t=${f.t.toFixed(1)}s` },
+    { type: "image_url", image_url: { url: f.signedUrl } }, // Supabase 
+Storage signed URL
+  ]),
+];
+const res = await nebius.chat.completions.create({
+  model: MODELS.vision,
+  temperature: 0.1,
+  response_format: { type: "json_object" },
+  messages: [
+    { role: "system", content: WATCHER_PROMPT },
+    { role: "user", content },
+  ],
+});
+const report = BugReport.parse(JSON.parse(res.choices[0].message.content!));
+Replay — Hackathon Build Plan
+Page 17 of 39
+
+=== PAGE 18 ===
+
+Tool-calling loop (Reproducer and Fixer)
+async function runAgent({ model, system, user, tools, handlers, maxTurns, 
+emit }) {
+  const messages = [{ role: "system", content: system }, { role: "user", 
+content: user }];
+  for (let turn = 0; turn < maxTurns; turn++) {
+    const t0 = Date.now();
+    const res = await nebius.chat.completions.create({ model, messages, 
+tools, temperature: 0.2 });
+    const msg = res.choices[0].message;
+    messages.push(msg);
+    await emit({ type: "llm", model, usage: res.usage, ms: Date.now() - t0 
+});
+    if (!msg.tool_calls?.length) return msg.content;          // final JSON 
+answer
+    for (const call of msg.tool_calls) {
+      const args = JSON.parse(call.function.arguments);
+      const result = await handlers[call.function.name](args);  // e.g. 
+run_test in Docker
+      await emit({ type: "tool", name: call.function.name, args, result });
+      messages.push({ role: "tool", tool_call_id: call.id, content: 
+JSON.stringify(result) });
+    }
+  }
+  throw new Error("max turns reached");
+}
+Every emit  writes a row to run_events  and pushes it to the browser over SSE, so the
+judges watch each model call, tool call, token count and latency live.
+What to verify on day 1
+All five model IDs respond in the Token Factory playground with your key
+Super VL accepts 30+ images in one request (if not, batch frames in chunks of 10–15
+and merge)
+Ultra supports tool calling through tools  (if not, use Super for the tool loops)
+response_format: json_object  is honoured (if not, rely on the prompt + Zod retry)
+Builder Program credits are applied to your Token Factory balance, and
+MAX_TOKENS_PER_RUN is set
+Replay — Hackathon Build Plan
+Page 18 of 39
+
+=== PAGE 19 ===
+
+Backend design
+The backend is two processes from one codebase: an API that accepts runs and streams
+events, and a worker that executes the pipeline and drives the sandbox. They share
+Supabase Postgres and Storage.
+API endpoints (Hono)
+Worker loop
+1. Poll: UPDATE runs SET status='running', locked_at=now() WHERE id = (SELECT
+id FROM runs WHERE status='queued' ORDER BY created_at FOR UPDATE SKIP
+LOCKED LIMIT 1) RETURNING * .
+2. Ingest: download video, run ffmpeg, upload frames to frames/<runId>/ , insert
+artifacts.
+3. Watcher → Locator → Reproducer → same-symptom check → Fixer → Reporter, each
+writing its output to runs  and its events to run_events .
+4. Mark run fixed , reproduced_only , unreproduced  or failed ; record duration,
+tokens and cost.
+5. Concurrency: 2 runs at a time on an 8-vCPU VM (each sandbox uses a browser).
+Method Path Purpose
+POST /api/uploads Returns a signed Supabase Storage upload URL;
+browser uploads the video directly
+POST /api/runs Body: { videoKey, targetId, note? }  → creates
+run ( status=queued ), returns runId
+GET /api/runs/:id Full run: status, BugReport, suspects, test, diff,
+metrics
+GET /api/runs/:id/events Server-Sent Events stream of run_events  (replays
+history, then live)
+POST /api/runs/:id/rerun Re-runs the same video (for consistency demos)
+GET /api/targets Available target apps (demo shop, real OSS app)
+GET /api/samples Preloaded sample bug videos for one-click demos
+GET /api/stats Aggregate success rates, median time, median cost
+across all runs
+GET /api/health Checks DB, storage, Token Factory and Docker
+Replay — Hackathon Build Plan
+Page 19 of 39
+
+=== PAGE 20 ===
+
+Sandbox runner
+One Docker container per run, started from a pre-built image that contains the target app
+with node_modules  installed and Playwright browsers.
+# sandbox/Dockerfile.demo-shop
+FROM mcr.microsoft.com/playwright:v1.57.0-noble
+WORKDIR /app
+COPY demo-shop/package.json demo-shop/pnpm-lock.yaml ./
+RUN corepack enable && pnpm install --frozen-lockfile
+COPY demo-shop/ .
+CMD ["sleep", "infinity"]
+Start: docker run -d --network none --memory 2g --cpus 2 --ipc=host replay-
+demo-shop . The app and the browser talk over localhost inside the container, so no
+network is needed.
+Inside: pnpm dev --port 5173 &  then wait for the port.
+run_test : docker exec <id> npx playwright test tests/replay/<name>.spec.ts
+--reporter=json --trace=on  with a 60 s timeout. Copy out the JSON report, last
+screenshot and trace zip, upload to Supabase Storage, return a compact result to the
+agent.
+apply_patch : copy diff in, git apply --check  then git apply .
+Teardown: docker rm -f  at the end of the run, always (in a finally ).
+Pin the Playwright image version to match the @playwright/test  version in the demo
+app, or browsers won't be found (Playwright Docker docs).
+Event model (streamed to the UI)
+type RunEvent =
+  | { type: "stage"; stage: "ingest" | "watch" | "locate" | "reproduce" | 
+"verify" | "fix" | "report"; status: "start" | "done" | "fail" }
+  | { type: "llm"; agent: string; model: string; promptTokens: number; 
+completionTokens: number; ms: number; costUsd: number }
+  | { type: "tool"; agent: string; name: string; args: unknown; ok: boolean; 
+summary: string }
+  | { type: "test"; name: string; status: "passed" | "failed"; error?: 
+string; screenshotUrl?: string }
+  | { type: "artifact"; kind: "bug_report" | "suspects" | "diff" | "report"; 
+data: unknown };
+Replay — Hackathon Build Plan
+Page 20 of 39
+
+=== PAGE 21 ===
+
+Database and storage
+Use one free Supabase project for both the database (Postgres) and file storage. It lives
+outside your backend host, so stored runs stay viewable in replay mode even when the
+VM or laptop is off. Postgres holds runs, events and metrics; Supabase Storage holds
+videos, frames, screenshots and traces, and Postgres keeps only their keys.
+Connect the worker and API with the Postgres connection string ( DATABASE_URL , use
+the pooler URL) through Drizzle, exactly as before.
+The frontend reads finished sample runs directly with @supabase/supabase-js  and
+the anon key, protected by Row Level Security: only rows with is_sample = true  or a
+share token are readable.
+Free projects pause after a period of inactivity, so add a weekly GitHub Actions
+workflow that runs a tiny query to keep it awake through judging.
+Local development: run Postgres in Docker ( postgres:16 ) and point DATABASE_URL  at
+it; switch to Supabase for the deployed demo.
+Schema (Drizzle)
+// packages/db/schema.ts
+export const targets = pgTable("targets", {
+  id: text("id").primaryKey(),               // "demo-shop", "oss-todo"
+  name: text("name").notNull(),
+  repoUrl: text("repo_url"),
+  sandboxImage: text("sandbox_image").notNull(),
+  baseUrl: text("base_url").default("http://localhost:5173"),
+});
+export const runs = pgTable("runs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  targetId: text("target_id").references(() => targets.id),
+  videoKey: text("video_key").notNull(),
+  note: text("note"),
+  status: text("status").notNull().default("queued"), // 
+queued|running|fixed|reproduced_only|unreproduced|failed
+  stage: text("stage"),
+  bugReport: jsonb("bug_report"),
+  suspects: jsonb("suspects"),
+  testCode: text("test_code"),
+  testResultBefore: jsonb("test_result_before"),
+  sameSymptom: jsonb("same_symptom"),
+  diff: text("diff"),
+  testResultAfter: jsonb("test_result_after"),
+  suitePassed: boolean("suite_passed"),
+Replay — Hackathon Build Plan
+Page 21 of 39
+
+=== PAGE 22 ===
+
+  reportMd: text("report_md"),
+  promptTokens: integer("prompt_tokens").default(0),
+  completionTokens: integer("completion_tokens").default(0),
+  costUsd: numeric("cost_usd").default("0"),
+  durationMs: integer("duration_ms"),
+  isSample: boolean("is_sample").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  lockedAt: timestamp("locked_at"),
+  finishedAt: timestamp("finished_at"),
+});
+export const runEvents = pgTable("run_events", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  runId: uuid("run_id").references(() => runs.id),
+  seq: integer("seq").notNull(),
+  type: text("type").notNull(),             // stage|llm|tool|test|artifact
+  agent: text("agent"),
+  payload: jsonb("payload").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const artifacts = pgTable("artifacts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  runId: uuid("run_id").references(() => runs.id),
+  kind: text("kind").notNull(),             // 
+video|frame|screenshot|trace|report
+  key: text("key").notNull(),               // Supabase Storage key
+  t: real("t"),                             // timestamp in video, for frames
+  createdAt: timestamp("created_at").defaultNow(),
+});
+// Indexes: runs(status, created_at), run_events(run_id, seq), 
+artifacts(run_id, kind)
+File storage layout (Supabase Storage)
+replay-artifacts/            (bucket, private)
+  videos/<runId>.mp4
+  frames/<runId>/t_0012.5.jpg
+  screenshots/<runId>/before.png | after.png
+  traces/<runId>/trace.zip
+  samples/<sampleId>.mp4
+Replay — Hackathon Build Plan
+Page 22 of 39
+
+=== PAGE 23 ===
+
+// packages/storage/src/index.ts (server side, service-role key never reaches 
+the browser)
+import { createClient } from "@supabase/supabase-js";
+export const supabase = createClient(process.env.SUPABASE_URL!, 
+process.env.SUPABASE_SERVICE_ROLE_KEY!);
+export async function put(key: string, body: Buffer, contentType: string) {
+  const { error } = await supabase.storage.from("replay-
+artifacts").upload(key, body, { contentType, upsert: true });
+  if (error) throw error;
+}
+export async function signedUrl(key: string, seconds = 900) {
+  const { data, error } = await supabase.storage.from("replay-
+artifacts").createSignedUrl(key, seconds);
+  if (error) throw error;
+  return data.signedUrl;   // also used as the image URL sent to Super VL
+}
+Browser uploads use createSignedUploadUrl  from the API, so videos go straight to
+storage. Keep frames small (1280 px JPEG, quality 80) to stay inside the free storage
+quota, and delete frames of non-sample runs after 7 days.
+Frontend design
+A judge should understand Replay in 30 seconds and see a full red → green result in under
+2 minutes, without uploading anything. Give it a distinctive "forensics replay" identity:
+dark editor-like canvas, monospace accents, one accent color for red/green verdicts.
+Avoid a chat interface entirely.
+Screens
+1. Home ( / )
+One-line promise: "Drop a bug video. Get a failing test and a verified fix."
+Three sample-bug cards with 3-second looping previews (e.g. "Cart total shows
+NaN", "Discount applied twice", "Price sort is wrong"). One click starts a run.
+Upload zone for your own video + target app picker + optional note.
+Live stats strip from /api/stats : runs, % reproduced, % fixed, median time,
+median cost. Real numbers only.
+2. Run view ( /runs/[id] ) — the hero screen, three columns
+Replay — Hackathon Build Plan
+Page 23 of 39
+
+=== PAGE 24 ===
+
+Left: Video. Player with a scrubber; markers for each detected user step; a red
+marker at the failure frame. When the Watcher finishes, the player jumps to that
+frame and pauses.
+Center: Agent trace. Vertical timeline of stages (Watch → Locate → Reproduce →
+Verify → Fix → Report). Each step shows the model badge (e.g. "Nemotron 3.5 Super
+VL"), tokens, latency and cost, expandable to see tool calls. Steps animate in as SSE
+events arrive.
+Right: Code & tests. Tabs: Suspects (file + highlighted lines), Test (generated spec
+in Monaco), Diff (Monaco diff editor), Terminal (test output). A large status pill flips
+from red FAILING to green PASSING.
+Bottom: Evidence card. Video failure frame and test screenshot side by side, with
+the same-symptom verdict.
+Final: Report. Rendered Markdown bug report + "Copy as GitHub issue" and
+"Download test" buttons.
+3. Benchmark ( /benchmark ) — table of every sample bug × attempts with outcome, time
+and cost, plus totals. This answers "does it really work?" with your own numbers,
+including failures.
+4. How it works ( /how ) — the architecture diagram and the model-per-agent table.
+Judges look for exactly this.
+UX details that score on Design
+First result with zero input: sample cards auto-play; a "Watch a finished run" link opens
+a completed run instantly if the live one is slow.
+Always show what's happening: each stage has a spinner, elapsed time and a one-line
+description ("Super VL is reading 38 frames…").
+Failures are designed states, not errors: "Couldn't reproduce — here's what the test
+saw" with the screenshot.
+Keyboard: Space plays/pauses the video, J/K jump between steps.
+Mobile: run view stacks vertically; the status pill stays sticky at the top.
+Repo structure and demo app
+Use one public GitHub monorepo named replay , MIT-licensed, with the agents in their
+own package so the README can point judges straight at them.
+replay/
+├ ─ LICENSE                      # MIT, at the top level (required)
+├ ─ README.md
+├ ─ docker-compose.yml           # api, worker, postgres, caddy
+Replay — Hackathon Build Plan
+Page 24 of 39
+
+=== PAGE 25 ===
+
+├ ─ .env.example
+├ ─ apps/
+│  ├ ─ web/                      # Next.js frontend (Vercel)
+│  │  └─ app/ (page.tsx, runs/[id], benchmark, how)
+│  └─ api/                      # Hono API + worker entrypoints
+│     ├ ─ src/server.ts
+│     └─ src/worker.ts
+├ ─ packages/
+│  ├ ─ agents/                   # ← the AI core
+│  │  ├ ─ prompts/ (watcher.md, locator.md, reproducer.md, fixer.md, 
+verify.md, reporter.md)
+│  │  ├ ─ src/llm.ts            # Token Factory client + model map
+│  │  ├ ─ src/runAgent.ts       # tool-calling loop
+│  │  ├ ─ src/watcher.ts, locator.ts, reproducer.ts, fixer.ts, reporter.ts
+│  │  ├ ─ src/tools/ (getFrames, searchCode, readFile, writeTest, runTest, 
+applyPatch, runSuite)
+│  │  ├ ─ src/schemas.ts        # Zod: BugReport, Suspects, ReproResult, 
+FixResult
+│  │  └─ src/pipeline.ts       # orchestrates stages + gates
+│  ├ ─ sandbox/                  # Docker control (start, exec, copy, 
+teardown)
+│  ├ ─ video/                    # ffmpeg frame extraction
+│  ├ ─ storage/                  # Supabase Storage helpers
+│  └─ db/                       # Drizzle schema + migrations
+├ ─ targets/
+│  └─ demo-shop/                # React + Vite app with planted bugs
+├ ─ sandbox-images/
+│  └─ Dockerfile.demo-shop
+├ ─ samples/                     # bug videos + expected outcomes (for 
+benchmark)
+└─ eval/
+   └─ run-benchmark.ts          # runs every sample N times, writes results
+The demo target app: "Demo Shop"
+A small React + Vite store (product list, cart, checkout form) with an existing passing
+Playwright suite of ~6 tests and five planted bugs, each on its own git branch so you can
+switch per sample.
+Bug What the video shows Planted cause Why it's a good
+demo
+Cart total
+NaN
+Clearing a quantity
+field makes the total
+show "NaN"
+Number('')  path not
+handled; quantity kept as
+string
+Instantly visible,
+classic
+Replay — Hackathon Build Plan
+Page 25 of 39
+
+=== PAGE 26 ===
+
+Record each bug as a 10–25 second screen recording (macOS: Cmd+Shift+5) at 1280–1440
+px wide, with large, readable text. Clear videos are part of the product experience, not
+cheating; say in the README that real-world videos are harder.
+One real-world target (credibility)
+Add one open-source React app (for example a TodoMVC React implementation from
+github.com/tastejs/todomvc) with a bug you reintroduce from its history or write yourself.
+Run it 5 times and report the true success rate on the Benchmark page, even if it is 2/5.
+Deployment
+Everything deploys for $0: frontend on Vercel Hobby, database and files on Supabase
+free, inference on Token Factory credits, and the backend on a Nebius CPU VM paid from
+Builder Program credits. Your laptop with a free Cloudflare tunnel is the fallback. Replay
+mode means the public demo works even when no backend is running.
+Bug What the video shows Planted cause Why it's a good
+demo
+Discount
+applied
+twice
+Double-clicking
+"Apply" takes 20% off
+twice
+No idempotency guard on
+the coupon handler
+Needs reading the
+click sequence in
+frames
+Price sort
+wrong
+"Sort by price" puts
+$100 before $20
+Compares price strings, not
+numbers
+Clear expected vs
+actual
+Empty email
+accepted
+Checkout succeeds
+with a blank email
+Validation checks email
+!== undefined  instead of
+non-empty
+Form flow, multi-
+step
+Quantity
+resets
+Cart quantity goes
+back to 1 after page
+navigation
+State not persisted to
+store/localStorage
+Harder; good
+honest-failure
+candidate
+Piece Where Cost How
+Frontend
+( apps/web )
+Vercel Hobby Free Import the GitHub repo, root
+apps/web , set env vars
+Database +
+files
+Supabase free project Free Create project, private
+bucket replay-artifacts ,
+run Drizzle migrations
+Replay — Hackathon Build Plan
+Page 26 of 39
+
+=== PAGE 27 ===
+
+Stretching the AI Cloud credits: keep the VM stopped while you develop locally. Start it
+for recording the demo, on submission day, and during any judging window announced on
+Devpost. The rest of the time the site runs in replay mode and shows a banner: "Live runs
+are paused — watch recorded runs or run locally with docker compose up ."
+Nebius VMs are created in the web console under Compute → Virtual machines, choosing
+no GPUs (Nebius docs). Check the preset's hourly price against your credit balance
+before creating it.
+docker-compose.yml (outline)
+services:
+  postgres:
+    image: postgres:16
+    environment: [POSTGRES_PASSWORD=${PG_PASSWORD}, POSTGRES_DB=replay]
+    volumes: [pgdata:/var/lib/postgresql/data]
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    command: node dist/server.js
+Piece Where Cost How
+Inference Nebius Token Factory Builder
+Program
+credits
+API key in env
+API + worker +
+sandbox (live
+mode)
+Nebius AI Cloud CPU VM,
+Docker Compose
+Builder
+Program AI
+Cloud
+credits
+Smallest preset that runs
+one browser sandbox (2–4
+vCPU, 8 GB);
+MAX_CONCURRENT_RUNS=1
+Fallback live
+host
+Your MacBook +
+cloudflared tunnel --
+url
+http://localhost:8787
+Free, no
+account
+Gives a public
+trycloudflare.com  HTTPS
+URL; only up while your
+laptop is on
+HTTPS on the
+VM
+Caddy + <ip>.sslip.io Free Automatic TLS without
+buying a domain
+Keep
+Supabase
+awake
+GitHub Actions weekly cron Free curl  the API health route
+or run one SQL query
+Demo video YouTube Free ≤ 3 minutes, public
+Code Public GitHub repo with
+MIT LICENSE
+Free Required by the rules
+Replay — Hackathon Build Plan
+Page 27 of 39
+
+=== PAGE 28 ===
+
+    env_file: .env
+    depends_on: [postgres]
+  worker:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    command: node dist/worker.js
+    env_file: .env
+    volumes: [/var/run/docker.sock:/var/run/docker.sock]
+    depends_on: [postgres]
+  caddy:
+    image: caddy:2
+    ports: ["80:80", "443:443"]
+    volumes: [./Caddyfile:/etc/caddy/Caddyfile, caddy_data:/data]
+volumes: { pgdata: {}, caddy_data: {} }
+Environment variables
+Name,Used by,Example / notes
+NEBIUS_API_KEY,api + worker,Token Factory key (never commit)
+NEBIUS_BASE_URL,api + worker,https://api.tokenfactory.nebius.com/v1/
+MODEL_VISION,worker,nvidia/Nemotron-3.5-Super-VL
+MODEL_LONG_CONTEXT,worker,nvidia/Nemotron-3_5-Lightning
+MODEL_REASONING,worker,nvidia/Nemotron-3-Ultra-550b-a55b
+MODEL_CHEAP,worker,nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B
+DATABASE_URL,api + worker,Supabase pooler connection string (local: 
+postgres://replay:***@postgres:5432/replay)
+SUPABASE_URL,api + worker + web,https://<project>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY,api + worker,Server only; never in the browser
+NEXT_PUBLIC_SUPABASE_URL,web,Same project URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY,web,Public key; RLS limits it to sample runs
+NEXT_PUBLIC_API_URL,web,https://<ip>.sslip.io or 
+https://<name>.trycloudflare.com (empty = replay mode only)
+CORS_ORIGIN,api,https://replay-<you>.vercel.app
+MAX_CONCURRENT_RUNS,worker,1
+MAX_TOKENS_PER_RUN,worker,400000 (protects your credits)
+The Compose file above is for local development and the VM; with Supabase in
+production, drop the postgres  service there and point DATABASE_URL  at Supabase.
+Abuse protection (public demo)
+Limit uploads to 30 seconds and 50 MB; rate-limit POST /api/runs  to 5 per IP per hour.
+Only allow your configured targets; users can't point Replay at arbitrary repos in the
+public demo.
+Cap tokens per run and stop the run if the cap is hit.
+Replay — Hackathon Build Plan
+Page 28 of 39
+
+=== PAGE 29 ===
+
+Build steps and 4-day sprint
+36 steps in 7 phases, about 51 focused hours, done in a 4-day sprint (Oct 25–28) at ~16
+hours a day. Oct 29 is buffer and polish, and you submit on Oct 29 night or Oct 30 by 6 PM
+IST at the latest. Each step is small enough to finish in one sitting and has a "done when"
+test, so you always know whether you can move on.
+Three rules for the sprint:
+Pipeline before UI. The CLI must go video → red → green (step 20) before you touch
+the frontend.
+Never skip a "done when". A step that half-works costs triple later.
+Protect your sleep. Even on full day-and-night days, sleep 5–6 hours. Tired debugging
+is the slowest kind, and you need a clear head for the demo video.
+Phase A · Setup — 3.25 h (Day 1)
+4-day sprint · 36 steps, about 51 focused hours, 2 buffer days
+# Step What to build Done when Hours
+1 Accounts and
+credits
+Join Nebius Builder Program;
+Token Factory API key; GitHub,
+Vercel, Supabase accounts
+API key works in the
+Token Factory
+playground
+0.75
+2 Model smoke
+test
+scripts/smoke.ts  calls all
+four Nemotron models; Super
+VL with 30 images; Ultra with
+one tool
+Each model answers; you
+note latency and
+whether 30 images and
+tool calls work
+0.75
+Replay — Hackathon Build Plan
+Page 29 of 39
+
+=== PAGE 30 ===
+
+Phase B · Demo target — 5 h (Day 1)
+Phase C · Perception agents — 6 h (Day 1)
+# Step What to build Done when Hours
+3 Monorepo
+scaffold
+pnpm workspaces, strict
+tsconfig, ESLint, MIT LICENSE ,
+.env.example , folders from
+Repo structure
+pnpm -r build  passes
+on empty packages
+1
+4 Database and
+storage
+Supabase project, private
+bucket, Drizzle schema, first
+migration; local Postgres in
+Docker
+Tables exist; a test script
+uploads and signs a file
+0.75
+# Step What to build Done when Hours
+5 Demo
+Shop app
+React + Vite: product list,
+sort, cart with quantities,
+coupon, checkout form;
+data-testid s everywhere
+App runs at localhost:5173
+and looks clean in recordings
+2.5
+6 Baseline
+tests
+6 Playwright tests covering
+the main flows
+pnpm test  passes on main 1
+7 Plant bugs 5 branches, one bug each
+(NaN total, double discount,
+string sort, empty email,
+quantity reset)
+Each branch shows its bug by
+hand; baseline tests still pass
+(the bugs aren't covered)
+0.75
+8 Record
+samples
+10–25 s video per bug +
+expected.json  (failure time,
+guilty file, expected
+outcome)
+5 videos + 5 expected files in
+samples/
+0.75
+# Step What to build Done when Hours
+9 Frame
+extractor
+ffmpeg wrapper: 2 fps + scene
+changes, 1280 px JPEG,
+timestamps, upload to storage
+Returns [{t, key,
+signedUrl}]  for each
+sample
+1
+Replay — Hackathon Build Plan
+Page 30 of 39
+
+=== PAGE 31 ===
+
+Phase D · Action agents — 9.75 h (Day 2)
+# Step What to build Done when Hours
+10 LLM client
+and schemas
+Token Factory client, model map,
+Zod schemas, callJson()  with
+one retry on validation error
+A test call returns a
+parsed object
+1
+11 Watcher
+agent
+Prompt + call + get_frames  tool;
+pnpm eval:watcher  scores
+against expected.json
+Failure frame within ±2
+s on ≥ 4 of 5 samples
+2
+12 Repo packer Repomix or own packer: source
+files with paths and line
+numbers, skip node_modules
+Demo Shop packs into
+one string under 200K
+tokens
+0.75
+13 Locator
+agent
+Prompt + call +
+search_code / read_file ; pnpm
+eval:locator
+Guilty file in top 3 on ≥
+4 of 5 samples
+1.25
+# Step What to build Done when Hours
+14 Sandbox
+runner
+Docker image of Demo
+Shop; start (no
+network), wait for dev
+server, exec, copy out,
+always tear down
+runInSandbox(branch, cmd)
+runs the baseline tests and
+returns results
+2
+15 Agent tools read_file ,
+search_code ,
+write_test ,
+run_test ,
+apply_patch ,
+run_suite  with path
+and size guards
+Each tool has a small unit test,
+including a blocked path
+1.5
+16 Tool loop and
+events
+runAgent()  loop;
+emit()  writes events
+to DB and console
+A dummy agent calls a tool and
+finishes; events are in the DB
+1
+17 Reproducer +
+repro gate
+Prompt, loop (max 4
+runs), gate rejects
+timeouts and selector
+errors
+Fails for the right reason on ≥ 3
+of 5 samples
+2
+Replay — Hackathon Build Plan
+Page 31 of 39
+
+=== PAGE 32 ===
+
+Phase E · Backend — 5 h (Day 2)
+Phase F · Frontend — 12.5 h (Day 3)
+# Step What to build Done when Hours
+18 Same-
+symptom
+check
+Super VL compares
+failure frame and test
+screenshot
+Says "same" on correct repros
+and "different" on a
+deliberately wrong one
+0.75
+19 Fixer + fix gate Prompt, patch loop
+(max 3), runs repro test
+then suite
+NaN bug: repro test and suite
+both green
+1.5
+20 Pipeline + CLI
++ Reporter
+pipeline.ts  chains all
+stages; pnpm replay
+<video> ; Reporter
+writes Markdown
+Milestone: one command goes
+video → red → green → report
+1
+# Step What to build Done when Hours
+21 Worker Claims queued runs with
+FOR UPDATE SKIP
+LOCKED , runs the
+pipeline, stores outputs,
+cost and status
+Inserting a run row makes it run
+end to end
+1.5
+22 API + SSE Hono routes from
+Backend design; SSE
+replays history, then
+streams live
+curl -N
+/api/runs/:id/events  prints
+events live
+2
+23 Uploads and
+samples
+Signed upload URLs;
+seed script loads the 5
+samples as is_sample
+runs
+Posting a sample ID creates and
+runs a job
+1.5
+# Step What to build Done when Hours
+24 Design system Dark theme tokens, fonts,
+shadcn base, layout shell,
+model badge and status
+pill components
+A style page shows every
+component in light and
+dark
+1.5
+Replay — Hackathon Build Plan
+Page 32 of 39
+
+=== PAGE 33 ===
+
+Phase G · Ship — 9.25 h (Day 4)
+# Step What to build Done when Hours
+25 Home page Promise line, sample cards
+with looping previews,
+upload zone, stats strip
+Clicking a sample opens
+its run page
+2
+26 Video panel Player, step markers, red
+failure marker, auto-jump
+on Watcher result
+Markers match the
+BugReport timestamps
+2
+27 Agent timeline SSE client, stages with
+model, tokens, latency,
+cost; expandable tool calls
+Timeline animates in as a
+live run progresses
+2
+28 Code, test,
+evidence panels
+Monaco test and diff,
+terminal output, red →
+green pill, evidence card,
+report
+A finished run shows
+every panel with real data
+2.5
+29 Replay mode Play stored events at real
+speed from Supabase with
+no API; "live paused"
+banner
+With the API off, a sample
+run still plays fully
+1
+30 Benchmark and
+How pages
+Results table from real
+runs; architecture diagram
+and model table
+Numbers match the
+database
+1.5
+# Step What to build Done when Hours
+31 Deploy Vercel frontend; Nebius VM
+with Compose + Caddy (or
+laptop + tunnel); Supabase
+prod; keep-alive workflow
+Public URL plays a replay
+and starts a live run
+2
+32 Benchmark
+run
+pnpm eval : 5 samples × 3
+attempts + real-world app ×
+5
+Results saved and shown on
+the Benchmark page
+1.5
+33 Hallway test Someone with no context
+uses the site; you watch
+silently, then fix confusion
+points
+They reach red → green
+without help in under 2
+minutes
+1.5
+Replay — Hackathon Build Plan
+Page 33 of 39
+
+=== PAGE 34 ===
+
+4-day sprint at a glance
+If you fall behind, cut in this order: the real-world target app (step 32 part), the
+Benchmark page (30), the Fixer (19, runs end as reproduced_only ). Never cut replay
+mode (29) or the demo video (35).
+# Step What to build Done when Hours
+34 README All sections from the
+README checklist, GIF,
+results, limitations
+A stranger could run it
+locally from the README
+alone
+1.5
+35 Demo video Record, edit, voice-over from
+the script; upload to YouTube
+Under 3:00, public, NVIDIA
+models and Nebius named
+on screen
+2
+36 Submit Devpost form, links,
+screenshots, feedback on
+Nebius and NVIDIA
+Submission confirmed; site
+checked in incognito
+0.75
+Day Steps Focused
+hours
+End-of-day check
+Sun Oct
+25
+1–13 (Setup, Demo target,
+Perception)
+14.25 Watcher and Locator pass their
+evals
+Mon
+Oct 26
+14–23 (Action agents,
+Backend)
+14.75 CLI red → green; worker + API
+stream a run
+Tue Oct
+27
+24–30 (Frontend) 12.5 Full run view works live and in
+replay mode
+Wed
+Oct 28
+31–36 (Ship) 9.25 Deployed, benchmarked, README
+and video done
+Thu Oct
+29
+Buffer — Fix bugs, polish, submit if ready
+Fri Oct
+30
+Final — Submit by 6 PM IST (deadline 10:30
+PM IST)
+Replay — Hackathon Build Plan
+Page 34 of 39
+
+=== PAGE 35 ===
+
+Demo video, README and submission
+Demo video script (2:50 max)
+Fill X, Y, Z and W only from your real benchmark run. Record with OBS or QuickTime at
+1080p; speed up waiting parts and label them "sped up 4×".
+README sections
+Time On screen Voice-over
+0:00–
+0:15
+A Slack/Jira bug report with a video
+attached
+"Bugs arrive as videos. Reproducing
+them takes developers 30 to 90
+minutes."
+0:15–
+0:30
+Replay home; click the "Cart total
+shows NaN" sample
+"Replay turns the video into a failing
+test and a verified fix."
+0:30–
+1:00
+Player jumps to the failure frame;
+steps appear
+"Nemotron 3.5 Super VL on Nebius
+Token Factory watches the video and
+finds the exact frame."
+1:00–
+1:20
+Suspects tab highlights cart.ts  lines "Nemotron Lightning reads the whole
+repo in its 1M context and finds the
+code."
+1:20–
+1:50
+Test written; status pill turns RED;
+evidence card side by side
+"Nemotron Ultra writes a Playwright
+test. It fails for the same reason the
+video shows, confirmed visually."
+1:50–
+2:15
+Diff appears; pill flips to GREEN; suite
+passes
+"Then it fixes the code and proves it:
+the test passes and nothing else
+broke."
+2:15–
+2:35
+Benchmark page "Across 5 sample bugs: X reproduced,
+Y fixed, median Z seconds and $W per
+run. Here's where it fails."
+2:35–
+2:50
+How-it-works diagram "Four Nemotron models, each chosen
+for a job, running on Nebius Token
+Factory and Nebius AI Cloud."
+One-line pitch + 20-second GIF of red → green
+Problem and target users (QA, front-end devs, support teams)
+How it works: architecture diagram + agent/model table
+Replay — Hackathon Build Plan
+Page 35 of 39
+
+=== PAGE 36 ===
+
+Devpost submission checklist
+Risks, fallbacks and limitations
+The biggest risk is the long chain: if any one stage fails during the demo, the magic breaks.
+Each risk below has a fallback you can switch to without rewriting the pipeline.
+How NVIDIA models are used (model ID, role, why chosen) and how Nebius is used
+(Token Factory, AI Cloud VM)
+Tech stack
+Setup: prerequisites, .env.example , pnpm install , docker compose up , seeding
+samples
+Running tests and the benchmark ( pnpm eval )
+Results table from the benchmark, including failures
+Limitations and known failure cases (see Risks)
+Screenshots, live demo URL, video link
+What was built during the hackathon period
+License: MIT
+Track selected: Coding and Agentic Engineering
+Public demo URL works in an incognito window
+Public repo with LICENSE  visible at the top level
+YouTube video ≤ 3 minutes, public
+Description names the NVIDIA models and Nebius services explicitly
+Feedback on Nebius and NVIDIA tools written (what worked, what didn't)
+Screenshots uploaded
+Submitted by Oct 30, 2026, 6:00 PM IST, leaving a 4.5-hour buffer before the 10:30 PM
+deadline
+Risk Likelihood Fallback
+Super VL not available or rejects
+many images
+Medium Batch frames 10–15 per call and merge;
+else use Nemotron Nano 2 VL
+Ultra tool calling unreliable Medium Switch Reproducer/Fixer to Nemotron 3
+Super via MODEL_REASONING  env
+Watcher picks the wrong failure
+frame
+Medium Show top 3 candidate frames; let the user
+click the right one (human-in-the-loop is
+fine)
+Replay — Hackathon Build Plan
+Page 36 of 39
+
+=== PAGE 37 ===
+
+Limitations to state honestly in the README
+Works best on short (≤ 30 s), clear recordings of React web apps.
+Requires the target app to run locally in a container with an existing test setup.
+Visual-only bugs (layout, animation) are harder to assert than value or logic bugs.
+The public demo only runs against preconfigured target apps.
+A passing test proves the reproduced scenario is fixed, not that every related path is
+correct.
+Links and sign-ups
+Accounts to create today
+Risk Likelihood Fallback
+Generated test fails for the
+wrong reason
+High early
+on
+Repro gate + up to 4 retries; give the
+Reproducer the Locator's selectors and
+add data-testid s to the demo app
+Fix breaks other tests Medium Fix gate runs the suite; max 3 patch
+attempts; else end as reproduced_only
+(still valuable)
+Sandbox slow or flaky Medium Pre-built image, warm container pool of 1–
+2, pinned Playwright version
+Live demo slow during judging Medium "Watch a finished run" replays stored
+events at real speed from the DB
+Credits run out Low–
+medium
+MAX_TOKENS_PER_RUN cap; cache
+Watcher and Locator outputs per sample;
+second $25 Builder Program credit
+arrives after ~30 days
+VM issues near deadline Low Laptop + Cloudflare tunnel runs the
+same Compose file; replay mode keeps
+the public demo working; freeze deploys
+on Oct 28
+Nebius Builder Program: free Token Factory + AI Cloud credits
+Nebius Token Factory: API key; test all four model IDs
+Nebius AI Cloud console: project and a small CPU VM (create it on Day 4, keep it
+stopped otherwise)
+Replay — Hackathon Build Plan
+Page 37 of 39
+
+=== PAGE 38 ===
+
+Docs and repos
+Supabase: free project, private bucket replay-artifacts
+Vercel: Hobby plan, connect the repo
+GitHub: public replay  repo with MIT license
+cloudflared installed on your Mac as the fallback tunnel
+YouTube channel for the demo video
+What Link Used for
+Hackathon page
+and rules
+nebiusglobalaihackathon.devpost.com Requirements, submission
+Token Factory
+quickstart
+docs.tokenfactory.nebius.com/quickstart Base URL, auth, first call
+Token Factory
+vision example
+Vision capabilities Sending frames as images
+Switching from
+OpenAI
+docs.tokenfactory.nebius.com/switch OpenAI SDK compatibility
+Token Factory
+cookbook
+github.com/nebius/token-factory-
+cookbook
+Example code and demo
+apps
+Model catalog
+and prices
+BenchLM: Nebius Token Factory Model IDs, prices, context
+Nebius Object
+Storage
+Object Storage quickstart Optional; Supabase
+Storage replaces it in the
+$0 plan
+Nebius Compute
+VMs
+Create a VM Backend host
+Playwright in
+Docker
+playwright.dev/docs/docker Sandbox image, version
+pinning
+Playwright Test playwright.dev/docs/intro Writing and running tests
+Hono hono.dev API + SSE streaming
+Drizzle ORM orm.drizzle.team Postgres schema and
+queries
+Repomix github.com/yamadashy/repomix Packing the repo for
+Lightning
+Replay — Hackathon Build Plan
+Page 38 of 39
+
+=== PAGE 39 ===
+
+Free services for the $0 plan
+What Link Used for
+shadcn/ui ui.shadcn.com UI components
+Monaco React github.com/suren-atoyan/monaco-react Test and diff viewers
+FFmpeg ffmpeg.org Frame extraction
+AWS SDK S3
+client
+@aws-sdk/client-s3 Object Storage access
+Caddy caddyserver.com HTTPS reverse proxy
+TodoMVC github.com/tastejs/todomvc Real-world target app
+Judges'
+livestream
+Will It Ship? (YouTube) What judges look for
+What Link Used for
+Nebius Builder
+Program
+dev.nebius.com/builders Free Token Factory and AI
+Cloud credits
+Builder Program
+terms
+nebius.com/builders-terms-and-
+conditions
+Credit amounts and rules
+Supabase supabase.com/docs Postgres, Storage, Row Level
+Security
+Supabase JS client @supabase/supabase-js Server storage access,
+browser replay reads
+Cloudflare Quick
+Tunnels
+TryCloudflare docs Public URL for your laptop
+backend
+Vercel Hobby vercel.com/pricing Free frontend hosting
+GitHub Actions
+schedules
+docs.github.com: schedule event Weekly keep-alive ping
+OBS Studio obsproject.com Recording the demo video
+Replay — Hackathon Build Plan
+Page 39 of 39

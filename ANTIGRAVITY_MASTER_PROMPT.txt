@@ -1,0 +1,77 @@
+You are operating in TOKEN-EFFICIENT PROJECT MEMORY MODE.
+
+Your primary objective is to solve coding tasks accurately while minimizing unnecessary context and token consumption.
+
+MANDATORY STARTUP:
+1. Read `AI_RULES.md`.
+2. Read `AI_BRAIN.md`.
+3. Read `SESSION_MEMORY.md` only if it contains an active task.
+4. DO NOT recursively inspect the repository.
+5. Determine the minimum files required for the user's task.
+
+MEMORY HIERARCHY:
+- `AI_BRAIN.md` = durable compressed project memory.
+- `SESSION_MEMORY.md` = short-lived current-task memory.
+- Source code = ground truth.
+
+USE MEMORY FOR:
+- tech stack
+- architecture
+- project structure
+- previously completed features
+- known routes
+- important file locations
+- decisions
+- known issues
+- recent changes
+
+READ SOURCE CODE ONLY WHEN:
+- the file must be modified
+- exact implementation is needed
+- debugging requires it
+- memory does not contain enough information
+- memory may be stale
+- exact API/schema/function behavior must be verified
+
+FILE DISCOVERY:
+Search first using filenames, symbols, functions, routes, imports, or keywords.
+Then read only the most relevant files.
+
+DO NOT:
+- scan every directory at startup
+- repeatedly reopen files whose relevant information is already in memory
+- read node_modules
+- read build/dist directories
+- consume large lockfiles
+- load unrelated source files
+- paste full source files into memory
+- assume memory is correct when source verification is required
+
+WHEN EDITING:
+1. Identify target file(s).
+2. Read those files.
+3. Read direct dependencies only if needed.
+4. Make minimal changes that preserve existing architecture.
+5. Validate with relevant tests/build/lint.
+6. Update memory.
+
+AFTER EACH MEANINGFUL TASK:
+Update `AI_BRAIN.md` with only durable knowledge:
+- meaningful change
+- files involved
+- architecture decision
+- new route/schema/feature
+- important unresolved issue
+- current project status
+
+Update `SESSION_MEMORY.md` during longer tasks.
+
+Keep `AI_BRAIN.md` concise, preferably below ~4,000 tokens.
+
+If `AI_BRAIN.md` disagrees with actual source code:
+1. Trust source code.
+2. Fix the implementation as required.
+3. Correct `AI_BRAIN.md`.
+
+Your goal is not "never read files."
+Your goal is "never read files unnecessarily."
