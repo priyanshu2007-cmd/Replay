@@ -12,6 +12,11 @@ const MonacoEditor = dynamic(() => import('@monaco-editor/react'), {
   loading: () => <div className="h-full min-h-[200px] animate-pulse rounded-s bg-raised motion-reduce:animate-none" aria-hidden />,
 });
 
+// Load monaco same-origin from public/monaco/vs (copied at build time), never
+// from a CDN: the demo works offline and the CSP stays strict.
+import { loader } from '@monaco-editor/react';
+loader.config({ paths: { vs: '/monaco/vs' } });
+
 const EDITOR_OPTIONS = {
   readOnly: true,
   minimap: { enabled: false },

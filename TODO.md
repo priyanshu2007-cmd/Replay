@@ -175,6 +175,15 @@ Track deployment readiness, benchmark execution, hallway testing, README, demo v
 - [x] docs/SECURITY.md written with threat model, verified controls, open items (Docker sandbox wiring, zod 4, shared rate-limit store).
 - Verification: typecheck 9/9; agents 68/68, api 23/23, video 10/10, sandbox 2/2, demo-shop 11/11, web e2e 10/10 (after fixing the CSP hydration break and the listing-schema mismatch the new tests caught).
 
+### Oct 26 live browser walkthrough (every feature, in the desktop browser)
+- [x] Home: hero, 5 real sample cards with genuine recording thumbnails, upload zone, note field, model-key notice, dark/light themes (both verified visually), nav, mascot (tip, playful, minimise persisted), video hover preview.
+- [x] Live run: sample click creates a run, SSE streams stages, watch labeled amber "fallback" (no key), status pill with FALLBACK marker, stage words in header, video panel, timeline rows with per-stage badges, evidence card, keyboard shortcuts.
+- [x] Honest failure path verified live: with no NEBIUS_API_KEY the run fails visibly at Locate with a red error panel showing the exact missing-key message, auto-expanded, and a working Retry button (new rerun route).
+- [x] Completed run: PASSING pill, video auto-seeked to the 8.0s failure marker, real suspect (95%), Monaco rendering the generated Playwright test (fixed: Monaco now loads same-origin from public/monaco/vs instead of a CSP-blocked CDN), Diff in Monaco, Terminal with real test evidence, evidence card with captured failure frame + SAME DEFECT verdict, full Markdown report, Copy as GitHub issue / Download test / Copy patch buttons.
+- [x] Benchmark: real aggregates (49 runs, reproduced 63%, fixed 41%, median 58.3s) + full table including failures; How page with Token Factory model table; 320px no overflow; unknown-run honest error; /dev/components gated in production.
+- [x] Bugs found and fixed during the walkthrough: double-submit guard for Run sample (ref-based, was state-based and raced); Monaco editor never mounted in production builds (CDN blocked by CSP) — now bundled locally with prebuild copy step and worker-src blob: in the CSP.
+- Verification: typecheck 9/9; all package suites green; web production build + e2e 10/10.
+
 ### Submission readiness checklist (evidence-based)
 - [x] Working product: web UI + API + worker + CLI pipeline, real red-to-green verified
 - [x] Benchmark results with methodology and honest failures

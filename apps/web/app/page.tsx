@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { SampleCard } from '@/components/sample-card';
 import { UploadDropzone } from '@/components/upload-dropzone';
@@ -21,6 +21,7 @@ export default function HomePage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [modelsKeyMissing, setModelsKeyMissing] = useState(false);
+  const runningRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,7 +59,8 @@ export default function HomePage() {
   }, []);
 
   async function runSample(id: string) {
-    if (mode.kind !== 'live') return;
+    if (mode.kind !== 'live' || runningRef.current) return;
+    runningRef.current = true;
     setBusyId(id);
     setError(null);
     try {
@@ -67,6 +69,7 @@ export default function HomePage() {
     } catch (err) {
       setError((err as Error).message);
       setBusyId(null);
+      runningRef.current = false;
     }
   }
 

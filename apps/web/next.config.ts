@@ -12,7 +12,7 @@ const connects = ["'self'", apiOrigin, supabaseOrigin].filter(Boolean).join(' ')
 const securityHeaders = [
   {
     key: 'Content-Security-Policy',
-    value: `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; connect-src ${connects || "'self'"}; frame-ancestors 'none'; object-src 'none'; base-uri 'self'`,
+    value: `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; connect-src ${connects || "'self'"}; worker-src 'self' blob:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'`,
   },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
