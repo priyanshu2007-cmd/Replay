@@ -1,0 +1,3 @@
+# Monaco bundles match generic key patterns in minified variable names (false positives)
+# Fingerprint: 79e5a8d1fb449feb888f17be94b51636c80280dd:apps/web/public/monaco/vs/language/typescript/tsWorker.js:generic-api-key:320
+# Fingerprint: 79e5a8d1fb449feb888f17be94b51636c80280dd:apps/web/public/monaco/vs/editor/editor.main.js:generic-api-key:631
