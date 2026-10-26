@@ -204,6 +204,14 @@ Track deployment readiness, benchmark execution, hallway testing, README, demo v
 - [x] G2: .github/workflows/security.yml — gitleaks full history, prod audit, CodeQL security-extended; .github/dependabot.yml (npm/actions/docker weekly).
 - Verification: typecheck 9/9; agents 68/68, api 23/23, video 10/10, sandbox 2/2, demo-shop 11/11, web build + e2e 10/10.
 
+### Oct 27 final QA pass (release readiness verification)
+- [x] Security re-scan: gitleaks full history clean; pnpm audit = only the documented zod exception; working tree clean, no secrets staged (key-mapping edits in .env are gitignored).
+- [x] Live evaluations re-run with the working provider mapping: eval:locator 5/5 (schema, path, line-range, top-1 file and grounded symbol all correct), eval:reproducer PASS (genuine assertion failure, gate passed), eval:pipeline SUCCESS (reproduced, verified, fixed in isolated sandbox, regression-tested).
+- [x] CI on ac0e1aa: 7/7 checks green (typecheck/lint/unit, api smoke, docker build, web e2e, CodeQL, gitleaks, audit).
+- [x] Vercel redeployed to the ac0e1aa working tree (production Ready); /api/health and /api/samples verified via authenticated vercel curl; full browser walkthrough of every route/journey was done earlier on the same build (see Oct 26 walkthrough entry).
+- [x] Production deployment protection remains ON (user action required to disable for public access).
+- Note: the earlier 5-sample benchmark table (README) is from the Oct 25 live run; today's re-verification confirms the pipeline still completes end to end on the current code.
+
 ### Submission readiness checklist (evidence-based)
 - [x] Working product: web UI + API + worker + CLI pipeline, real red-to-green verified
 - [x] Benchmark results with methodology and honest failures
