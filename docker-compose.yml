@@ -60,6 +60,9 @@ services:
       DATABASE_URL: postgresql://replay:${PG_PASSWORD:-replay}@postgres:5432/replay
       REPLAY_DATA_DIR: /app/artifacts
       TRUST_PROXY: "1"
+      # Local compose escape hatch (env allowlist still enforced). On the
+      # public VM, wire DockerSandbox instead and remove this.
+      REPLAY_ALLOW_HOST_SANDBOX: "1"
     volumes:
       - artifacts:/app/artifacts
     depends_on:

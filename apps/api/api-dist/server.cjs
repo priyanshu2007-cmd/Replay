@@ -2450,7 +2450,7 @@ var require_lib2 = __commonJS({
       let accum = [];
       let accumBytes = 0;
       let abort = false;
-      return new Body.Promise(function(resolve10, reject) {
+      return new Body.Promise(function(resolve12, reject) {
         let resTimeout;
         if (_this4.timeout) {
           resTimeout = setTimeout(function() {
@@ -2484,7 +2484,7 @@ var require_lib2 = __commonJS({
           }
           clearTimeout(resTimeout);
           try {
-            resolve10(Buffer.concat(accum, accumBytes));
+            resolve12(Buffer.concat(accum, accumBytes));
           } catch (err) {
             reject(new FetchError(`Could not create Buffer from response body for ${_this4.url}: ${err.message}`, "system", err));
           }
@@ -3159,7 +3159,7 @@ var require_lib2 = __commonJS({
         throw new Error("native promise missing, set fetch.Promise to your favorite alternative");
       }
       Body.Promise = fetch2.Promise;
-      return new fetch2.Promise(function(resolve10, reject) {
+      return new fetch2.Promise(function(resolve12, reject) {
         const request = new Request5(url, opts);
         const options = getNodeRequestOptions(request);
         const send = (options.protocol === "https:" ? https : http).request;
@@ -3292,7 +3292,7 @@ var require_lib2 = __commonJS({
                   requestOpts.body = void 0;
                   requestOpts.headers.delete("content-length");
                 }
-                resolve10(fetch2(new Request5(locationURL, requestOpts)));
+                resolve12(fetch2(new Request5(locationURL, requestOpts)));
                 finalize();
                 return;
             }
@@ -3313,7 +3313,7 @@ var require_lib2 = __commonJS({
           const codings = headers.get("Content-Encoding");
           if (!request.compress || request.method === "HEAD" || codings === null || res.statusCode === 204 || res.statusCode === 304) {
             response = new Response5(body, response_options);
-            resolve10(response);
+            resolve12(response);
             return;
           }
           const zlibOptions = {
@@ -3323,7 +3323,7 @@ var require_lib2 = __commonJS({
           if (codings == "gzip" || codings == "x-gzip") {
             body = body.pipe(zlib.createGunzip(zlibOptions));
             response = new Response5(body, response_options);
-            resolve10(response);
+            resolve12(response);
             return;
           }
           if (codings == "deflate" || codings == "x-deflate") {
@@ -3335,12 +3335,12 @@ var require_lib2 = __commonJS({
                 body = body.pipe(zlib.createInflateRaw());
               }
               response = new Response5(body, response_options);
-              resolve10(response);
+              resolve12(response);
             });
             raw2.on("end", function() {
               if (!response) {
                 response = new Response5(body, response_options);
-                resolve10(response);
+                resolve12(response);
               }
             });
             return;
@@ -3348,11 +3348,11 @@ var require_lib2 = __commonJS({
           if (codings == "br" && typeof zlib.createBrotliDecompress === "function") {
             body = body.pipe(zlib.createBrotliDecompress());
             response = new Response5(body, response_options);
-            resolve10(response);
+            resolve12(response);
             return;
           }
           response = new Response5(body, response_options);
-          resolve10(response);
+          resolve12(response);
         });
         writeToStream(req, request);
       });
@@ -6802,7 +6802,7 @@ module.exports = __toCommonJS(server_exports);
 var fs15 = __toESM(require("node:fs"), 1);
 var path14 = __toESM(require("node:path"), 1);
 var import_node_crypto4 = require("node:crypto");
-var import_node_url4 = require("node:url");
+var import_node_url = require("node:url");
 var import_dotenv2 = __toESM(require_main(), 1);
 
 // ../../node_modules/.pnpm/hono@4.13.13/node_modules/hono/dist/http-exception.js
@@ -9099,7 +9099,7 @@ var responseViaResponseObject = async (res, outgoing, options = {}) => {
         });
         if (!chunk) {
           if (i2 === 1) {
-            await new Promise((resolve10) => setTimeout(resolve10));
+            await new Promise((resolve12) => setTimeout(resolve12));
             maxReadCount = 3;
             continue;
           }
@@ -13555,9 +13555,9 @@ var originError = Symbol("OriginError");
 var CLOSE = {};
 var Query = class extends Promise {
   constructor(strings, args, handler, canceller, options = {}) {
-    let resolve10, reject;
+    let resolve12, reject;
     super((a2, b3) => {
-      resolve10 = a2;
+      resolve12 = a2;
       reject = b3;
     });
     this.tagged = Array.isArray(strings.raw);
@@ -13568,7 +13568,7 @@ var Query = class extends Promise {
     this.options = options;
     this.state = null;
     this.statement = null;
-    this.resolve = (x2) => (this.active = false, resolve10(x2));
+    this.resolve = (x2) => (this.active = false, resolve12(x2));
     this.reject = (x2) => (this.active = false, reject(x2));
     this.active = false;
     this.cancelled = null;
@@ -13616,12 +13616,12 @@ var Query = class extends Promise {
           if (this.executed && !this.active)
             return { done: true };
           prev && prev();
-          const promise = new Promise((resolve10, reject) => {
+          const promise = new Promise((resolve12, reject) => {
             this.cursorFn = (value) => {
-              resolve10({ value, done: false });
+              resolve12({ value, done: false });
               return new Promise((r2) => prev = r2);
             };
-            this.resolve = () => (this.active = false, resolve10({ done: true }));
+            this.resolve = () => (this.active = false, resolve12({ done: true }));
             this.reject = (x2) => (this.active = false, reject(x2));
           });
           this.execute();
@@ -14248,12 +14248,12 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
     x2.on("drain", drain);
     return x2;
   }
-  async function cancel({ pid, secret }, resolve10, reject) {
+  async function cancel({ pid, secret }, resolve12, reject) {
     try {
       cancelMessage = bytes_default().i32(16).i32(80877102).i32(pid).i32(secret).end(16);
       await connect();
       socket.once("error", reject);
-      socket.once("close", resolve10);
+      socket.once("close", resolve12);
     } catch (error2) {
       reject(error2);
     }
@@ -15200,7 +15200,7 @@ function parseEvent(x2) {
 // ../../node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/large.js
 var import_stream7 = __toESM(require("stream"), 1);
 function largeObject(sql2, oid, mode = 131072 | 262144) {
-  return new Promise(async (resolve10, reject) => {
+  return new Promise(async (resolve12, reject) => {
     await sql2.begin(async (sql3) => {
       let finish;
       !oid && ([{ oid }] = await sql3`select lo_creat(-1) as oid`);
@@ -15226,7 +15226,7 @@ function largeObject(sql2, oid, mode = 131072 | 262144) {
           ) seek
         `
       };
-      resolve10(lo);
+      resolve12(lo);
       return new Promise(async (r2) => finish = r2);
       async function readable({
         highWaterMark = 2048 * 8,
@@ -15400,8 +15400,8 @@ function Postgres(a2, b3) {
   }
   async function reserve() {
     const queue = queue_default();
-    const c2 = open.length ? open.shift() : await new Promise((resolve10, reject) => {
-      const query = { reserve: resolve10, reject };
+    const c2 = open.length ? open.shift() : await new Promise((resolve12, reject) => {
+      const query = { reserve: resolve12, reject };
       queries.push(query);
       closed.length && connect(closed.shift(), query);
     });
@@ -15438,9 +15438,9 @@ function Postgres(a2, b3) {
       let uncaughtError, result;
       name && await sql3`savepoint ${sql3(name)}`;
       try {
-        result = await new Promise((resolve10, reject) => {
+        result = await new Promise((resolve12, reject) => {
           const x2 = fn2(sql3);
-          Promise.resolve(Array.isArray(x2) ? Promise.all(x2) : x2).then(resolve10, reject);
+          Promise.resolve(Array.isArray(x2) ? Promise.all(x2) : x2).then(resolve12, reject);
         });
         if (uncaughtError)
           throw uncaughtError;
@@ -15497,8 +15497,8 @@ function Postgres(a2, b3) {
     return c2.execute(query) ? move(c2, busy) : move(c2, full);
   }
   function cancel(query) {
-    return new Promise((resolve10, reject) => {
-      query.state ? query.active ? connection_default(options).cancel(query.state, resolve10, reject) : query.cancelled = { resolve: resolve10, reject } : (queries.remove(query), query.cancelled = true, query.reject(Errors.generic("57014", "canceling statement due to user request")), resolve10());
+    return new Promise((resolve12, reject) => {
+      query.state ? query.active ? connection_default(options).cancel(query.state, resolve12, reject) : query.cancelled = { resolve: resolve12, reject } : (queries.remove(query), query.cancelled = true, query.reject(Errors.generic("57014", "canceling statement due to user request")), resolve12());
     });
   }
   async function end({ timeout = null } = {}) {
@@ -15517,11 +15517,11 @@ function Postgres(a2, b3) {
   async function close() {
     await Promise.all(connections.map((c2) => c2.end()));
   }
-  async function destroy(resolve10) {
+  async function destroy(resolve12) {
     await Promise.all(connections.map((c2) => c2.terminate()));
     while (queries.length)
       queries.shift().reject(Errors.connection("CONNECTION_DESTROYED", options));
-    resolve10();
+    resolve12();
   }
   function connect(c2, query) {
     move(c2, connecting);
@@ -23123,11 +23123,12 @@ var PostgresRunRepository = class {
       await tx`SELECT pg_advisory_xact_lock(hashtext(${runId}))`;
       const rows = await tx`
         INSERT INTO run_events (run_id, seq, stage, agent, event_type, payload, created_at)
-        SELECT ${runId}, COALESCE(MAX(seq), 0) + 1, ${event.stage}, ${event.agent},
-               ${event.event_type}, ${JSON.stringify(sanitizeEventPayload(event.payload))}::jsonb,
-               ${new Date(timestamp2)}
-        FROM run_events WHERE run_id = ${runId}
-        RETURNING seq, created_at`;
+        VALUES (${runId},
+                COALESCE((SELECT MAX(seq) + 1 FROM run_events WHERE run_id = ${runId}), 1),
+                ${event.stage}, ${event.agent}, ${event.event_type},
+                ${JSON.stringify(sanitizeEventPayload(event.payload))}::jsonb,
+                ${timestamp2}::timestamptz)
+        RETURNING seq`;
       return rows[0];
     });
     const nextSeq = Number(inserted?.seq ?? 1);
@@ -24616,8 +24617,8 @@ function _addRequestID(value, response) {
 }
 var APIPromise = class _APIPromise extends Promise {
   constructor(responsePromise, parseResponse2 = defaultParseResponse) {
-    super((resolve10) => {
-      resolve10(null);
+    super((resolve12) => {
+      resolve12(null);
     });
     this.responsePromise = responsePromise;
     this.parseResponse = parseResponse2;
@@ -25192,7 +25193,7 @@ var startsWithSchemeRegexp = /^[a-z][a-z0-9+.-]*:/i;
 var isAbsoluteURL = (url) => {
   return startsWithSchemeRegexp.test(url);
 };
-var sleep = (ms) => new Promise((resolve10) => setTimeout(resolve10, ms));
+var sleep = (ms) => new Promise((resolve12) => setTimeout(resolve12, ms));
 var validatePositiveInteger = (name, n2) => {
   if (typeof n2 !== "number" || !Number.isInteger(n2)) {
     throw new OpenAIError(`${name} must be an integer`);
@@ -25625,12 +25626,12 @@ var EventStream = class {
     _EventStream_errored.set(this, false);
     _EventStream_aborted.set(this, false);
     _EventStream_catchingPromiseCreated.set(this, false);
-    __classPrivateFieldSet7(this, _EventStream_connectedPromise, new Promise((resolve10, reject) => {
-      __classPrivateFieldSet7(this, _EventStream_resolveConnectedPromise, resolve10, "f");
+    __classPrivateFieldSet7(this, _EventStream_connectedPromise, new Promise((resolve12, reject) => {
+      __classPrivateFieldSet7(this, _EventStream_resolveConnectedPromise, resolve12, "f");
       __classPrivateFieldSet7(this, _EventStream_rejectConnectedPromise, reject, "f");
     }), "f");
-    __classPrivateFieldSet7(this, _EventStream_endPromise, new Promise((resolve10, reject) => {
-      __classPrivateFieldSet7(this, _EventStream_resolveEndPromise, resolve10, "f");
+    __classPrivateFieldSet7(this, _EventStream_endPromise, new Promise((resolve12, reject) => {
+      __classPrivateFieldSet7(this, _EventStream_resolveEndPromise, resolve12, "f");
       __classPrivateFieldSet7(this, _EventStream_rejectEndPromise, reject, "f");
     }), "f");
     __classPrivateFieldGet8(this, _EventStream_connectedPromise, "f").catch(() => {
@@ -25714,11 +25715,11 @@ var EventStream = class {
    *   const message = await stream.emitted('message') // rejects if the stream errors
    */
   emitted(event) {
-    return new Promise((resolve10, reject) => {
+    return new Promise((resolve12, reject) => {
       __classPrivateFieldSet7(this, _EventStream_catchingPromiseCreated, true, "f");
       if (event !== "error")
         this.once("error", reject);
-      this.once(event, resolve10);
+      this.once(event, resolve12);
     });
   }
   async done() {
@@ -25871,7 +25872,7 @@ var AssistantStream = class _AssistantStream extends EventStream {
           if (done) {
             return { value: void 0, done: true };
           }
-          return new Promise((resolve10, reject) => readQueue.push({ resolve: resolve10, reject })).then((chunk2) => chunk2 ? { value: chunk2, done: false } : { value: void 0, done: true });
+          return new Promise((resolve12, reject) => readQueue.push({ resolve: resolve12, reject })).then((chunk2) => chunk2 ? { value: chunk2, done: false } : { value: void 0, done: true });
         }
         const chunk = pushQueue.shift();
         return { value: chunk, done: false };
@@ -27489,7 +27490,7 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
           if (done) {
             return { value: void 0, done: true };
           }
-          return new Promise((resolve10, reject) => readQueue.push({ resolve: resolve10, reject })).then((chunk2) => chunk2 ? { value: chunk2, done: false } : { value: void 0, done: true });
+          return new Promise((resolve12, reject) => readQueue.push({ resolve: resolve12, reject })).then((chunk2) => chunk2 ? { value: chunk2, done: false } : { value: void 0, done: true });
         }
         const chunk = pushQueue.shift();
         return { value: chunk, done: false };
@@ -29140,7 +29141,7 @@ var ResponseStream = class _ResponseStream extends EventStream {
           if (done) {
             return { value: void 0, done: true };
           }
-          return new Promise((resolve10, reject) => readQueue.push({ resolve: resolve10, reject })).then((event2) => event2 ? { value: event2, done: false } : { value: void 0, done: true });
+          return new Promise((resolve12, reject) => readQueue.push({ resolve: resolve12, reject })).then((event2) => event2 ? { value: event2, done: false } : { value: void 0, done: true });
         }
         const event = pushQueue.shift();
         return { value: event, done: false };
@@ -29863,10 +29864,10 @@ function maxTokensFor(role, override) {
 var RETRY_DELAYS_MS = [1e3, 3e3];
 function moduleDirOf(importMetaUrl) {
   try {
-    const { fileURLToPath: fileURLToPath5 } = require("node:url");
+    const { fileURLToPath: fileURLToPath2 } = require("node:url");
     if (!importMetaUrl)
       return void 0;
-    return path2.dirname(fileURLToPath5(importMetaUrl));
+    return path2.dirname(fileURLToPath2(importMetaUrl));
   } catch {
     return void 0;
   }
@@ -30557,13 +30558,14 @@ ${f2.numberedContent}`);
 // ../../packages/agents/dist/locator.js
 var fs6 = __toESM(require("node:fs"), 1);
 var path5 = __toESM(require("node:path"), 1);
-var import_node_url = require("node:url");
 var import_meta2 = {};
 var LOCATOR_PROMPT_VERSION = "v1";
-var moduleDir2 = path5.dirname((0, import_node_url.fileURLToPath)(import_meta2.url));
+var moduleDir2 = moduleDirOf(import_meta2.url);
 var PROMPT_CANDIDATES2 = [
-  path5.join(moduleDir2, "../prompts/locator.md"),
-  path5.join(moduleDir2, "../../prompts/locator.md")
+  ...moduleDir2 ? [path5.join(moduleDir2, "../prompts/locator.md"), path5.join(moduleDir2, "../../prompts/locator.md")] : [],
+  path5.resolve(process.cwd(), "packages/agents/prompts/locator.md"),
+  path5.resolve(process.cwd(), "prompts/locator.md"),
+  path5.resolve(process.env.REPLAY_PROMPTS_DIR || "", "locator.md")
 ];
 function loadLocatorPrompt() {
   for (const p2 of PROMPT_CANDIDATES2) {
@@ -31143,13 +31145,14 @@ async function verifyReproduction(input, deps = {}) {
 // ../../packages/agents/dist/fixer.js
 var fs10 = __toESM(require("node:fs"), 1);
 var path9 = __toESM(require("node:path"), 1);
-var import_node_url2 = require("node:url");
 var import_meta5 = {};
 var FIXER_PROMPT_VERSION = "v1";
-var moduleDir5 = path9.dirname((0, import_node_url2.fileURLToPath)(import_meta5.url));
+var moduleDir5 = moduleDirOf(import_meta5.url);
 var PROMPT_CANDIDATES5 = [
-  path9.join(moduleDir5, "../prompts/fixer.md"),
-  path9.join(moduleDir5, "../../prompts/fixer.md")
+  ...moduleDir5 ? [path9.join(moduleDir5, "../prompts/fixer.md"), path9.join(moduleDir5, "../../prompts/fixer.md")] : [],
+  path9.resolve(process.cwd(), "packages/agents/prompts/fixer.md"),
+  path9.resolve(process.cwd(), "prompts/fixer.md"),
+  path9.resolve(process.env.REPLAY_PROMPTS_DIR || "", "fixer.md")
 ];
 function loadFixerPrompt() {
   for (const p2 of PROMPT_CANDIDATES5) {
@@ -31365,13 +31368,14 @@ async function applyPatchToDirectory(workDir, output) {
 // ../../packages/agents/dist/reporter.js
 var fs11 = __toESM(require("node:fs"), 1);
 var path10 = __toESM(require("node:path"), 1);
-var import_node_url3 = require("node:url");
 var import_meta6 = {};
 var REPORTER_PROMPT_VERSION = "v1";
-var moduleDir6 = path10.dirname((0, import_node_url3.fileURLToPath)(import_meta6.url));
+var moduleDir6 = moduleDirOf(import_meta6.url);
 var PROMPT_CANDIDATES6 = [
-  path10.join(moduleDir6, "../prompts/reporter.md"),
-  path10.join(moduleDir6, "../../prompts/reporter.md")
+  ...moduleDir6 ? [path10.join(moduleDir6, "../prompts/reporter.md"), path10.join(moduleDir6, "../../prompts/reporter.md")] : [],
+  path10.resolve(process.cwd(), "packages/agents/prompts/reporter.md"),
+  path10.resolve(process.cwd(), "prompts/reporter.md"),
+  path10.resolve(process.env.REPLAY_PROMPTS_DIR || "", "reporter.md")
 ];
 function loadReporterPrompt() {
   for (const p2 of PROMPT_CANDIDATES6) {
@@ -32467,7 +32471,7 @@ var Worker = class {
   }
 };
 if (process.env.NODE_ENV !== "test" && !process.env.REPLAY_STANDALONE_DISABLED) {
-  const isDirectRun = process.argv[1]?.endsWith("worker.ts") || process.argv[1]?.endsWith("worker.js");
+  const isDirectRun = /worker\.(ts|js|cjs)$/.test(process.argv[1] ?? "");
   if (isDirectRun) {
     const worker = new Worker();
     worker.start().catch((err) => {
@@ -32489,7 +32493,7 @@ var import_meta7 = {};
 function computeRepoRoot() {
   if (process.env.VERCEL) return process.cwd();
   try {
-    return path14.resolve(path14.dirname((0, import_node_url4.fileURLToPath)(import_meta7.url)), "../..");
+    return path14.resolve(path14.dirname((0, import_node_url.fileURLToPath)(import_meta7.url)), "../..");
   } catch {
     return process.cwd();
   }
@@ -32952,8 +32956,8 @@ function createServer(options) {
         const buffer2 = [];
         let unsubscribeHandler;
         let finishStream;
-        const eventPromise = new Promise((resolve10) => {
-          finishStream = resolve10;
+        const eventPromise = new Promise((resolve12) => {
+          finishStream = resolve12;
           unsubscribeHandler = repo.subscribeEvents(id, async (liveEvent) => {
             if (liveEvent.seq <= lastSentSeq) return;
             buffer2.push(liveEvent);
@@ -32983,7 +32987,7 @@ function createServer(options) {
         for (const ev of buffer2) {
           if (ev.seq > lastSentSeq) await writeEvent(ev);
         }
-        const livePromise = new Promise((resolve10) => {
+        const livePromise = new Promise((resolve12) => {
           unsubscribeHandler = repo.subscribeEvents(id, async (liveEvent) => {
             try {
               if (liveEvent.seq <= lastSentSeq) return;
@@ -32993,10 +32997,10 @@ function createServer(options) {
                   event: "stream_closed",
                   data: JSON.stringify({ reason: "pipeline_finished" })
                 });
-                resolve10();
+                resolve12();
               }
             } catch {
-              resolve10();
+              resolve12();
             }
           });
         });
@@ -33036,7 +33040,7 @@ function createServer(options) {
 var defaultApp = createServer();
 var port = Number(process.env.PORT || 3001);
 if (process.env.NODE_ENV !== "test" && !process.env.REPLAY_STANDALONE_DISABLED && !process.env.VERCEL) {
-  const isDirectRun = process.argv[1]?.endsWith("server.ts") || process.argv[1]?.endsWith("server.js");
+  const isDirectRun = /server\.(ts|js|cjs)$/.test(process.argv[1] ?? "");
   if (isDirectRun) {
     console.log(`[Replay API] Server listening on http://localhost:${port}`);
     serve({

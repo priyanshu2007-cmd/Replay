@@ -331,7 +331,7 @@ export class Worker {
 
 // Standalone execution entrypoint
 if (process.env.NODE_ENV !== 'test' && !process.env.REPLAY_STANDALONE_DISABLED) {
-  const isDirectRun = process.argv[1]?.endsWith('worker.ts') || process.argv[1]?.endsWith('worker.js');
+  const isDirectRun = /worker\.(ts|js|cjs)$/.test(process.argv[1] ?? '');
   if (isDirectRun) {
     const worker = new Worker();
     worker.start().catch((err) => {

@@ -1,6 +1,5 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type OpenAI from 'openai';
 import { z } from 'zod';
 import {
@@ -13,14 +12,16 @@ import {
   RunState,
   VerifierOutput,
 } from '@replay/shared';
-import { LlmClient, LlmError, ModelMetrics, resolveApiKey, resolveModel, toLlmError } from './llm.js';
+import { LlmClient, LlmError, ModelMetrics, moduleDirOf, resolveApiKey, resolveModel, toLlmError } from './llm.js';
 
 export const REPORTER_PROMPT_VERSION = 'v1';
 
-const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+const moduleDir = moduleDirOf(import.meta.url);
 const PROMPT_CANDIDATES = [
-  path.join(moduleDir, '../prompts/reporter.md'),
-  path.join(moduleDir, '../../prompts/reporter.md'),
+  ...(moduleDir ? [path.join(moduleDir, '../prompts/reporter.md'), path.join(moduleDir, '../../prompts/reporter.md')] : []),
+  path.resolve(process.cwd(), 'packages/agents/prompts/reporter.md'),
+  path.resolve(process.cwd(), 'prompts/reporter.md'),
+  path.resolve(process.env.REPLAY_PROMPTS_DIR || '', 'reporter.md'),
 ];
 
 export function loadReporterPrompt(): string {

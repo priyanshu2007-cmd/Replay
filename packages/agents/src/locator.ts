@@ -1,19 +1,20 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type OpenAI from 'openai';
 import { z } from 'zod';
 import { BugReport, BugReportSchema, LocatorOutput, LocatorOutputSchema } from '@replay/shared';
-import { LlmClient, ModelMetrics, resolveApiKey, resolveModel } from './llm.js';
+import { LlmClient, ModelMetrics, moduleDirOf, resolveApiKey, resolveModel } from './llm.js';
 import { PackedFile, RepoBundle } from './packer.js';
 
 export const LOCATOR_PROMPT_VERSION = 'v1';
 
-const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+const moduleDir = moduleDirOf(import.meta.url);
 
 const PROMPT_CANDIDATES = [
-  path.join(moduleDir, '../prompts/locator.md'),
-  path.join(moduleDir, '../../prompts/locator.md'),
+  ...(moduleDir ? [path.join(moduleDir, '../prompts/locator.md'), path.join(moduleDir, '../../prompts/locator.md')] : []),
+  path.resolve(process.cwd(), 'packages/agents/prompts/locator.md'),
+  path.resolve(process.cwd(), 'prompts/locator.md'),
+  path.resolve(process.env.REPLAY_PROMPTS_DIR || '', 'locator.md'),
 ];
 
 /** Load the versioned Locator system prompt from packages/agents/prompts/locator.md. */

@@ -1,6 +1,5 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type OpenAI from 'openai';
 import {
   BugReport,
@@ -12,16 +11,18 @@ import {
   ReproducerOutput,
   ReproducerOutputSchema,
 } from '@replay/shared';
-import { LlmClient, ModelMetrics, resolveApiKey, resolveModel } from './llm.js';
+import { LlmClient, ModelMetrics, moduleDirOf, resolveApiKey, resolveModel } from './llm.js';
 import { RepoBundle } from './packer.js';
 
 export const FIXER_PROMPT_VERSION = 'v1';
 
-const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+const moduleDir = moduleDirOf(import.meta.url);
 
 const PROMPT_CANDIDATES = [
-  path.join(moduleDir, '../prompts/fixer.md'),
-  path.join(moduleDir, '../../prompts/fixer.md'),
+  ...(moduleDir ? [path.join(moduleDir, '../prompts/fixer.md'), path.join(moduleDir, '../../prompts/fixer.md')] : []),
+  path.resolve(process.cwd(), 'packages/agents/prompts/fixer.md'),
+  path.resolve(process.cwd(), 'prompts/fixer.md'),
+  path.resolve(process.env.REPLAY_PROMPTS_DIR || '', 'fixer.md'),
 ];
 
 /** Load the versioned Fixer system prompt from packages/agents/prompts/fixer.md. */

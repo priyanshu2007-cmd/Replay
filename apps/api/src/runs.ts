@@ -567,7 +567,8 @@ export class PostgresRunRepository implements RunRepository {
     event: Omit<RunEvent, 'seq' | 'run_id' | 'timestamp'> & { timestamp?: string }
   ): Promise<RunEvent> {
     // Atomic, race-free seq: one transaction holds an advisory lock on the run
-    // and computes max(seq)+1 in the same INSERT. No SELECT-then-INSERT race.
+    // and computes max(seq)+1 via a scalar subquery (always yields a row, so
+    // the first event of a run is inserted too). No SELECT-then-INSERT race.
     const timestamp = event.timestamp ?? new Date().toISOString();
     const inserted = await (this.db as unknown as {
       $client: { begin: (fn: (tx: any) => Promise<any>) => Promise<any> };
@@ -575,11 +576,12 @@ export class PostgresRunRepository implements RunRepository {
       await tx`SELECT pg_advisory_xact_lock(hashtext(${runId}))`;
       const rows = await tx`
         INSERT INTO run_events (run_id, seq, stage, agent, event_type, payload, created_at)
-        SELECT ${runId}, COALESCE(MAX(seq), 0) + 1, ${event.stage}, ${event.agent},
-               ${event.event_type}, ${JSON.stringify(sanitizeEventPayload(event.payload))}::jsonb,
-               ${new Date(timestamp)}
-        FROM run_events WHERE run_id = ${runId}
-        RETURNING seq, created_at`;
+        VALUES (${runId},
+                COALESCE((SELECT MAX(seq) + 1 FROM run_events WHERE run_id = ${runId}), 1),
+                ${event.stage}, ${event.agent}, ${event.event_type},
+                ${JSON.stringify(sanitizeEventPayload(event.payload))}::jsonb,
+                ${timestamp}::timestamptz)
+        RETURNING seq`;
       return rows[0];
     });
 

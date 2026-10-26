@@ -691,7 +691,7 @@ const defaultApp = createServer();
 const port = Number(process.env.PORT || 3001);
 
 if (process.env.NODE_ENV !== 'test' && !process.env.REPLAY_STANDALONE_DISABLED && !process.env.VERCEL) {
-  const isDirectRun = process.argv[1]?.endsWith('server.ts') || process.argv[1]?.endsWith('server.js');
+  const isDirectRun = /server\.(ts|js|cjs)$/.test(process.argv[1] ?? '');
   if (isDirectRun) {
     console.log(`[Replay API] Server listening on http://localhost:${port}`);
     serve({
