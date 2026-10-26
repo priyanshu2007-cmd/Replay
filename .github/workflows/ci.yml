@@ -30,6 +30,9 @@ jobs:
       - run: pnpm -r build
       - run: pnpm -r typecheck
       - run: pnpm --filter @replay/web lint
+      # The pipeline end-to-end test drives real Playwright tests in the
+      # sandbox copy: the chromium browser must exist.
+      - run: pnpm --filter @replay/demo-shop exec playwright install --with-deps chromium
       # Unit tests are hermetic: strip model credentials so nothing can call
       # a real provider even if one is configured at the repo level.
       - run: pnpm --filter @replay/agents test
