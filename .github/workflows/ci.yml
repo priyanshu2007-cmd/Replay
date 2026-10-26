@@ -30,13 +30,21 @@ jobs:
       - run: pnpm -r build
       - run: pnpm -r typecheck
       - run: pnpm --filter @replay/web lint
-      # Unit tests must never call real models.
-      - run: |
-          if [ -n "$NEBIUS_API_KEY" ]; then echo "::error::NEBIUS_API_KEY must not be set in CI"; exit 1; fi
-          pnpm --filter @replay/agents test
-          pnpm --filter @replay/api test
-          pnpm --filter @replay/video test
-          pnpm --filter @replay/sandbox test
+      # Unit tests are hermetic: strip model credentials so nothing can call
+      # a real provider even if one is configured at the repo level.
+      - run: pnpm --filter @replay/agents test
+        env:
+          NEBIUS_API_KEY: ''
+          NEBIUS_API_KEY_WATCHER: ''
+          NEBIUS_API_KEY_LOCATOR: ''
+          NEBIUS_API_KEY_REPRODUCER: ''
+          NEBIUS_API_KEY_FIXER: ''
+          NEBIUS_API_KEY_REPORTER: ''
+      - run: pnpm --filter @replay/api test
+        env:
+          NEBIUS_API_KEY: ''
+      - run: pnpm --filter @replay/video test
+      - run: pnpm --filter @replay/sandbox test
 
   api-compose-smoke:
     name: API smoke (memory repo)
