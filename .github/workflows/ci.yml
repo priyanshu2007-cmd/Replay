@@ -90,8 +90,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: npx playwright install --with-deps chromium
         working-directory: apps/web
-      # The web imports @replay/api from its dist/.
-      - run: pnpm --filter @replay/api build
+      # The web imports @replay/api (and its deps) from their dist/.
+      - run: pnpm --filter @replay/api... build
       - run: pnpm --filter @replay/web build
       - run: pnpm --filter @replay/web test
         env:
