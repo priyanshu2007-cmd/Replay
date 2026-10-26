@@ -137,7 +137,7 @@ export async function proposeFix(input: FixerInput, deps: FixerDeps = {}): Promi
   const client = deps.client ?? new LlmClient({ apiKey: resolveApiKey('fixer') });
   const model = deps.model ?? resolveModel('fixer');
 
-  const res = await client.callJson<FixerOutput>(model, messages, FixerOutputSchema, {
+  const res = await client.callJson<FixerOutput>(model, messages, FixerOutputSchema, { role: 'fixer',
     temperature: 0.1,
     enableThinking: false,
   });

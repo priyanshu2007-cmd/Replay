@@ -184,6 +184,26 @@ Track deployment readiness, benchmark execution, hallway testing, README, demo v
 - [x] Bugs found and fixed during the walkthrough: double-submit guard for Run sample (ref-based, was state-based and raced); Monaco editor never mounted in production builds (CDN blocked by CSP) — now bundled locally with prebuild copy step and worker-src blob: in the CSP.
 - Verification: typecheck 9/9; all package suites green; web production build + e2e 10/10.
 
+### Oct 27 API fix-list pass (22 findings from API_FIX_PROMPTS.md, review of 13f5c87)
+- [x] A1: Dockerfile rebuilt on the Playwright base image (version-pinned to demo-shop's @playwright/test), correct `--filter "@replay/api..."` build, ffmpeg via apt, writable /app/artifacts for pwuser; compose: worker starts (no REPLAY_STANDALONE_DISABLED), inline worker off, shared artifacts volume, migrate service, 3001 no longer published (Caddy only). .dockerignore added. Docker build itself UNVERIFIED (no daemon locally).
+- [x] A2: packages/db migrate.ts (drizzle migrator + demo-shop target seed), `migrate` compose service gated by postgres health; getRunRepository no longer silently falls back when DATABASE_URL is set.
+- [x] A5: clientIp() trusts X-Forwarded-For only from private (proxy) peers when TRUST_PROXY=1; spoofing from untrusted peers is ignored.
+- [x] A6: SSE rewritten — UUID check, counter incremented only for real streams with a single finally decrement (no leak on 404/terminal), subscribe-before-history with buffer (no lost events at the boundary), retry: 3000. Web polling fallback now uses API_BASE.
+- [x] A7: the repository owns event seq (callers can no longer pass it); Postgres assigns max(seq)+1 atomically under pg_advisory_xact_lock; memory repo uses a monotonic counter; worker no longer forwards pipeline seq (duplicate-seq bug fixed).
+- [x] A8: frame extraction runs inside the try with an fs.existsSync video check; missing/undecodable video falls back with watch_model_error for samples and a clear error for uploads. (All five sample videos already exist — that finding was stale.)
+- [x] A9: every model call is classified via LlmError (auth/model_not_found/rate_limited/unreachable), retryable codes back off 1s/3s (bounded), empty content and second validation failure become bad_output with a redacted output head, per-role max_tokens with env override, role threaded through callJson.
+- [x] A10: the Reproducer no longer runs model code on the host — tests execute in an isolated workspace COPY with the allowlisted env (no NEBIUS_/SUPABASE_/DATABASE_ vars), URLs rewritten to the sandbox preview port, and the real targets/demo-shop is never touched. Docker runtime wiring stays fail-closed and documented open (no daemon locally to verify).
+- [x] A11: uploads return videoKey 'upload' and drop the reporter note from responses; GET /:id returns opaque keys and note only for samples; addEvent sanitizes absolute paths out of every event payload.
+- [x] A12: UUID validation on /events and /events-page; targetId restricted to known targets; uploads content-sniffed (EBML/ftyp) earlier pass retained.
+- [x] A13: GET /api/ready reports per-dependency status (database, model key) with a 30s cache; /health stays cheap liveness.
+- [x] A14: PipelineRunResult now carries totalTokens and an estimatedCostUsd (per-role price table, marked estimate); the worker persists them. Partial-results-on-failure limited to bugReport (full partial plumbing deferred).
+- [x] A15: DB-configured startup never falls back to memory silently; event payload sanitizer added. Memory-repo debounce/cap deferred (single-process local tool; DB mode is the deployment path).
+- [x] A16: compose publishes only Caddy (3001 internal), TRUST_PROXY=1 wired, Caddyfile gains encode + 52MB body limit + flush_interval -1 for SSE, production CORS fails loudly without ALLOWED_ORIGINS.
+- Deferred with reasons: A3 cross-process live events via Postgres LISTEN/NOTIFY (the web polling fallback covers correctness; NOTIFY/LISTEN is a latency optimization), A4 Supabase Storage upload path (creds unconfigured; relative keys + shared volume cover compose), G3/G4/G5 publish+VM+Vercel-CLI workflows (need cloud secrets; Vercel Git integration already deploys the web).
+- [x] G1: .github/workflows/ci.yml — typecheck, lint, unit tests (fails if NEBIUS_API_KEY set), API smoke, web build + Playwright e2e, Docker build; actions pinned by SHA, minimal permissions, concurrency guards.
+- [x] G2: .github/workflows/security.yml — gitleaks full history, prod audit, CodeQL security-extended; .github/dependabot.yml (npm/actions/docker weekly).
+- Verification: typecheck 9/9; agents 68/68, api 23/23, video 10/10, sandbox 2/2, demo-shop 11/11, web build + e2e 10/10.
+
 ### Submission readiness checklist (evidence-based)
 - [x] Working product: web UI + API + worker + CLI pipeline, real red-to-green verified
 - [x] Benchmark results with methodology and honest failures

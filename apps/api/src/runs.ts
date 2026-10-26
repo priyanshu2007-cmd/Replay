@@ -49,9 +49,32 @@ export interface RunRepository {
   recordHeartbeat(runId: string, workerId: string): Promise<void>;
   releaseRunLock(runId: string, workerId: string, nextState?: RunState): Promise<void>;
   recoverStaleRuns(staleTimeoutMs: number): Promise<number>;
-  addEvent(runId: string, event: Omit<RunEvent, 'seq' | 'run_id' | 'timestamp'> & { seq?: number; timestamp?: string }): Promise<RunEvent>;
+  addEvent(runId: string, event: Omit<RunEvent, 'seq' | 'run_id' | 'timestamp'> & { timestamp?: string }): Promise<RunEvent>;
   getEvents(runId: string): Promise<RunEvent[]>;
   subscribeEvents(runId: string, listener: (event: RunEvent) => void): () => void;
+}
+
+/**
+ * Safety net for event payloads reaching every client: replace any string that
+ * looks like an absolute server path with a relative label.
+ */
+function REPO_ROOT_DATA(): string {
+  return process.env.REPLAY_DATA_DIR || process.cwd();
+}
+
+function sanitizeEventPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  const looksAbsolute = /^\/(Users|home|app|tmp|root|var)\b|^\\\\|^C:\\\\/i;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(payload)) {
+    if (typeof value === 'string' && looksAbsolute.test(value)) {
+      out[key] = value.split('/').pop() || '[path]';
+    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      out[key] = sanitizeEventPayload(value as Record<string, unknown>);
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
 }
 
 export const KNOWN_SAMPLE_IDS = [
@@ -297,7 +320,7 @@ export class MemoryRunRepository implements RunRepository {
 
   async addEvent(
     runId: string,
-    event: Omit<RunEvent, 'seq' | 'run_id' | 'timestamp'> & { seq?: number; timestamp?: string }
+    event: Omit<RunEvent, 'seq' | 'run_id' | 'timestamp'> & { timestamp?: string }
   ): Promise<RunEvent> {
     let list = this.events.get(runId);
     if (!list) {
@@ -305,14 +328,16 @@ export class MemoryRunRepository implements RunRepository {
       this.events.set(runId, list);
     }
 
-    const seq = event.seq ?? list.length + 1;
+    // The repository owns seq: monotonic per run, gap-free under concurrency
+    // (Node runs this block on one thread).
+    const seq = list.length > 0 ? (list[list.length - 1]!.seq ?? 0) + 1 : 1;
     const fullEvent: RunEvent = {
       run_id: runId,
       seq,
       stage: event.stage,
       agent: event.agent,
       event_type: event.event_type,
-      payload: event.payload,
+      payload: sanitizeEventPayload(event.payload),
       timestamp: event.timestamp ?? new Date().toISOString(),
     };
 
@@ -539,31 +564,26 @@ export class PostgresRunRepository implements RunRepository {
 
   async addEvent(
     runId: string,
-    event: Omit<RunEvent, 'seq' | 'run_id' | 'timestamp'> & { seq?: number; timestamp?: string }
+    event: Omit<RunEvent, 'seq' | 'run_id' | 'timestamp'> & { timestamp?: string }
   ): Promise<RunEvent> {
-    let nextSeq = event.seq;
-    if (nextSeq === undefined) {
-      const existing = await this.db
-        .select({ seq: runEvents.seq })
-        .from(runEvents)
-        .where(eq(runEvents.runId, runId))
-        .orderBy(desc(runEvents.seq))
-        .limit(1);
-
-      const first = existing[0];
-      nextSeq = first ? first.seq + 1 : 1;
-    }
-
+    // Atomic, race-free seq: one transaction holds an advisory lock on the run
+    // and computes max(seq)+1 in the same INSERT. No SELECT-then-INSERT race.
     const timestamp = event.timestamp ?? new Date().toISOString();
-
-    await this.db.insert(runEvents).values({
-      runId,
-      seq: nextSeq,
-      stage: event.stage,
-      agent: event.agent,
-      eventType: event.event_type,
-      payload: event.payload,
+    const inserted = await (this.db as unknown as {
+      $client: { begin: (fn: (tx: any) => Promise<any>) => Promise<any> };
+    }).$client.begin(async (tx: any) => {
+      await tx`SELECT pg_advisory_xact_lock(hashtext(${runId}))`;
+      const rows = await tx`
+        INSERT INTO run_events (run_id, seq, stage, agent, event_type, payload, created_at)
+        SELECT ${runId}, COALESCE(MAX(seq), 0) + 1, ${event.stage}, ${event.agent},
+               ${event.event_type}, ${JSON.stringify(sanitizeEventPayload(event.payload))}::jsonb,
+               ${new Date(timestamp)}
+        FROM run_events WHERE run_id = ${runId}
+        RETURNING seq, created_at`;
+      return rows[0];
     });
+
+    const nextSeq = Number(inserted?.seq ?? 1);
 
     const fullEvent: RunEvent = {
       run_id: runId,
@@ -614,16 +634,13 @@ export function getRunRepository(): RunRepository {
 
   const dbUrl = process.env.DATABASE_URL;
   if (dbUrl && dbUrl.trim() !== '') {
-    try {
-      const db = createDb(dbUrl);
-      currentRepo = new PostgresRunRepository(db);
-      return currentRepo;
-    } catch (err) {
-      console.warn('[RunRepository] PostgreSQL unavailable, falling back to MemoryRunRepository:', err);
-    }
+    // A configured database is a promise: never silently fall back to memory,
+    // or runs "disappear" between API and worker processes.
+    currentRepo = new PostgresRunRepository(createDb(dbUrl));
+    return currentRepo;
   }
 
-  const persistPath = path.resolve(process.cwd(), 'artifacts/runs.json');
+  const persistPath = path.resolve(process.env.REPLAY_DATA_DIR || REPO_ROOT_DATA(), 'artifacts/runs.json');
   currentRepo = new MemoryRunRepository({ persistPath });
   return currentRepo;
 }

@@ -19,7 +19,8 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "migrate": "node --import tsx src/migrate.ts"
   },
   "dependencies": {
     "@replay/shared": "workspace:*",

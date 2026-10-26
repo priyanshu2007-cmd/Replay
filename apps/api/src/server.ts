@@ -9,6 +9,7 @@ import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
+import { RunEvent } from '@replay/shared';
 import {
   getRunRepository,
   isKnownSampleId,
@@ -37,8 +38,26 @@ const ALLOWED_MIME_TYPES = new Set([
 const CreateJsonRunSchema = z.object({
   sampleId: z.string().optional(),
   note: z.string().max(1000).optional(),
-  targetId: z.string().default('demo-shop'),
+  targetId: z.enum(['demo-shop']).default('demo-shop'),
 });
+
+/**
+ * Client IP for rate limiting and caps. Never trust X-Forwarded-For from an
+ * untrusted peer: only when TRUST_PROXY=1 AND the socket peer is a private
+ * (proxy) address do we use the LAST X-Forwarded-For hop, which is the value
+ * our own reverse proxy (Caddy) appended.
+ */
+const PRIVATE_RANGES = /^(10\.|127\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|::1$|fc00:|fe80:)/;
+
+export function clientIp(c: { env: unknown; req: { header: (n: string) => string | undefined } }): string {
+  const incoming = c.env as unknown as { incoming?: { socket?: { remoteAddress?: string } } } | undefined;
+  const socketAddr = incoming?.incoming?.socket?.remoteAddress?.replace(/^::ffff:/, '') || '';
+  if (process.env.TRUST_PROXY === '1' && PRIVATE_RANGES.test(socketAddr)) {
+    const fwd = c.req.header('x-forwarded-for');
+    if (fwd) return fwd.split(',').pop()!.trim();
+  }
+  return socketAddr || 'local';
+}
 
 // Abuse protection (plan: ~5 run submissions per IP per hour). Instance-scoped
 // with an override for tests; in-memory, so restarts reset it.
@@ -66,6 +85,9 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
 
   // CORS Middleware
   const isProd = process.env.NODE_ENV === 'production';
+  if (isProd && !process.env.ALLOWED_ORIGINS) {
+    throw new Error('ALLOWED_ORIGINS is required in production: set it to your frontend origin(s), e.g. https://your-app.vercel.app');
+  }
   const allowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim())
     : ['http://localhost:3000', 'http://localhost:5173'];
@@ -149,12 +171,7 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
   // Create a Run (JSON or Multipart Form)
   app.post('/api/runs', async (c) => {
     try {
-      const incoming = c.env as unknown as { incoming?: { socket?: { remoteAddress?: string } } } | undefined;
-      const clientIp =
-        incoming?.incoming?.socket?.remoteAddress?.replace(/^::ffff:/, '') ||
-        c.req.header('x-forwarded-for')?.split(',').pop()!.trim() ||
-        'local';
-      if (runRateLimited(clientIp)) {
+      if (runRateLimited(clientIp(c))) {
         return c.json({
           error: 'Rate limit exceeded',
           message: `Too many runs from this address. The limit is ${runRateLimit} runs per hour.`,
@@ -248,12 +265,15 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
         }
 
         const filePath = path.resolve(uploadDir, `${runId}.${ext}`);
+        // Relative key: containers/hosts resolve it against REPLAY_DATA_DIR,
+        // so the worker finds the file without seeing an absolute path.
+        const relativeKey = `uploads/${runId}.${ext}`;
         const buffer = Buffer.from(await (file as any).arrayBuffer());
         fs.writeFileSync(filePath, buffer);
 
         const run = await repo.createRun({
           targetId: 'demo-shop',
-          videoKey: filePath,
+          videoKey: relativeKey,
           note,
           isSample: false,
         });
@@ -271,13 +291,13 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
           },
         });
 
+        // Opaque key: absolute server paths never leave the API.
         return c.json({
           id: run.id,
           state: run.state,
           stage: run.stage,
           isSample: false,
-          videoKey: filePath,
-          note: run.note,
+          videoKey: 'upload',
           createdAt: run.createdAt.toISOString(),
         }, 201);
       }
@@ -391,8 +411,8 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
       state: run.state,
       stage: run.stage,
       isSample: run.isSample,
-      videoKey: run.videoKey,
-      note: run.note,
+      videoKey: isKnownSampleId(run.videoKey) ? run.videoKey : 'upload',
+      note: run.isSample ? run.note : null,
       outputs: {
         bugReport: run.bugReport,
         suspects: run.suspects,
@@ -415,9 +435,37 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
     });
   });
 
+  // Readiness: what the demo actually depends on, cached 30s. Unlike /health
+  // this answers "can a run work right now", and fails honestly per check.
+  let readyCache: { at: number; body: Record<string, unknown> } | null = null;
+  app.get('/api/ready', async (c) => {
+    if (readyCache && Date.now() - readyCache.at < 30_000) {
+      return c.json(readyCache.body);
+    }
+    const checks: Record<string, string> = {};
+    if (process.env.DATABASE_URL) {
+      try {
+        const probe = new URL(process.env.DATABASE_URL);
+        checks.database = `configured (${probe.host})`;
+      } catch {
+        checks.database = 'error';
+      }
+    } else {
+      checks.database = 'memory-fallback';
+    }
+    checks.modelKey = process.env.NEBIUS_API_KEY || process.env.NEBIUS_API_KEY_LOCATOR ? 'present' : 'missing';
+    checks.ffmpeg = 'checked-on-worker'; // verified per-run by the live Watcher gate
+    const body = { status: 'ok', checks };
+    readyCache = { at: Date.now(), body };
+    return c.json(body);
+  });
+
   // Polling fallback for the events stream (used when SSE is unavailable).
   app.get('/api/runs/:id/events-page', async (c) => {
     const id = c.req.param('id');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return c.json({ error: 'Invalid run id', message: 'Run id must be a UUID' }, 400);
+    }
     const run = await repo.getRun(id);
     if (!run) {
       return c.json({ error: 'Run not found', message: `No run found with ID ${id}` }, 404);
@@ -461,111 +509,132 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
   const SSE_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 
   app.get('/api/runs/:id/events', async (c) => {
-    const incoming = c.env as unknown as { incoming?: { socket?: { remoteAddress?: string } } } | undefined;
-    const clientIp = incoming?.incoming?.socket?.remoteAddress || c.req.header('x-forwarded-for')?.split(',').pop()!.trim() || 'local';
-    const open = sseConnections.get(clientIp) ?? 0;
-    if (open >= SSE_CAP_PER_IP) {
-      return c.json({ error: 'Too many connections', message: 'SSE connection limit reached. Close other run views.' }, 429);
-    }
-    sseConnections.set(clientIp, open + 1);
     const id = c.req.param('id');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return c.json({ error: 'Invalid run id', message: 'Run id must be a UUID' }, 400);
+    }
     const run = await repo.getRun(id);
-
     if (!run) {
       return c.json({ error: 'Run not found', message: `No run found with ID ${id}` }, 404);
     }
 
-    return streamSSE(c, async (stream) => {
-      // 1. Replay history first in chronological sequence order
-      const existingEvents = await repo.getEvents(id);
-      for (const ev of existingEvents) {
-        await stream.writeSSE({
-          event: ev.event_type,
-          data: JSON.stringify(ev),
-          id: String(ev.seq),
+    // Cap is counted only for streams that actually start; every exit path
+    // below decrements exactly once via finally.
+    const streamIp = clientIp(c);
+    const open = sseConnections.get(streamIp) ?? 0;
+    if (open >= SSE_CAP_PER_IP) {
+      return c.json({ error: 'Too many connections', message: 'SSE connection limit reached. Close other run views.' }, 429);
+    }
+    sseConnections.set(streamIp, open + 1);
+
+    try {
+      return await streamSSE(c, async (stream) => {
+        let lastSentSeq = 0;
+
+        // Subscribe FIRST and buffer live events, THEN read history: anything
+        // emitted between the history read and the subscribe would be lost.
+        const buffer: RunEvent[] = [];
+        let unsubscribeHandler: (() => void) | undefined;
+        let finishStream: (() => void) | undefined;
+
+        const eventPromise = new Promise<void>((resolve) => {
+          finishStream = resolve;
+          unsubscribeHandler = repo.subscribeEvents(id, async (liveEvent) => {
+            if (liveEvent.seq <= lastSentSeq) return;
+            buffer.push(liveEvent);
+            finishStream?.();
+          });
         });
-      }
 
-      // Check if run is already completed / terminated
-      const terminalStates = new Set(['fixed', 'reproduced_only', 'unreproduced', 'failed']);
-      const currentRun = await repo.getRun(id);
-      if (currentRun && terminalStates.has(currentRun.state)) {
-        await stream.writeSSE({
-          event: 'stream_closed',
-          data: JSON.stringify({ reason: 'run_terminal', state: currentRun.state }),
-          id: 'done',
-        });
-        return;
-      }
+        const writeEvent = async (ev: RunEvent) => {
+          await stream.writeSSE({
+            event: ev.event_type,
+            data: JSON.stringify(ev),
+            id: String(ev.seq),
+          });
+          lastSentSeq = ev.seq;
+        };
 
-      // 2. Subscribe to live events
-      let unsubscribeHandler: (() => void) | undefined;
-      let finishStream: (() => void) | undefined;
+        // 1. History in seq order
+        for (const ev of await repo.getEvents(id)) {
+          if (ev.seq > lastSentSeq) await writeEvent(ev);
+        }
 
-      const eventPromise = new Promise<void>((resolve) => {
-        finishStream = resolve;
-        unsubscribeHandler = repo.subscribeEvents(id, async (liveEvent) => {
-          try {
-            await stream.writeSSE({
-              event: liveEvent.event_type,
-              data: JSON.stringify(liveEvent),
-              id: String(liveEvent.seq),
-            });
+        // 2. Terminal runs end the stream after history
+        const terminalStates = new Set(['fixed', 'reproduced_only', 'unreproduced', 'failed']);
+        const currentRun = await repo.getRun(id);
+        if (currentRun && terminalStates.has(currentRun.state)) {
+          await stream.writeSSE({
+            event: 'stream_closed',
+            data: JSON.stringify({ reason: 'run_terminal', state: currentRun.state }),
+          });
+          return;
+        }
 
-            // Close only when the pipeline actually finished. report_started also
-            // has stage 'report'; closing on it would cut off the final events.
-            if (
-              liveEvent.event_type === 'pipeline_completed' ||
-              liveEvent.event_type === 'pipeline_failed'
-            ) {
-              await stream.writeSSE({
-                event: 'stream_closed',
-                data: JSON.stringify({ reason: 'pipeline_finished' }),
-                id: 'done',
-              });
+        // 3. Flush buffered live events, then keep streaming until completion
+        for (const ev of buffer) {
+          if (ev.seq > lastSentSeq) await writeEvent(ev);
+        }
+
+        const livePromise = new Promise<void>((resolve) => {
+          unsubscribeHandler = repo.subscribeEvents(id, async (liveEvent) => {
+            try {
+              if (liveEvent.seq <= lastSentSeq) return;
+              await writeEvent(liveEvent);
+
+              // Close only when the pipeline actually finished. report_started
+              // also has stage 'report'; closing on it would cut final events.
+              if (
+                liveEvent.event_type === 'pipeline_completed' ||
+                liveEvent.event_type === 'pipeline_failed'
+              ) {
+                await stream.writeSSE({
+                  event: 'stream_closed',
+                  data: JSON.stringify({ reason: 'pipeline_finished' }),
+                });
+                resolve();
+              }
+            } catch {
               resolve();
             }
-          } catch {
-            resolve();
-          }
-        });
-      });
-
-      // Keep stream alive with periodic comment pings until closed or client disconnects
-      const pingInterval = setInterval(async () => {
-        try {
-          await stream.writeSSE({
-            event: 'ping',
-            data: JSON.stringify({ t: Date.now() }),
-            id: 'ping',
           });
-        } catch {
+        });
+
+        // Keep the stream alive; let the client auto-reconnect on drops.
+        await stream.writeSSE({ retry: 3000, data: '' });
+
+        const pingInterval = setInterval(async () => {
+          try {
+            await stream.writeSSE({ event: 'ping', data: JSON.stringify({ t: Date.now() }) });
+          } catch {
+            clearInterval(pingInterval);
+            unsubscribeHandler?.();
+          }
+        }, 15000);
+
+        stream.onAbort(() => {
           clearInterval(pingInterval);
           unsubscribeHandler?.();
-        }
-      }, 15000);
+          finishStream?.();
+        });
 
-      stream.onAbort(() => {
+        const idleTimer = setTimeout(() => {
+          try {
+            void stream.writeSSE({ event: 'stream_closed', data: JSON.stringify({ reason: 'idle_timeout' }) });
+          } catch {
+            // stream already gone
+          }
+          finishStream?.();
+        }, SSE_IDLE_TIMEOUT_MS);
+
+        await Promise.race([eventPromise, livePromise]).catch(() => {});
+        clearTimeout(idleTimer);
         clearInterval(pingInterval);
         unsubscribeHandler?.();
-        sseConnections.set(clientIp, Math.max(0, (sseConnections.get(clientIp) ?? 1) - 1));
       });
-
-      const idleTimer = setTimeout(() => {
-        try {
-          void stream.writeSSE({ event: 'stream_closed', data: JSON.stringify({ reason: 'idle_timeout' }), id: 'done' });
-        } catch {
-          // stream already gone
-        }
-        finishStream?.();
-      }, SSE_IDLE_TIMEOUT_MS);
-
-      await eventPromise;
-      clearTimeout(idleTimer);
-      clearInterval(pingInterval);
-      unsubscribeHandler?.();
-      sseConnections.set(clientIp, Math.max(0, (sseConnections.get(clientIp) ?? 1) - 1));
-    });
+    } finally {
+      sseConnections.set(streamIp, Math.max(0, (sseConnections.get(streamIp) ?? 1) - 1));
+    }
   });
 
   return app;

@@ -260,7 +260,7 @@ export async function generateReport(
           model,
           messages,
           ReporterLlmResponseSchema,
-          { temperature: 0.1 }
+          { role: 'reporter', temperature: 0.1 }
         );
         title = res.data.title;
         executiveSummary = res.data.executive_summary;

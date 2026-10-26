@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { RunEvent, RunEventSchema, sseUrl } from '@/lib/api';
+import { API_BASE } from '@/lib/api';
 
 /**
  * SSE hook: opens one EventSource per run, replays history, then streams
@@ -83,7 +84,7 @@ export function useRunEvents(runId: string, enabled: boolean): UseRunEvents {
 
     async function pollOnce() {
       try {
-        const res = await fetch(`/api/runs/${encodeURIComponent(runId)}/events-page`, { cache: 'no-store' });
+        const res = await fetch(`${API_BASE}/api/runs/${encodeURIComponent(runId)}/events-page`, { cache: 'no-store' });
         if (!res.ok) return;
         const body = (await res.json()) as { events: Array<{ seq: number; [k: string]: unknown }> };
         for (const ev of body.events) {

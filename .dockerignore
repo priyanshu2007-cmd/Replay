@@ -1,0 +1,15 @@
+node_modules
+.next
+dist
+artifacts
+.env
+.env.*
+.git
+ECC
+*.pdf
+*.webm
+!samples/videos/*.webm
+test-results
+playwright-report
+.taste-skill
+docs

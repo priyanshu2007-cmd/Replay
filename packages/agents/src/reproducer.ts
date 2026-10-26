@@ -1,7 +1,5 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import type OpenAI from 'openai';
 import {
@@ -13,8 +11,8 @@ import {
   ReproducerOutputSchema,
 } from '@replay/shared';
 import { LlmClient, ModelMetrics, resolveApiKey, resolveModel } from './llm.js';
+import { IsolatedWorkspaceSandbox, SandboxUnavailableError } from '@replay/sandbox';
 
-const execFileAsync = promisify(execFile);
 
 export const REPRODUCER_PROMPT_VERSION = 'v1';
 
@@ -156,7 +154,7 @@ export async function generateReproduction(
   const client = deps.client ?? new LlmClient({ apiKey: resolveApiKey('reproducer') });
   const model = deps.model ?? resolveModel('reproducer');
 
-  const res = await client.callJson<ReproducerOutput>(model, messages, ReproducerOutputSchema, {
+  const res = await client.callJson<ReproducerOutput>(model, messages, ReproducerOutputSchema, { role: 'reproducer',
     temperature: 0.1,
     enableThinking: false,
   });
@@ -292,54 +290,64 @@ export interface ExecuteReproOptions {
 }
 
 /**
- * Execute a reproduction test in an isolated file under targets/demo-shop/tests/repro/.
- * Avoids touching baseline or planted-bug tests.
+ * Execute a reproduction test inside an isolated workspace COPY, never in the
+ * real targets/demo-shop and never with host secrets. Model-written test code
+ * is untrusted: it runs with an explicit environment allowlist, and its file
+ * writes land in the temp workspace. validateReproductionTestCode stays as a
+ * lint pass, not a security control.
  */
 export async function executeReproductionTest(
   testCode: string,
   options: ExecuteReproOptions
 ): Promise<ReproExecutionResult> {
-  const { demoShopRoot, testTimeoutMs = 30_000, keepReproFile = false } = options;
-  const reproDir = path.join(demoShopRoot, 'tests', 'repro');
-  await fs.promises.mkdir(reproDir, { recursive: true });
-
-  const fileName = options.testFileName ?? `repro-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.spec.ts`;
-  const reproFile = path.join(reproDir, fileName);
-  const relativeReproPath = path.relative(demoShopRoot, reproFile);
-  await fs.promises.writeFile(reproFile, testCode, 'utf8');
-
+  const { demoShopRoot } = options;
   const startTime = Date.now();
+
+  const sandbox = await IsolatedWorkspaceSandbox.create(demoShopRoot);
   let stdout = '';
   let stderr = '';
   let exitCode = 0;
 
   try {
-    const res = await execFileAsync(
-      'npx',
-      ['playwright', 'test', relativeReproPath, '--output=.playwright-results-repro'],
-      {
-        cwd: demoShopRoot,
-        timeout: testTimeoutMs + 10_000,
-        env: { ...process.env, PLAYWRIGHT_TEST_MATCH: '**/tests/repro/**' },
-      }
+    const sandboxPort = '5179';
+    // Generated tests navigate to absolute localhost URLs; point them at the
+    // sandbox's own preview server (playwright.config boots vite preview on
+    // DEMO_SHOP_PORT).
+    const sandboxTestCode = testCode.replace(
+      /https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/g,
+      `http://127.0.0.1:${sandboxPort}`,
     );
-    stdout = res.stdout;
-    stderr = res.stderr;
-    exitCode = 0;
-  } catch (err: any) {
-    stdout = err.stdout || '';
-    stderr = err.stderr || '';
-    exitCode = typeof err.code === 'number' ? err.code : 1;
-  } finally {
-    if (!keepReproFile) {
-      try {
-        if (fs.existsSync(reproFile)) {
-          await fs.promises.unlink(reproFile);
-        }
-      } catch {
-        // ignore cleanup error
-      }
+    const reproDir = path.join(sandbox.workDir, 'tests', 'repro');
+    await fs.promises.mkdir(reproDir, { recursive: true });
+    await fs.promises.writeFile(path.join(reproDir, 'generated.spec.ts'), sandboxTestCode, 'utf8');
+
+    // vite preview serves dist; build the copied workspace first.
+    const build = await sandbox.exec('npx', ['vite', 'build'], { SANDBOX_TEST: '1' });
+    if (build.exitCode !== 0) {
+      stdout = build.stdout;
+      stderr = build.stderr;
+      exitCode = build.exitCode;
+    } else {
+      const res = await sandbox.exec(
+        'npx',
+        ['playwright', 'test', 'tests/repro/generated.spec.ts', '--output=.playwright-results-repro'],
+        {
+          PLAYWRIGHT_TEST_MATCH: '**/tests/repro/**',
+          DEMO_SHOP_PORT: sandboxPort,
+          SANDBOX_TEST: '1',
+        },
+      );
+      stdout = res.stdout;
+      stderr = res.stderr;
+      exitCode = res.exitCode;
     }
+  } catch (err: any) {
+    if (err instanceof SandboxUnavailableError) throw err;
+    stdout = err?.stdout || '';
+    stderr = err?.stderr || String(err?.message ?? err);
+    exitCode = typeof err?.code === 'number' ? err.code : 1;
+  } finally {
+    await sandbox.cleanup().catch(() => {});
   }
 
   const durationMs = Date.now() - startTime;
@@ -351,6 +359,6 @@ export async function executeReproductionTest(
     stdout,
     stderr,
     durationMs,
-    reproFilePath: reproFile,
+    reproFilePath: 'tests/repro/generated.spec.ts',
   };
 }

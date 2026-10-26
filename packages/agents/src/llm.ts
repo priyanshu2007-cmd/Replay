@@ -104,7 +104,35 @@ export interface CallJsonOptions {
   jsonMode?: boolean;
   /** Set false on NVIDIA NIM hybrid models (e.g. Lightning) to disable long thinking traces that stall non-streaming calls. */
   enableThinking?: boolean;
+  /** Which agent is calling: drives error classification and the token cap. */
+  role?: AgentRole;
+  /** Output cap. Per-role defaults below; env MODEL_<ROLE>_MAX_TOKENS overrides. */
+  maxTokens?: number;
 }
+
+/** Output budgets per role (reasoning models burn tokens before the answer). */
+const ROLE_MAX_TOKENS: Record<AgentRole, number> = {
+  watcher: 2000,
+  verifier: 2000,
+  locator: 2000,
+  reproducer: 4000,
+  fixer: 4000,
+  reporter: 1500,
+};
+
+function maxTokensFor(role: AgentRole | undefined, override?: number): number {
+  if (override) return override;
+  if (role) {
+    const env = process.env[`MODEL_${role.toUpperCase()}_MAX_TOKENS`];
+    if (env && Number(env) > 0) return Number(env);
+    return ROLE_MAX_TOKENS[role];
+  }
+  return 2000;
+}
+
+const RETRY_DELAYS_MS = [1000, 3000];
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms + Math.floor(Math.random() * 250)));
 
 function stripJsonFence(raw: string): string {
   return raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
@@ -134,29 +162,71 @@ export class LlmClient {
    * Call model requesting JSON and validate with Zod schema.
    * If validation fails, retries at most once with the exact validation error attached.
    */
+  /**
+   * Call a model for JSON with classification, bounded retries and validation.
+   * Provider errors become LlmError (auth/model_not_found/rate_limited/
+   * unreachable); retryable codes back off 1s/3s. Empty output and a second
+   * validation failure become bad_output. Every failure is classified, none
+   * silently swallowed.
+   */
   async callJson<T>(
     model: string,
     messages: OpenAI.Chat.ChatCompletionMessageParam[],
     schema: z.ZodType<T, z.ZodTypeDef, unknown>,
     opts: CallJsonOptions = {}
   ): Promise<LlmResponse<T>> {
+    const role = opts.role ?? 'unknown';
+    let lastError: LlmError | undefined;
+    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+      if (attempt > 0 && lastError) {
+        await sleep(RETRY_DELAYS_MS[attempt - 1]!);
+      }
+      try {
+        return await this.callJsonOnce<T>(model, messages, schema, opts);
+      } catch (err) {
+        lastError = err instanceof LlmError ? err : toLlmError(err, role, model);
+        if (!lastError.retryable || attempt === RETRY_DELAYS_MS.length) break;
+      }
+    }
+    throw lastError ?? new LlmError('Model call failed', 'unknown', role, model);
+  }
+
+  private async callJsonOnce<T>(
+    model: string,
+    messages: OpenAI.Chat.ChatCompletionMessageParam[],
+    schema: z.ZodType<T, z.ZodTypeDef, unknown>,
+    opts: CallJsonOptions & { role?: AgentRole | 'unknown' } = {}
+  ): Promise<LlmResponse<T>> {
+    const role = opts.role ?? 'unknown';
     const temperature = opts.temperature ?? 0.1;
     const jsonMode = opts.jsonMode !== false;
     const extraBody =
       opts.enableThinking === false ? { chat_template_kwargs: { enable_thinking: false } } : {};
     const startTime = Date.now();
 
-    const response = await this.openai.chat.completions.create({
-      model,
-      messages,
-      temperature,
-      ...(jsonMode ? { response_format: { type: 'json_object' as const } } : {}),
-      ...extraBody,
-    });
+    let response: OpenAI.Chat.ChatCompletion;
+    try {
+      response = await this.openai.chat.completions.create({
+        model,
+        messages,
+        temperature,
+        max_tokens: maxTokensFor(role === 'unknown' ? undefined : role as AgentRole, opts.maxTokens),
+        ...(jsonMode ? { response_format: { type: 'json_object' as const } } : {}),
+        ...extraBody,
+      });
+    } catch (err) {
+      throw toLlmError(err, role as AgentRole, model);
+    }
 
     const durationMs = Date.now() - startTime;
     const choice = response.choices[0];
     const rawContent = choice?.message?.content || '';
+    if (!rawContent.trim()) {
+      throw new LlmError(
+        `Model returned empty content (finish_reason: ${choice?.finish_reason ?? 'unknown'})`,
+        'bad_output', role as AgentRole, model,
+      );
+    }
 
     const metrics: ModelMetrics = {
       promptTokens: response.usage?.prompt_tokens ?? 0,
@@ -171,7 +241,7 @@ export class LlmClient {
       parsedJson = JSON.parse(stripJsonFence(rawContent));
     } catch (parseErr: any) {
       // Retry once with error context
-      return this.retryJson(model, messages, rawContent, `Invalid JSON syntax: ${parseErr.message}`, schema, metrics, jsonMode, extraBody);
+      return this.retryJson(model, messages, rawContent, `Invalid JSON syntax: ${parseErr.message}`, schema, metrics, jsonMode, extraBody, role);
     }
 
     const validated = schema.safeParse(parsedJson);
@@ -179,7 +249,7 @@ export class LlmClient {
       const errorMsg = validated.error.issues
         .map(i => `${i.path.join('.')}: ${i.message}`)
         .join('; ');
-      return this.retryJson(model, messages, rawContent, `Schema validation failed: ${errorMsg}`, schema, metrics, jsonMode, extraBody);
+      return this.retryJson(model, messages, rawContent, `Schema validation failed: ${errorMsg}`, schema, metrics, jsonMode, extraBody, role);
     }
 
     return {
@@ -197,7 +267,8 @@ export class LlmClient {
     schema: z.ZodType<T, z.ZodTypeDef, unknown>,
     initialMetrics: ModelMetrics,
     jsonMode: boolean,
-    extraBody: Record<string, unknown> = {}
+    extraBody: Record<string, unknown> = {},
+    role: AgentRole | 'unknown' = 'unknown'
   ): Promise<LlmResponse<T>> {
     const startTime = Date.now();
     const repairMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -209,17 +280,26 @@ export class LlmClient {
       }
     ];
 
-    const response = await this.openai.chat.completions.create({
-      model,
-      messages: repairMessages,
-      temperature: 0.1,
-      ...(jsonMode ? { response_format: { type: 'json_object' as const } } : {}),
-      ...extraBody,
-    });
+    let response: OpenAI.Chat.ChatCompletion;
+    try {
+      response = await this.openai.chat.completions.create({
+        model,
+        messages: repairMessages,
+        temperature: 0.1,
+        max_tokens: maxTokensFor(role === 'unknown' ? undefined : role as AgentRole),
+        ...(jsonMode ? { response_format: { type: 'json_object' as const } } : {}),
+        ...extraBody,
+      });
+    } catch (err) {
+      throw toLlmError(err, role as AgentRole, model);
+    }
 
     const durationMs = Date.now() - startTime;
     const choice = response.choices[0];
     const rawContent = choice?.message?.content || '';
+    if (!rawContent.trim()) {
+      throw new LlmError('Model returned empty content on the validation retry', 'bad_output', role, model);
+    }
 
     const totalMetrics: ModelMetrics = {
       promptTokens: initialMetrics.promptTokens + (response.usage?.prompt_tokens ?? 0),
@@ -229,13 +309,23 @@ export class LlmClient {
       model,
     };
 
-    const parsedJson = JSON.parse(stripJsonFence(rawContent));
-    const validated = schema.parse(parsedJson);
-
-    return {
-      data: validated,
-      rawText: rawContent,
-      metrics: totalMetrics,
-    };
+    let parsedJson: unknown;
+    try {
+      parsedJson = JSON.parse(stripJsonFence(rawContent));
+      return {
+        data: schema.parse(parsedJson),
+        rawText: rawContent,
+        metrics: totalMetrics,
+      };
+    } catch (err) {
+      // Second failure: deterministic bad_output, with a redacted output head.
+      const detail = err instanceof z.ZodError
+        ? 'schema validation failed'
+        : 'invalid JSON';
+      throw new LlmError(
+        `Model output ${detail} after retry. Output head: ${redactSecretText(rawContent).slice(0, 300)}`,
+        'bad_output', role as AgentRole, model,
+      );
+    }
   }
 }

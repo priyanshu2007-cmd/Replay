@@ -1,5 +1,13 @@
 # HTTPS reverse proxy for the VM (plan: Caddy + sslip.io, no domain needed).
 # Replace the host with your VM ip or hostname: e.g. replay.198-51-100-7.sslip.io
 {$REPLAY_HOST:localhost} {
-	reverse_proxy api:3001
+	encode zstd gzip
+	# Upload limit must match the API's 50 MB body cap.
+	request_body {
+		max_size 52MB
+	}
+	reverse_proxy api:3001 {
+		# SSE: stream events as they arrive, never buffered.
+		flush_interval -1
+	}
 }

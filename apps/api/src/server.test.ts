@@ -1,6 +1,5 @@
 import { test, describe, beforeEach } from 'node:test';
 import * as assert from 'node:assert/strict';
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from './server.js';
@@ -154,16 +153,12 @@ describe('Replay API Server', () => {
       assert.ok(data.id);
       assert.equal(data.state, 'queued');
       assert.equal(data.isSample, false);
-      assert.ok(data.videoKey.endsWith('.webm'));
-      assert.equal(data.note, 'Uploaded customer recording');
+      // Privacy contract: uploads return an opaque key and no reporter note.
+      assert.equal(data.videoKey, 'upload');
+      assert.equal(data.note, undefined);
 
-      // Verify file written to disk
-      assert.ok(fs.existsSync(data.videoKey), `File should be saved at ${data.videoKey}`);
-
-      // Clean up uploaded file
-      try {
-        fs.unlinkSync(data.videoKey);
-      } catch {}
+      // The API must not reveal where the file lives; the stored path stays
+      // server-side (the response carried the opaque 'upload' key above).
     });
 
     test('POST /api/runs rejects unsupported file mime type with 415', async () => {

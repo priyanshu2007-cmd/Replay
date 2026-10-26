@@ -188,7 +188,7 @@ export async function verifyReproduction(
     try {
       const client = deps.client ?? new LlmClient({ apiKey });
       const messages = buildVerifierMessages(input);
-      const res = await client.callJson<VerifierOutput>(model, messages, VerifierOutputSchema, {
+      const res = await client.callJson<VerifierOutput>(model, messages, VerifierOutputSchema, { role: 'verifier',
         temperature: 0.1,
       });
 

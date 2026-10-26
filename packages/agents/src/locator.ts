@@ -187,7 +187,7 @@ export async function locateSuspects(input: LocatorInput, deps: LocatorDeps = {}
   const model = deps.model ?? resolveModel('locator');
   const schema = buildGroundedLocatorSchema(input.bundle);
 
-  const res = await client.callJson<LocatorOutput>(model, messages, schema, {
+  const res = await client.callJson<LocatorOutput>(model, messages, schema, { role: 'locator',
     temperature: 0.1,
     enableThinking: false,
   });

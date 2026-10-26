@@ -18,11 +18,26 @@ import { packRepository, RepoBundle } from './packer.js';
 import { fixtureToBugReport, locateSuspects, LocatorDeps, SampleFixtureSchema } from './locator.js';
 import { executeReproductionTest, generateReproduction, ReproducerDeps } from './reproducer.js';
 import { verifyReproduction, VerifierDeps } from './verifier.js';
-import { redactSecretText, resolveApiKey, resolveModel } from './llm.js';
+import { redactSecretText, resolveApiKey, resolveModel, ModelMetrics, AgentRole } from './llm.js';
 import { analyzeBugVideo } from './watcher.js';
 import { VideoProcessor } from '@replay/video';
 import { applyPatchToDirectory, FixerDeps, proposeFix } from './fixer.js';
 import { generateReport, ReporterDeps } from './reporter.js';
+
+/** Estimated cost from published Token Factory prices ($/1M tokens, in+out blended). Marked as estimate everywhere it is shown. */
+const COST_PER_1M: Record<AgentRole, number> = {
+  watcher: 0.60,
+  verifier: 0.60,
+  locator: 0.15,
+  reproducer: 2.00,
+  fixer: 2.00,
+  reporter: 0.15,
+};
+
+export function estimateCostUsd(usage: Array<{ role: AgentRole; tokens: number }>): string {
+  const dollars = usage.reduce((sum, u) => sum + (u.tokens / 1_000_000) * COST_PER_1M[u.role], 0);
+  return dollars.toFixed(4);
+}
 
 /** Last N lines of process output for error events; secrets redacted. */
 function outputTail(res: { stdout?: string; stderr?: string }, lines = 40): string {
@@ -56,6 +71,8 @@ export interface PipelineDeps {
 export interface PipelineRunResult {
   runId: string;
   status: RunState;
+  totalTokens: number;
+  estimatedCostUsd: string;
   sampleId?: string;
   videoAnalysis: 'live' | 'fixture_assisted' | 'none';
   bugReport: BugReport;
@@ -148,6 +165,7 @@ export async function runPipeline(
 
   // --- STAGE 2: WATCH ---
   let bugReport: BugReport;
+  let watcherMetrics: ModelMetrics | undefined;
   let videoAnalysis: 'live' | 'fixture_assisted' | 'none' = 'none';
   const blockedStages: string[] = [];
 
@@ -172,24 +190,28 @@ export async function runPipeline(
     }
   }
 
+  const videoReadable = !!options.videoPath && fs.existsSync(options.videoPath);
   const liveWatcherPossible =
-    !!options.videoPath &&
+    videoReadable &&
     (await VideoProcessor.checkFfmpeg()) &&
     !!resolveApiKey('watcher');
 
   if (liveWatcherPossible) {
-    // Live vision: extract frames and send them to the Watcher model.
-    const framesDir = path.join(artifactsDir, 'frames');
-    const extracted = await VideoProcessor.extractFrames(options.videoPath!, framesDir);
-    const stride = Math.ceil(extracted.length / 40) || 1;
-    const selected = extracted.filter((_, i) => i % stride === 0).slice(0, 40);
-    const watcherFrames = await Promise.all(
-      selected.map(async (f) => ({
-        timestampS: f.timestampS,
-        jpegBase64: (await fs.promises.readFile(f.filePath)).toString('base64'),
-      })),
-    );
+    // Live vision: extract frames and send them to the Watcher model. Frame
+    // extraction happens inside the try: a missing or undecodable video falls
+    // back (samples) or fails with a clear code (uploads) instead of throwing
+    // out of the stage unclassified.
     try {
+      const framesDir = path.join(artifactsDir, 'frames');
+      const extracted = await VideoProcessor.extractFrames(options.videoPath!, framesDir);
+      const stride = Math.ceil(extracted.length / 40) || 1;
+      const selected = extracted.filter((_, i) => i % stride === 0).slice(0, 40);
+      const watcherFrames = await Promise.all(
+        selected.map(async (f) => ({
+          timestampS: f.timestampS,
+          jpegBase64: (await fs.promises.readFile(f.filePath)).toString('base64'),
+        })),
+      );
       const watcherRes = await analyzeBugVideo({
         frames: watcherFrames,
         route: sampleId ? `/?bug=${sampleId}` : undefined,
@@ -210,6 +232,7 @@ export async function runPipeline(
         confidence: watcherRes.report.confidence,
       } as BugReport;
       videoAnalysis = 'live';
+      watcherMetrics = watcherRes.metrics;
       if (sampleId && fixtureJson) {
         const expected = SampleFixtureSchema.parse(JSON.parse(fixtureJson));
         const matches = Math.abs(expected.failure_timestamp_s - bugReport.first_failure_timestamp_s) <= 2;
@@ -220,7 +243,8 @@ export async function runPipeline(
         });
       }
     } catch (err: any) {
-      // Live vision failed: fall back to the fixture, with the error on record.
+      // Live vision or frame extraction failed: fall back to the fixture, with
+      // the error on record.
       await collector.emit('watch', 'watch_model_error', 'watcher', {
         code: err?.code ?? 'unknown',
         model: err?.model ?? resolveModel('watcher'),
@@ -243,11 +267,11 @@ export async function runPipeline(
     const parsedFixture = SampleFixtureSchema.parse(JSON.parse(fixtureJson));
     bugReport = fixtureToBugReport(parsedFixture);
     videoAnalysis = 'fixture_assisted';
-    const reason = !(await VideoProcessor.checkFfmpeg())
-      ? 'ffmpeg not installed'
-      : !resolveApiKey('watcher')
-        ? 'no watcher API key configured'
-        : 'no video path';
+    const reason = !videoReadable
+      ? 'video file missing'
+      : !(await VideoProcessor.checkFfmpeg())
+        ? 'ffmpeg not installed'
+        : 'no watcher API key configured';
     blockedStages.push(`Live Watcher unavailable: ${reason}`);
     await collector.emit('watch', 'watch_fixture_fallback', 'watcher', {
       reason: `Using verified fixture clip metadata (${reason})`,
@@ -255,7 +279,7 @@ export async function runPipeline(
     });
   } else if (options.videoPath) {
     throw new Error(
-      `Cannot analyze the uploaded video: ffmpeg or the watcher API key is missing. Install ffmpeg (brew install ffmpeg) and set NEBIUS_API_KEY.`,
+      `Cannot analyze the uploaded video: ${!videoReadable ? 'the video file is missing or unreadable' : !(await VideoProcessor.checkFfmpeg()) ? 'ffmpeg is not installed on the worker' : 'no watcher API key configured'}.`,
     );
   } else {
     throw new Error('Pipeline requires either bugReport, sampleId, or valid videoPath input.');
@@ -408,9 +432,18 @@ export async function runPipeline(
       summary: reporterRes.output.executive_summary,
     });
 
+    const totalTokens = [locatorRes, reproRes, verifierRes]
+      .map((r) => r?.metrics?.totalTokens ?? 0)
+      .reduce((a, b) => a + b, 0);
     return {
       runId,
       status: 'unreproduced',
+      totalTokens,
+      estimatedCostUsd: estimateCostUsd([
+        { role: 'locator', tokens: locatorRes.metrics.totalTokens },
+        { role: 'reproducer', tokens: reproRes.metrics.totalTokens },
+        { role: 'verifier', tokens: verifierRes.metrics.totalTokens },
+      ]),
       sampleId,
       videoAnalysis,
       bugReport,
@@ -594,9 +627,23 @@ export async function runPipeline(
     summary: reporterRes.output.executive_summary,
   });
 
+  const totalTokens =
+    (locatorRes?.metrics?.totalTokens ?? 0) +
+    (reproRes?.metrics?.totalTokens ?? 0) +
+    (verifierRes?.metrics?.totalTokens ?? 0) +
+    (fixerMetrics?.totalTokens ?? 0) +
+    (watcherMetrics?.totalTokens ?? 0);
   return {
     runId,
     status: finalStatus,
+    totalTokens,
+    estimatedCostUsd: estimateCostUsd([
+      { role: 'watcher', tokens: watcherMetrics?.totalTokens ?? 0 },
+      { role: 'locator', tokens: locatorRes?.metrics?.totalTokens ?? 0 },
+      { role: 'reproducer', tokens: reproRes?.metrics?.totalTokens ?? 0 },
+      { role: 'verifier', tokens: verifierRes?.metrics?.totalTokens ?? 0 },
+      { role: 'fixer', tokens: fixerMetrics?.totalTokens ?? 0 },
+    ]),
     sampleId,
     videoAnalysis,
     bugReport,

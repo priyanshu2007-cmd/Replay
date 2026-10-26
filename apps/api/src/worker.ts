@@ -179,10 +179,17 @@ export class Worker {
     if (run.isSample && isKnownSampleId(run.videoKey)) {
       sampleId = run.videoKey;
       videoPath = path.resolve(this.repoRoot, `samples/videos/${sampleId}.webm`);
+    } else if (path.isAbsolute(run.videoKey)) {
+      // Legacy rows created before relative keys existed.
+      videoPath = run.videoKey;
     } else {
-      videoPath = path.isAbsolute(run.videoKey)
-        ? run.videoKey
-        : path.resolve(this.repoRoot, run.videoKey);
+      // Relative key (A4): resolve against the shared data dir. Reject traversal.
+      const relative = run.videoKey.replace(/^uploads\//, 'artifacts/uploads/');
+      const resolved = path.resolve(DATA_DIR, relative);
+      if (!resolved.startsWith(path.resolve(DATA_DIR) + path.sep)) {
+        throw new Error(`Rejected unsafe video key: ${run.videoKey}`);
+      }
+      videoPath = resolved;
     }
 
     await this.repo.addEvent(run.id, {
@@ -210,7 +217,6 @@ export class Worker {
         onEvent: async (event: RunEvent) => {
           lastEventStage = event.stage;
           await this.repo.addEvent(run.id, {
-            seq: event.seq,
             stage: event.stage,
             agent: event.agent,
             event_type: event.event_type,
@@ -230,6 +236,8 @@ export class Worker {
       await this.repo.updateRun(run.id, {
         state: finalState,
         stage: 'report',
+        totalTokens: result.totalTokens,
+        estimatedCostUsd: result.estimatedCostUsd,
         bugReport: result.bugReport,
         suspects: result.locatorOutput?.suspects ?? null,
         generatedTest: result.reproducerOutput?.test_code ?? null,
@@ -265,6 +273,8 @@ export class Worker {
         durationMs,
         completedAt: new Date(),
         workerLock: null,
+        // Persist whatever partial outputs exist so judges see evidence, not nothing.
+        bugReport: (err as { partial?: { bugReport?: unknown } })?.partial?.bugReport ?? null,
       });
 
       await this.repo.addEvent(run.id, {

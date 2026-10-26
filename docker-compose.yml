@@ -18,6 +18,17 @@ services:
       timeout: 3s
       retries: 10
 
+  migrate:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    command: node packages/db/dist/migrate.js
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://replay:${PG_PASSWORD:-replay}@postgres:5432/replay
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   api:
     build: { context: ., dockerfile: apps/api/Dockerfile }
     command: node apps/api/dist/server.js
@@ -25,11 +36,20 @@ services:
     environment:
       DATABASE_URL: postgresql://replay:${PG_PASSWORD:-replay}@postgres:5432/replay
       PORT: 3001
-    ports:
-      - "3001:3001"
+      # Behind Caddy on the same host: trust the proxy-added client IP hop.
+      TRUST_PROXY: "1"
+      # The API does not execute runs here; the dedicated worker does.
+      REPLAY_INLINE_WORKER: "0"
+      REPLAY_DATA_DIR: /app/artifacts
+    volumes:
+      - artifacts:/app/artifacts
+    expose:
+      - "3001"
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   worker:
     build: { context: ., dockerfile: apps/api/Dockerfile }
@@ -37,10 +57,15 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://replay:${PG_PASSWORD:-replay}@postgres:5432/replay
-      REPLAY_STANDALONE_DISABLED: "1"
+      REPLAY_DATA_DIR: /app/artifacts
+      TRUST_PROXY: "1"
+    volumes:
+      - artifacts:/app/artifacts
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   caddy:
     image: caddy:2-alpine
@@ -56,3 +81,4 @@ services:
 volumes:
   pgdata:
   caddy_data:
+  artifacts:
