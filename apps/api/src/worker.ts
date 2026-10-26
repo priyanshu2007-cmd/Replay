@@ -10,6 +10,8 @@ import { getRunRepository, RunRecord, RunRepository, isKnownSampleId } from './r
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '../../..');
+// Writable data dir on serverless hosts (repo is read-only there).
+const DATA_DIR = process.env.REPLAY_DATA_DIR || REPO_ROOT;
 
 dotenv.config({ path: path.join(REPO_ROOT, '.env') });
 
@@ -98,8 +100,8 @@ export class Worker {
     const cutoff = now - 24 * 60 * 60 * 1000;
     let removed = 0;
     const dirs = [
-      path.join(this.repoRoot, 'artifacts', 'uploads'),
-      path.join(this.repoRoot, 'artifacts', 'runs'),
+      path.join(DATA_DIR, 'artifacts', 'uploads'),
+      path.join(DATA_DIR, 'artifacts', 'runs'),
     ];
     for (const dir of dirs) {
       const entries = await fs.readdir(dir).catch(() => []);
@@ -204,7 +206,7 @@ export class Worker {
         videoPath,
         maxFixAttempts: this.maxFixAttempts,
         runId: run.id,
-        artifactsDir: path.resolve(this.repoRoot, `artifacts/runs/${run.id}`),
+        artifactsDir: path.resolve(DATA_DIR, `artifacts/runs/${run.id}`),
         onEvent: async (event: RunEvent) => {
           lastEventStage = event.stage;
           await this.repo.addEvent(run.id, {

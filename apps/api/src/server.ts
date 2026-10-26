@@ -20,6 +20,9 @@ import { Worker } from './worker.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '../../..');
+// Serverless hosts (Vercel) have a read-only repo: transient uploads and run
+// artifacts must live in a writable data dir (e.g. REPLAY_DATA_DIR=/tmp).
+const DATA_DIR = process.env.REPLAY_DATA_DIR || REPO_ROOT;
 
 dotenv.config({ path: path.join(REPO_ROOT, '.env') });
 
@@ -239,7 +242,7 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
 
         const runId = randomUUID();
         const ext = mimeType === 'video/mp4' ? 'mp4' : 'webm';
-        const uploadDir = path.resolve(repoRoot, 'artifacts/uploads');
+        const uploadDir = path.resolve(DATA_DIR, 'artifacts/uploads');
         if (!fs.existsSync(uploadDir)) {
           fs.mkdirSync(uploadDir, { recursive: true });
         }
@@ -571,7 +574,7 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
 const defaultApp = createServer();
 const port = Number(process.env.PORT || 3001);
 
-if (process.env.NODE_ENV !== 'test' && !process.env.REPLAY_STANDALONE_DISABLED) {
+if (process.env.NODE_ENV !== 'test' && !process.env.REPLAY_STANDALONE_DISABLED && !process.env.VERCEL) {
   const isDirectRun = process.argv[1]?.endsWith('server.ts') || process.argv[1]?.endsWith('server.js');
   if (isDirectRun) {
     console.log(`[Replay API] Server listening on http://localhost:${port}`);

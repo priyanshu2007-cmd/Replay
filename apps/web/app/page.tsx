@@ -27,11 +27,24 @@ export default function HomePage() {
     let cancelled = false;
     async function init() {
       if (API_BASE === '') {
-        // No API configured: replay mode (Supabase) or honest offline state.
-        const replaySamples = await listReplaySamples();
+        // Same-origin deployment (e.g. Vercel services rewrite): the API lives
+        // behind /api on this origin. Live only when its health check passes.
+        const health = await checkHealth();
         if (cancelled) return;
-        setMode({ kind: replaySamples ? 'replay' : 'offline' });
-        setSamples(replaySamples ?? []);
+        if (health.ok) {
+          setMode({ kind: 'live' });
+          try {
+            const { samples: s } = await getSamples();
+            if (!cancelled) setSamples(s);
+          } catch (err) {
+            if (!cancelled) setError((err as Error).message);
+          }
+        } else {
+          const replaySamples = await listReplaySamples();
+          if (cancelled) return;
+          setMode({ kind: replaySamples ? 'replay' : 'offline' });
+          setSamples(replaySamples ?? []);
+        }
         return;
       }
       const health = await checkHealth();
