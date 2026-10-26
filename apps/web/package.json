@@ -24,7 +24,8 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "@replay/api": "workspace:*"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.7",

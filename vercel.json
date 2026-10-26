@@ -3,13 +3,8 @@
   "services": {
     "web": {
       "root": "apps/web",
-      "framework": "nextjs"
-    },
-    "api": {
-      "root": "apps/api",
-      "framework": "hono",
-      "entrypoint": "api-dist/server.cjs",
-      "buildCommand": "pnpm run build"
+      "framework": "nextjs",
+      "buildCommand": "pnpm --filter @replay/api build && pnpm run build"
     }
   },
   "rewrites": [

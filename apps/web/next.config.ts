@@ -22,6 +22,7 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  transpilePackages: ['@replay/api'],
   async headers() {
     return [
       {

@@ -119,12 +119,12 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
 
   // CORS Middleware
   const isProd = process.env.NODE_ENV === 'production';
-  if (isProd && !process.env.ALLOWED_ORIGINS) {
-    throw new Error('ALLOWED_ORIGINS is required in production: set it to your frontend origin(s), e.g. https://your-app.vercel.app');
+  // Validated per request, not at import: builds and tests have no runtime env.
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '')
+    .split(',').map((s) => s.trim()).filter(Boolean);
+  if (isProd && allowedOrigins.length === 0) {
+    console.error('[Replay API] ALLOWED_ORIGINS is not set; API routes will refuse requests until it is configured.');
   }
-  const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim())
-    : ['http://localhost:3000', 'http://localhost:5173'];
 
   app.use('*', cors({
     origin: isProd ? allowedOrigins : '*',
@@ -132,6 +132,15 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
     allowHeaders: ['Content-Type', 'Authorization'],
     maxAge: 86400,
   }));
+
+  // Production safety gate: refuse API requests when the origin allowlist
+  // was never configured (builds must not require runtime env).
+  app.use('/api/*', async (c, next) => {
+    if (isProd && allowedOrigins.length === 0) {
+      return c.json({ error: 'Server misconfigured', message: 'ALLOWED_ORIGINS is not set on this deployment.' }, 503);
+    }
+    await next();
+  });
 
   // Reject oversized request bodies before any parsing (upload limit + headroom).
   app.use('*', bodyLimit({

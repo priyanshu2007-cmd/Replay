@@ -237,6 +237,9 @@ importers:
       '@radix-ui/react-tabs':
         specifier: ^1.1.12
         version: 1.2.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@replay/api':
+        specifier: workspace:*
+        version: link:../api
       '@supabase/supabase-js':
         specifier: ^2.75.0
         version: 2.118.0
