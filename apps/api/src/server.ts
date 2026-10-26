@@ -140,6 +140,7 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
       return c.json({ error: 'Server misconfigured', message: 'ALLOWED_ORIGINS is not set on this deployment.' }, 503);
     }
     await next();
+    return;
   });
 
   // Reject oversized request bodies before any parsing (upload limit + headroom).
