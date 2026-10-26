@@ -26,6 +26,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Workspace packages resolve types from dist/: build before checking.
+      - run: pnpm -r build
       - run: pnpm -r typecheck
       - run: pnpm --filter @replay/web lint
       # Unit tests must never call real models.
@@ -77,6 +79,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: npx playwright install --with-deps chromium
         working-directory: apps/web
+      # The web imports @replay/api from its dist/.
+      - run: pnpm --filter @replay/api build
       - run: pnpm --filter @replay/web build
       - run: pnpm --filter @replay/web test
         env:

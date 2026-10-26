@@ -8,7 +8,7 @@ import {
   resolveModel,
   toLlmError,
   type AgentRole,
-} from '../packages/agents/src/llm.js';
+} from '../src/llm.js';
 
 /**
  * One tiny live call per agent role against Nebius Token Factory.
@@ -31,7 +31,7 @@ async function loadEnvFile(envPath: string): Promise<void> {
 }
 
 async function main() {
-  await loadEnvFile(path.resolve(process.cwd(), '.env'));
+  await loadEnvFile(path.resolve(process.cwd(), '../../.env'));
   console.log('=== Replay — Nebius Token Factory model smoke ===');
   console.log(`Base URL: ${process.env.NEBIUS_BASE_URL || NEBIUS_BASE_URL_DEFAULT}`);
 

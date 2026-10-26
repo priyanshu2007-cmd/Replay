@@ -32552,16 +32552,23 @@ function createServer(options) {
   }
   const app = new Hono3();
   const isProd = process.env.NODE_ENV === "production";
-  if (isProd && !process.env.ALLOWED_ORIGINS) {
-    throw new Error("ALLOWED_ORIGINS is required in production: set it to your frontend origin(s), e.g. https://your-app.vercel.app");
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "").split(",").map((s2) => s2.trim()).filter(Boolean);
+  if (isProd && allowedOrigins.length === 0) {
+    console.error("[Replay API] ALLOWED_ORIGINS is not set; API routes will refuse requests until it is configured.");
   }
-  const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(",").map((s2) => s2.trim()) : ["http://localhost:3000", "http://localhost:5173"];
   app.use("*", cors({
     origin: isProd ? allowedOrigins : "*",
     allowMethods: ["GET", "POST", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
     maxAge: 86400
   }));
+  app.use("/api/*", async (c2, next) => {
+    if (isProd && allowedOrigins.length === 0) {
+      return c2.json({ error: "Server misconfigured", message: "ALLOWED_ORIGINS is not set on this deployment." }, 503);
+    }
+    await next();
+    return;
+  });
   app.use("*", bodyLimit({
     maxSize: MAX_UPLOAD_BYTES + 64 * 1024,
     onError: (c2) => c2.json({

@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf429fc1e1f3ed08ec # v2.3.9
+      - uses: gitleaks/gitleaks-action@bcfb9cce635345aac9996cedc19b2de8e01b894f # master, resolved via git ls-remote
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -52,11 +52,11 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-      - uses: github/codeql-action/init@fc7e4a0fa01c1cca3f3d8d819124239b846c6c1e # v3.29.11
+      - uses: github/codeql-action/init@3306ba4df796b6b5059316f3af8bdea1e2138c9b # main, resolved via git ls-remote
         with:
           languages: javascript-typescript
           queries: security-extended
-      - uses: github/codeql-action/autobuild@fc7e4a0fa01c1cca3f3d8d819124239b846c6c1e # v3.29.11
-      - uses: github/codeql-action/analyze@fc7e4a0fa01c1cca3f3d8d819124239b846c6c1e # v3.29.11
+      - uses: github/codeql-action/autobuild@3306ba4df796b6b5059316f3af8bdea1e2138c9b # main, resolved via git ls-remote
+      - uses: github/codeql-action/analyze@3306ba4df796b6b5059316f3af8bdea1e2138c9b # main, resolved via git ls-remote
         with:
           category: '/language:javascript-typescript'
