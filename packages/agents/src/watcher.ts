@@ -1,18 +1,19 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type OpenAI from 'openai';
 import { BugReport, BugReportSchema } from '@replay/shared';
-import { LlmClient, ModelMetrics, resolveApiKey, resolveModel } from './llm.js';
+import { LlmClient, ModelMetrics, moduleDirOf, resolveApiKey, resolveModel } from './llm.js';
 
 export const WATCHER_PROMPT_VERSION = 'v1';
 
-const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+const moduleDir = moduleDirOf(import.meta.url);
 
 const PROMPT_CANDIDATES = [
-  // src/watcher.ts and dist/watcher.js are both one level below packages/agents/prompts
-  path.join(moduleDir, '../prompts/watcher.md'),
-  path.join(moduleDir, '../../prompts/watcher.md'),
+  ...(moduleDir ? [path.join(moduleDir, '../prompts/watcher.md'), path.join(moduleDir, '../../prompts/watcher.md')] : []),
+  // CJS bundles have no import.meta: search from the working directory.
+  path.resolve(process.cwd(), 'packages/agents/prompts/watcher.md'),
+  path.resolve(process.cwd(), 'prompts/watcher.md'),
+  path.resolve(process.env.REPLAY_PROMPTS_DIR || '', 'watcher.md'),
 ];
 
 /** Load the versioned Watcher system prompt from packages/agents/prompts/watcher.md. */

@@ -1,4 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
+import * as path from 'node:path';
+
+const apiEntry = path.join(__dirname, '../../apps/api/dist/server.js');
 
 export default defineConfig({
   testDir: './tests',
@@ -18,7 +21,7 @@ export default defineConfig({
       timeout: 240_000,
     },
     {
-      command: 'pnpm --filter @replay/api dev',
+      command: `node ${apiEntry}`,
       url: 'http://localhost:3001/api/health',
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,

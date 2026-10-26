@@ -1,15 +1,16 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { runPipeline, PipelineOptions, PipelineRunResult } from '@replay/agents';
 import { RunEvent, RunStage, RunState } from '@replay/shared';
 import { getRunRepository, RunRecord, RunRepository, isKnownSampleId } from './runs.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const REPO_ROOT = path.resolve(__dirname, '../../..');
+const REPO_ROOT = process.env.VERCEL
+  ? process.cwd()
+  : process.env.REPLAY_WORKSPACE_ROOT
+    ? path.resolve(process.env.REPLAY_WORKSPACE_ROOT)
+    : path.resolve(process.cwd());
 // Writable data dir on serverless hosts (repo is read-only there).
 const DATA_DIR = process.env.REPLAY_DATA_DIR || REPO_ROOT;
 

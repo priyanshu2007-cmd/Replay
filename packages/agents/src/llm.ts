@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
+import * as path from 'node:path';
 
 export const NEBIUS_BASE_URL_DEFAULT = 'https://api.tokenfactory.nebius.com/v1/';
 
@@ -131,6 +132,22 @@ function maxTokensFor(role: AgentRole | undefined, override?: number): number {
 }
 
 const RETRY_DELAYS_MS = [1000, 3000];
+
+/**
+ * Directory of the calling module, or undefined when running from a CJS
+ * bundle where import.meta is empty (esbuild shims it to undefined).
+ * Callers must fall back to process.cwd()-relative or embedded resources.
+ */
+export function moduleDirOf(importMetaUrl: string | undefined): string | undefined {
+  try {
+    // Lazy import to avoid pulling node:url into browser-ish contexts.
+    const { fileURLToPath } = require('node:url');
+    if (!importMetaUrl) return undefined;
+    return path.dirname(fileURLToPath(importMetaUrl));
+  } catch {
+    return undefined;
+  }
+}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms + Math.floor(Math.random() * 250)));
 

@@ -31,7 +31,7 @@ services:
 
   api:
     build: { context: ., dockerfile: apps/api/Dockerfile }
-    command: node apps/api/dist/server.js
+    command: node apps/api/api-dist/server.cjs
     env_file: .env
     environment:
       DATABASE_URL: postgresql://replay:${PG_PASSWORD:-replay}@postgres:5432/replay
@@ -41,6 +41,7 @@ services:
       # The API does not execute runs here; the dedicated worker does.
       REPLAY_INLINE_WORKER: "0"
       REPLAY_DATA_DIR: /app/artifacts
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
     volumes:
       - artifacts:/app/artifacts
     expose:
@@ -53,7 +54,7 @@ services:
 
   worker:
     build: { context: ., dockerfile: apps/api/Dockerfile }
-    command: node apps/api/dist/worker.js
+    command: node apps/api/api-dist/worker.cjs
     env_file: .env
     environment:
       DATABASE_URL: postgresql://replay:${PG_PASSWORD:-replay}@postgres:5432/replay

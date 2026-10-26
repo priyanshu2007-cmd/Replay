@@ -1,6 +1,5 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type OpenAI from 'openai';
 import {
   BugReport,
@@ -10,16 +9,18 @@ import {
   VerifierOutput,
   VerifierOutputSchema,
 } from '@replay/shared';
-import { LlmClient, LlmError, ModelMetrics, resolveApiKey, resolveModel, toLlmError } from './llm.js';
+import { LlmClient, LlmError, ModelMetrics, moduleDirOf, resolveApiKey, resolveModel, toLlmError } from './llm.js';
 import { ReproExecutionResult } from './reproducer.js';
 
 export const VERIFIER_PROMPT_VERSION = 'v1';
 
-const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+const moduleDir = moduleDirOf(import.meta.url);
 
 const PROMPT_CANDIDATES = [
-  path.join(moduleDir, '../prompts/verifier.md'),
-  path.join(moduleDir, '../../prompts/verifier.md'),
+  ...(moduleDir ? [path.join(moduleDir, '../prompts/verifier.md'), path.join(moduleDir, '../../prompts/verifier.md')] : []),
+  path.resolve(process.cwd(), 'packages/agents/prompts/verifier.md'),
+  path.resolve(process.cwd(), 'prompts/verifier.md'),
+  path.resolve(process.env.REPLAY_PROMPTS_DIR || '', 'verifier.md'),
 ];
 
 /** Load the versioned Verifier system prompt from packages/agents/prompts/verifier.md. */

@@ -3,7 +3,9 @@
 #   docker build -f apps/api/Dockerfile -t replay-api .
 # The Playwright image version must match @playwright/test in targets/demo-shop.
 FROM mcr.microsoft.com/playwright:v1.50.1-noble AS base
-RUN corepack enable
+# The image's bundled corepack predates npm's registry key rotation and fails
+# signature verification ("Cannot find matching keyid") — upgrade it first.
+RUN npm install -g corepack@latest && corepack enable
 WORKDIR /app
 
 FROM base AS deps
@@ -23,8 +25,12 @@ COPY tsconfig.base.json ./
 COPY apps/api apps/api
 COPY packages packages
 COPY targets/demo-shop targets/demo-shop
-# Build the API and every workspace package it depends on.
-RUN pnpm --filter "@replay/api..." build
+# Build the API and every workspace package it depends on, then bundle the
+# server and worker to self-contained CJS (pnpm symlinked node_modules does
+# not survive Docker COPY).
+RUN pnpm --filter "@replay/api..." build \
+    && cd apps/api && npx esbuild src/server.ts --bundle --platform=node --format=cjs --outfile=api-dist/server.cjs \
+    && npx esbuild src/worker.ts --bundle --platform=node --format=cjs --outfile=api-dist/worker.cjs
 
 FROM base AS runtime
 ENV NODE_ENV=production
@@ -32,11 +38,13 @@ ENV NODE_ENV=production
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
+# Runtime needs: the self-contained bundles plus the demo-shop tree with its
+# node_modules (the worker runs its Playwright tests inside sandbox copies).
+COPY --from=build /app/apps/api/api-dist ./apps/api/api-dist
 COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/packages ./packages
 COPY --from=build /app/targets ./targets
-COPY --from=build /app/samples ./samples
+COPY samples ./samples
 # Writable artifact dirs for the non-root user (uploads, run artifacts).
 # The Playwright image ships a non-root user `pwuser` (uid 1000).
 RUN mkdir -p /app/artifacts/uploads /app/artifacts/runs \

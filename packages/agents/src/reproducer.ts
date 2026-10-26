@@ -1,6 +1,5 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type OpenAI from 'openai';
 import {
   BugReport,
@@ -10,17 +9,19 @@ import {
   ReproducerOutput,
   ReproducerOutputSchema,
 } from '@replay/shared';
-import { LlmClient, ModelMetrics, resolveApiKey, resolveModel } from './llm.js';
+import { LlmClient, ModelMetrics, moduleDirOf, resolveApiKey, resolveModel } from './llm.js';
 import { IsolatedWorkspaceSandbox, SandboxUnavailableError } from '@replay/sandbox';
 
 
 export const REPRODUCER_PROMPT_VERSION = 'v1';
 
-const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+const moduleDir = moduleDirOf(import.meta.url);
 
 const PROMPT_CANDIDATES = [
-  path.join(moduleDir, '../prompts/reproducer.md'),
-  path.join(moduleDir, '../../prompts/reproducer.md'),
+  ...(moduleDir ? [path.join(moduleDir, '../prompts/reproducer.md'), path.join(moduleDir, '../../prompts/reproducer.md')] : []),
+  path.resolve(process.cwd(), 'packages/agents/prompts/reproducer.md'),
+  path.resolve(process.cwd(), 'prompts/reproducer.md'),
+  path.resolve(process.env.REPLAY_PROMPTS_DIR || '', 'reproducer.md'),
 ];
 
 /** Load the versioned Reproducer system prompt from packages/agents/prompts/reproducer.md. */
