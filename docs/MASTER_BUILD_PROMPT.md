@@ -1,6 +1,6 @@
-# Replay — Master Build Prompt
+# Replay: Master Build Prompt
 
-Use this prompt at the root of the Replay Git repository in OpenCode, Claude Code, Codex, or another repository-aware coding agent. Keep the PDF Replay — Hackathon Build Plan available to the agent. This prompt is intentionally milestone-driven: do not ask an AI to generate the whole system in one giant pass.
+Use this prompt at the root of the Replay Git repository in OpenCode, Claude Code, Codex, or another repository-aware coding agent. Keep the PDF Replay: Hackathon Build Plan available to the agent. This prompt is intentionally milestone-driven: do not ask an AI to generate the whole system in one giant pass.
 
 ## ROLE AND MISSION
 Act as the senior staff engineer, test engineer, security reviewer, and product designer responsible for implementing Replay, a hackathon-ready AI bug-reproduction and verified-fix platform.
@@ -18,7 +18,7 @@ The product's promise is: “Drop a bug video. Get a failing test and a verified
 The most important principle is truthful execution: never claim a bug was reproduced or fixed unless the corresponding test actually ran and the result was recorded. A generated diff, model answer, mocked tool, or assumed pass is not proof.
 
 ## SOURCE OF TRUTH AND DECISIONS
-1. Read the complete Replay — Hackathon Build Plan.pdf if it exists in the workspace. Treat its intended product, stack, agent roles, gates, screen requirements, and benchmark honesty as the requirements baseline.
+1. Read the complete Replay: Hackathon Build Plan.pdf if it exists in the workspace. Treat its intended product, stack, agent roles, gates, screen requirements, and benchmark honesty as the requirements baseline.
 2. Inspect repository state before editing: git status, current branch, all relevant package manifests, workspace config, lockfile, environment examples, tests, CI, Docker setup, existing AGENTS.md, AI_TOOLKIT.md, and project-specific agent/skill instructions. Follow existing repository rules. If a Ponytail or equivalent engineering skill is configured, use its inspect-first, minimal-change, verify-each-change process.
 3. Do not assume the repository is empty. Reuse working code and preserve architecture unless there is evidence a change is necessary.
 4. If the PDF, existing code, official provider docs, and package APIs conflict, do not silently guess. Add the smallest clear entry to docs/IMPLEMENTATION_DECISIONS.md describing the conflict, the chosen resolution, and the reason. Prefer the PDF's intent while choosing one consistent implementation.
@@ -37,7 +37,7 @@ The most important principle is truthful execution: never claim a bug was reprod
 - Never edit tests, package files, Playwright config, or build config from the Fixer agent. The Fixer may patch application files only.
 - Do not weaken assertions to make tests pass. A valid reproduction fails because the expected behavior is violated, not due to timeout, bad selector, syntax error, missing app, or infrastructure failure.
 - A fix is verified only when both the generated reproduction test and the pre-existing suite pass after the patch.
-- Store every stage, model call, tool call, result, token count, latency, and actual cost that is available. If cost or token usage is unavailable, represent it as unavailable—not zero.
+- Store every stage, model call, tool call, result, token count, latency, and actual cost that is available. If cost or token usage is unavailable, represent it as unavailable, not zero.
 - Never use a mocked provider, mocked sandbox, or fake test result to claim an end-to-end milestone is complete. Unit tests may mock dependencies, but the live integration acceptance test must run real services.
 - If an essential external credential, account, Docker daemon, or deployed resource is unavailable, finish the parts that can be verified locally, identify the blocker, and give the exact next action. Never mark blocked work as done.
 
@@ -88,11 +88,11 @@ replay/
 ## PHASED EXECUTION PLAN
 Treat the source plan's 36 steps as acceptance gates. Do not start a later phase while the earlier phase's gate is failing. A phase is complete only with recorded command output or equivalent test evidence.
 
-- Phase 0 — Repository audit and implementation contract
-- Phase A — Setup (Accounts, Smoke test, Monorepo scaffold, Database and storage)
-- Phase B — Demo Shop (React+Vite target, Baseline tests, 5 planted bugs, Sample videos)
-- Phase C — Perception (Frame extraction, LLM client, Watcher, Repo packer, Locator)
-- Phase D — Action agents and CLI (Docker sandbox, Agent tools, Reproducer, Verifier, Fixer, Reporter, CLI pipeline)
-- Phase E — Backend (Worker queue, Hono API + SSE, Uploads & samples)
-- Phase F — Frontend (Design system, Home, Video timeline, Live SSE trace, Panels, Replay mode, Benchmark & How)
-- Phase G — Ship (Deploy, Benchmark run, Hallway test, Video demo, Submission)
+- Phase 0: Repository audit and implementation contract
+- Phase A: Setup (Accounts, Smoke test, Monorepo scaffold, Database and storage)
+- Phase B: Demo Shop (React+Vite target, Baseline tests, 5 planted bugs, Sample videos)
+- Phase C: Perception (Frame extraction, LLM client, Watcher, Repo packer, Locator)
+- Phase D: Action agents and CLI (Docker sandbox, Agent tools, Reproducer, Verifier, Fixer, Reporter, CLI pipeline)
+- Phase E: Backend (Worker queue, Hono API + SSE, Uploads & samples)
+- Phase F: Frontend (Design system, Home, Video timeline, Live SSE trace, Panels, Replay mode, Benchmark & How)
+- Phase G: Ship (Deploy, Benchmark run, Hallway test, Video demo, Submission)

@@ -1,6 +1,6 @@
-# Replay — Implementation Decisions & Requirements Baseline
+# Replay: Implementation Decisions & Requirements Baseline
 
-This document tracks requirements, architectural decisions, and resolutions to discrepancies between the **Replay — Hackathon Build Plan (PDF)**, the **Master Build Prompt**, provider documentation, and local environment state.
+This document tracks requirements, architectural decisions, and resolutions to discrepancies between the **Replay: Hackathon Build Plan (PDF)**, the **Master Build Prompt**, provider documentation, and local environment state.
 
 ---
 
@@ -35,8 +35,8 @@ This document tracks requirements, architectural decisions, and resolutions to d
 - **Observation:** Host has Node v24.18.0 installed (Plan baseline is Node 22 LTS). `pnpm` 12.15.0 enabled via Corepack.
 - **Resolution:** Node 24 is backward-compatible with Node 22 for ESM, strict TypeScript, Next.js 15, and Hono. Target Node 22+ engine in `package.json`.
 
-### Decision 005: Inference provider — NVIDIA Build API (supersedes Nebius Token Factory)
-- **Date:** 2026-10-25. Keys generated on https://build.nvidia.com/settings/api-keys (four designated keys, one per model family). The earlier OpenRouter assumption was wrong; the repo never contained OpenRouter config — this decision replaces the Nebius Token Factory baseline above.
+### Decision 005: Inference provider: NVIDIA Build API (supersedes Nebius Token Factory)
+- **Date:** 2026-10-25. Keys generated on https://build.nvidia.com/settings/api-keys (four designated keys, one per model family). The earlier OpenRouter assumption was wrong; the repo never contained OpenRouter config: this decision replaces the Nebius Token Factory baseline above.
 - **Endpoint:** `https://integrate.api.nvidia.com/v1` (OpenAI-compatible SDK), auth via `NVIDIA_API_KEY` plus optional per-role `NVIDIA_API_KEY_<ROLE>`.
 - **Models:** `nvidia/nemotron-3.5-super-vl-120b-a12b` (Watcher+Verifier), `nvidia/nemotron-3.5-lightning-30b-a3b` (Locator), `nvidia/nemotron-3-ultra-550b-a55b` (Reproducer+Fixer), `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` (Reporter). Native NVIDIA IDs, no `:free` suffix.
 - **Central map:** `packages/agents/src/llm.ts` (`AGENT_MODEL_DEFAULTS`, `resolveModel`, `resolveApiKey`) is the single role→model→key source of truth. Live verification: `pnpm smoke`.
@@ -49,6 +49,14 @@ This document tracks requirements, architectural decisions, and resolutions to d
   - Start Colima (`colima start`) before Phase D (Sandbox Docker Runner).
 
 ---
+
+### Decision 006: Provider reality (2026-10-27): supersedes the endpoint half of Decision 005
+- **Conflict:** Decision 005 named Nebius Token Factory endpoints, but no Token Factory key was ever provisioned; the working credentials are NVIDIA Build keys.
+- **Resolution:** the env-var NAMES stay `NEBIUS_*` (central map in `packages/agents/src/llm.ts`), and `.env` points `NEBIUS_BASE_URL` at `https://integrate.api.nvidia.com/v1` with the working NVIDIA Build keys. `pnpm smoke:models` verifies 4/4 roles live. Model IDs in use are the NVIDIA Build catalog variants (lowercase, e.g. `nvidia/nemotron-3.5-lightning-30b-a3b`); if a Token Factory key arrives, only `.env` changes.
+
+### Decision 007: API mounting and container format (2026-10-27)
+- The Vercel `hono` services builder emits ESM and loads it as CJS regardless of entry format: FUNCTION_INVOCATION_FAILED on every /api call. The API is therefore mounted **inside the Next service** at `apps/web/app/api/[[...route]]/route.ts` (standard Hono-on-Next pattern); `vercel.json` has a single `web` service.
+- Docker: pnpm's symlinked node_modules does not survive Docker COPY, so the containers run self-contained esbuild CJS bundles (`apps/api/api-dist/server.cjs`/`worker.cjs`). `import.meta.url` is undefined in CJS bundles: prompt loading and repo-root resolution use `moduleDirOf()` with cwd/`REPLAY_PROMPTS_DIR` fallbacks.
 
 ## 3. Dependency Graph & Phase Sequencing
 

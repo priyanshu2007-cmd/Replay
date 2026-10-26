@@ -66,10 +66,13 @@ marked.
 
 ## Supply chain
 
-- `pnpm audit --prod` after patching: 1 high remaining — zod < 4.6.6. The fix
-  is a major-version migration (zod 4) that touches every schema in the repo;
-  deliberately deferred past the hackathon deadline and pinned to the latest
-  v3 (3.25.76). Accepted risk, tracked here.
+- `pnpm audit --prod` after patching (re-verified 2026-10-27 on the final
+  push): 1 high remaining: zod < 4.6.6. The fix is a major-version migration
+  (zod 4) that touches every schema in the repo; deliberately deferred past
+  the hackathon deadline and pinned to the latest v3 (3.25.76). Accepted
+  risk, tracked here.
+- Final secret scan: gitleaks full history clean through commit `67d7f99`
+  (2026-10-27), including the two Monaco false positives fingerprint-ignored.
 - dompurify (via monaco-editor) and postcss (via next) transitive
   vulnerabilities patched with workspace overrides (3.4.17 / 8.5.12). VERIFIED
   by audit.
