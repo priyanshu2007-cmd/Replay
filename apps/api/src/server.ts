@@ -18,14 +18,24 @@ import {
 } from './runs.js';
 import { Worker } from './worker.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const REPO_ROOT = path.resolve(__dirname, '../../..');
+// Repo root: filesystem-relative paths only matter outside serverless hosts.
+// The CJS bundle for Vercel has no import.meta, so fall back to cwd there.
+function computeRepoRoot(): string {
+  if (process.env.VERCEL) return process.cwd();
+  try {
+    return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+  } catch {
+    return process.cwd();
+  }
+}
+const REPO_ROOT = computeRepoRoot();
 // Serverless hosts (Vercel) have a read-only repo: transient uploads and run
 // artifacts must live in a writable data dir (e.g. REPLAY_DATA_DIR=/tmp).
 const DATA_DIR = process.env.REPLAY_DATA_DIR || REPO_ROOT;
 
-dotenv.config({ path: path.join(REPO_ROOT, '.env') });
+if (fs.existsSync(path.join(REPO_ROOT, '.env'))) {
+  dotenv.config({ path: path.join(REPO_ROOT, '.env') });
+}
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50 MB
 const ALLOWED_MIME_TYPES = new Set([
@@ -34,6 +44,30 @@ const ALLOWED_MIME_TYPES = new Set([
   'video/quicktime',
   'video/x-matroska',
 ]);
+
+// Static fallback metadata for serverless deploys without the samples dir.
+const SAMPLE_TITLES: Record<string, { title: string; observedBehavior: string }> = {
+  'cart-nan': {
+    title: 'Cart total becomes NaN after clearing quantity field',
+    observedBehavior: "Clearing the quantity input field causes the cart total and subtotal to display '$NaN'.",
+  },
+  'double-discount': {
+    title: 'Double-clicking Apply applies the discount twice',
+    observedBehavior: 'Double-clicking Apply stacks the coupon twice, applying 20% discount ($20.00 off $100).',
+  },
+  'string-sort': {
+    title: 'String-based sort places $100 before $20',
+    observedBehavior: 'Products are sorted lexicographically: Mechanical Keyboard ($100) appears before Ergonomic Mouse ($20).',
+  },
+  'empty-email': {
+    title: 'Checkout accepts an empty email address',
+    observedBehavior: 'Checkout proceeds without email validation and shows Order Confirmed for an empty email address.',
+  },
+  'quantity-reset': {
+    title: 'Quantity resets after page navigation',
+    observedBehavior: 'Switching to Catalog and returning to Cart resets item quantity back to 1.',
+  },
+};
 
 const CreateJsonRunSchema = z.object({
   sampleId: z.string().optional(),
@@ -150,6 +184,9 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
       try {
         if (fs.existsSync(expectedPath)) {
           meta = JSON.parse(fs.readFileSync(expectedPath, 'utf8'));
+        } else if (process.env.VERCEL) {
+          // Serverless bundle ships no samples dir: honest static metadata.
+          meta = SAMPLE_TITLES[id] ? { ...SAMPLE_TITLES[id], id } : { id };
         }
       } catch {
         // Fallback to basic sample ID

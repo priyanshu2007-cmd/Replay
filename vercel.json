@@ -8,17 +8,22 @@
     "api": {
       "root": "apps/api",
       "framework": "hono",
-      "entrypoint": "src/server.ts"
+      "entrypoint": "api-dist/server.js",
+      "buildCommand": "npx esbuild src/server.ts --bundle --platform=node --format=cjs --outfile=api-dist/server.js && printf '{\"type\":\"commonjs\",\"main\":\"server.js\"}' > api-dist/package.json"
     }
   },
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": { "service": "api" }
+      "destination": {
+        "service": "api"
+      }
     },
     {
       "source": "/(.*)",
-      "destination": { "service": "web" }
+      "destination": {
+        "service": "web"
+      }
     }
   ]
 }
