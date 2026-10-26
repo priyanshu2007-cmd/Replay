@@ -93,11 +93,14 @@ jobs:
         working-directory: apps/web
       # The web imports @replay/api (and its deps) from their dist/.
       - run: pnpm --filter @replay/api... build
+      # Bake the split-port API base into the client: the tests expect live
+      # mode with the API webServer on :3001.
       - run: pnpm --filter @replay/web build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3001
       - run: pnpm --filter @replay/web test
         env:
-          # replay mode: no live backend assertions beyond the built-in api server
-          NEXT_PUBLIC_API_URL: ''
+          NEXT_PUBLIC_API_URL: http://localhost:3001
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
