@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc && npx esbuild src/server.ts --bundle --platform=node --format=cjs --outfile=api-dist/server.js && printf '{\"type\":\"commonjs\",\"main\":\"server.js\"}' > api-dist/package.json",
+    "build": "tsc && npx esbuild src/server.ts --bundle --platform=node --format=cjs --outfile=api-dist/server.cjs && printf '{\"type\":\"commonjs\",\"main\":\"server.cjs\"}' > api-dist/package.json",
     "typecheck": "tsc --noEmit",
     "dev": "tsx watch src/server.ts",
     "worker": "tsx watch src/worker.ts",

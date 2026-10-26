@@ -8,7 +8,7 @@
     "api": {
       "root": "apps/api",
       "framework": "hono",
-      "entrypoint": "api-dist/server.js",
+      "entrypoint": "api-dist/server.cjs",
       "buildCommand": "pnpm run build"
     }
   },
