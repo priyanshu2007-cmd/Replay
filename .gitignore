@@ -57,3 +57,6 @@ SESSION_MEMORY.md
 
 # Vercel project link
 .vercel/
+
+# TS incremental build state
+*.tsbuildinfo
