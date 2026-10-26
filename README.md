@@ -104,6 +104,31 @@ cp .env.example .env   # fill values first
 docker compose up
 ```
 
+## Deploy
+
+The repo is a Vercel services project (`vercel.json`): `web` (Next.js,
+public at `/`) and `api` (Hono, public at `/api/*`) deploy from one repo;
+`demo-shop` is not a service (it is the sandbox target and runs on the
+worker host). There are no service bindings: the browser reaches the API
+through the public `/api/*` rewrite, so `NEXT_PUBLIC_API_URL` must stay
+unset in the Vercel environment.
+
+Vercel environment variables (api + web):
+
+- `DATABASE_URL` (Supabase Postgres pooler) — required: without a shared
+  database, runs created on Vercel cannot be claimed by any worker
+- `REPLAY_DATA_DIR=/tmp` — serverless repos are read-only
+- `ALLOWED_ORIGINS=https://<your-app>.vercel.app`
+- `NEBIUS_API_KEY` — optional on the frontend; live model calls run on the
+  worker host, but the key presence drives the honest UI notices
+- Never set `NEXT_PUBLIC_*` secrets; the anon key pair only if replay mode
+  against Supabase is wanted
+
+The worker + Docker sandbox run on the VM (docker compose in this repo,
+same `DATABASE_URL`), not on Vercel: pipelines take 45 to 66 seconds and
+need Playwright plus Docker. Run `pnpm --filter @replay/db db:migrate`
+against the Supabase database once, then `docker compose up` on the VM.
+
 Database migrations (needed when DATABASE_URL points at Postgres/Supabase):
 
 ```bash
