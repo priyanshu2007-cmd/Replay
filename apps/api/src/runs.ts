@@ -40,6 +40,11 @@ export interface CreateRunInput {
   isSample?: boolean;
 }
 
+export interface RateLimitResult {
+  allowed: boolean;
+  remaining: number;
+}
+
 export interface RunRepository {
   createRun(input: CreateRunInput): Promise<RunRecord>;
   getRun(id: string): Promise<RunRecord | null>;
@@ -52,6 +57,7 @@ export interface RunRepository {
   addEvent(runId: string, event: Omit<RunEvent, 'seq' | 'run_id' | 'timestamp'> & { timestamp?: string }): Promise<RunEvent>;
   getEvents(runId: string): Promise<RunEvent[]>;
   subscribeEvents(runId: string, listener: (event: RunEvent) => void): () => void;
+  checkRateLimit?(key: string, limit: number, windowMs: number): Promise<RateLimitResult>;
 }
 
 /**
@@ -116,6 +122,9 @@ export function getSampleDefinition(id: SampleId, repoRoot = process.cwd()): Sam
 export class MemoryRunRepository implements RunRepository {
   private runs = new Map<string, RunRecord>();
   private events = new Map<string, RunEvent[]>();
+  private rateLimits = new Map<string, number[]>();
+  private lastEmittedSeq = new Map<string, number>();
+  private pollTimers = new Map<string, ReturnType<typeof setInterval>>();
   private emitter = new EventEmitter();
   private persistPath?: string;
 
@@ -135,19 +144,36 @@ export class MemoryRunRepository implements RunRepository {
         const data = JSON.parse(raw);
         if (Array.isArray(data.runs)) {
           for (const r of data.runs) {
-            this.runs.set(r.id, {
-              ...r,
-              createdAt: new Date(r.createdAt),
-              updatedAt: new Date(r.updatedAt),
-              workerHeartbeat: r.workerHeartbeat ? new Date(r.workerHeartbeat) : null,
-              completedAt: r.completedAt ? new Date(r.completedAt) : null,
-            });
+            const incomingUpdatedAt = new Date(r.updatedAt);
+            const existing = this.runs.get(r.id);
+            if (!existing || incomingUpdatedAt.getTime() >= existing.updatedAt.getTime()) {
+              this.runs.set(r.id, {
+                ...r,
+                createdAt: new Date(r.createdAt),
+                updatedAt: incomingUpdatedAt,
+                workerHeartbeat: r.workerHeartbeat ? new Date(r.workerHeartbeat) : null,
+                completedAt: r.completedAt ? new Date(r.completedAt) : null,
+              });
+            }
           }
         }
         if (data.events && typeof data.events === 'object') {
           for (const [runId, evList] of Object.entries(data.events)) {
             if (Array.isArray(evList)) {
-              this.events.set(runId, evList as RunEvent[]);
+              const incoming = evList as RunEvent[];
+              const current = this.events.get(runId) || [];
+              if (incoming.length >= current.length) {
+                this.events.set(runId, incoming);
+              }
+            }
+          }
+        }
+        if (data.rateLimits && typeof data.rateLimits === 'object') {
+          for (const [key, tsList] of Object.entries(data.rateLimits)) {
+            if (Array.isArray(tsList)) {
+              const existing = this.rateLimits.get(key) || [];
+              const merged = Array.from(new Set([...existing, ...(tsList as number[])])).sort((a, b) => a - b);
+              this.rateLimits.set(key, merged);
             }
           }
         }
@@ -167,14 +193,48 @@ export class MemoryRunRepository implements RunRepository {
       const data = {
         runs: Array.from(this.runs.values()),
         events: Object.fromEntries(this.events.entries()),
+        rateLimits: Object.fromEntries(this.rateLimits.entries()),
       };
-      fs.writeFileSync(this.persistPath, JSON.stringify(data, null, 2), 'utf8');
+      const tmpPath = `${this.persistPath}.${process.pid}.${randomUUID()}.tmp`;
+      fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf8');
+      fs.renameSync(tmpPath, this.persistPath);
     } catch {
       // Best-effort cache save
     }
   }
 
+  async checkRateLimit(key: string, limit: number, windowMs: number): Promise<RateLimitResult> {
+    this.loadFromFile();
+    const now = Date.now();
+    const cutoff = now - windowMs;
+
+    // Bound memory map size and prune expired entries
+    if (this.rateLimits.size > 5_000) {
+      for (const [k, ts] of this.rateLimits.entries()) {
+        const active = ts.filter((t) => t > cutoff);
+        if (active.length === 0) {
+          this.rateLimits.delete(k);
+        } else {
+          this.rateLimits.set(k, active);
+        }
+      }
+    }
+
+    const timestamps = (this.rateLimits.get(key) || []).filter((t) => t > cutoff);
+    if (timestamps.length >= limit) {
+      this.rateLimits.set(key, timestamps);
+      this.saveToFile();
+      return { allowed: false, remaining: 0 };
+    }
+
+    timestamps.push(now);
+    this.rateLimits.set(key, timestamps);
+    this.saveToFile();
+    return { allowed: true, remaining: Math.max(0, limit - timestamps.length) };
+  }
+
   async createRun(input: CreateRunInput): Promise<RunRecord> {
+    this.loadFromFile();
     const id = randomUUID();
     const now = new Date();
     const record: RunRecord = {
@@ -211,11 +271,13 @@ export class MemoryRunRepository implements RunRepository {
   }
 
   async getRun(id: string): Promise<RunRecord | null> {
+    this.loadFromFile();
     const record = this.runs.get(id);
     return record ? { ...record } : null;
   }
 
   async listRuns(limit = 50): Promise<RunRecord[]> {
+    this.loadFromFile();
     const list = Array.from(this.runs.values());
     const sorted = list
       .sort((a, b) => {
@@ -228,6 +290,7 @@ export class MemoryRunRepository implements RunRepository {
   }
 
   async updateRun(id: string, updates: Partial<RunRecord>): Promise<RunRecord | null> {
+    this.loadFromFile();
     const current = this.runs.get(id);
     if (!current) return null;
 
@@ -242,6 +305,7 @@ export class MemoryRunRepository implements RunRepository {
   }
 
   async claimQueuedRun(workerId: string): Promise<RunRecord | null> {
+    this.loadFromFile();
     // Find oldest queued run
     const candidates = Array.from(this.runs.values())
       .filter((r) => r.state === 'queued' && !r.workerLock)
@@ -264,6 +328,7 @@ export class MemoryRunRepository implements RunRepository {
   }
 
   async recordHeartbeat(runId: string, workerId: string): Promise<void> {
+    this.loadFromFile();
     const run = this.runs.get(runId);
     if (!run) return;
     if (run.workerLock !== workerId) return;
@@ -274,6 +339,7 @@ export class MemoryRunRepository implements RunRepository {
   }
 
   async releaseRunLock(runId: string, workerId: string, nextState?: RunState): Promise<void> {
+    this.loadFromFile();
     const run = this.runs.get(runId);
     if (!run) return;
     if (run.workerLock !== workerId) return;
@@ -287,11 +353,13 @@ export class MemoryRunRepository implements RunRepository {
   }
 
   async recoverStaleRuns(staleTimeoutMs: number): Promise<number> {
+    this.loadFromFile();
     const cutoff = Date.now() - staleTimeoutMs;
     let recovered = 0;
 
     for (const run of this.runs.values()) {
       if (run.state === 'running' && run.workerLock) {
+        const prevWorker = run.workerLock;
         const lastBeat = run.workerHeartbeat ? run.workerHeartbeat.getTime() : run.updatedAt.getTime();
         if (lastBeat < cutoff) {
           run.state = 'failed';
@@ -305,7 +373,7 @@ export class MemoryRunRepository implements RunRepository {
             event_type: 'worker_timeout_recovered',
             payload: {
               reason: `Run timed out with no heartbeat for ${Math.round(staleTimeoutMs / 1000)}s`,
-              previousWorker: run.workerLock,
+              previousWorker: prevWorker,
             },
           });
         }
@@ -322,6 +390,7 @@ export class MemoryRunRepository implements RunRepository {
     runId: string,
     event: Omit<RunEvent, 'seq' | 'run_id' | 'timestamp'> & { timestamp?: string }
   ): Promise<RunEvent> {
+    this.loadFromFile();
     let list = this.events.get(runId);
     if (!list) {
       list = [];
@@ -342,21 +411,55 @@ export class MemoryRunRepository implements RunRepository {
     };
 
     list.push(fullEvent);
-    this.emitter.emit(`events:${runId}`, fullEvent);
+    this.lastEmittedSeq.set(runId, Math.max(this.lastEmittedSeq.get(runId) ?? 0, seq));
     this.saveToFile();
+    this.emitter.emit(`events:${runId}`, fullEvent);
     return fullEvent;
   }
 
   async getEvents(runId: string): Promise<RunEvent[]> {
+    this.loadFromFile();
     const list = this.events.get(runId) || [];
     return [...list].sort((a, b) => a.seq - b.seq);
   }
 
   subscribeEvents(runId: string, listener: (event: RunEvent) => void): () => void {
     const eventName = `events:${runId}`;
+    this.loadFromFile();
+    const existing = this.events.get(runId) || [];
+    const maxExistingSeq = existing.reduce((max, ev) => Math.max(max, ev.seq), 0);
+    if ((this.lastEmittedSeq.get(runId) ?? 0) < maxExistingSeq) {
+      this.lastEmittedSeq.set(runId, maxExistingSeq);
+    }
+
     this.emitter.on(eventName, listener);
+
+    if (this.persistPath && !this.pollTimers.has(runId)) {
+      const timer = setInterval(() => {
+        this.loadFromFile();
+        const currentList = this.events.get(runId) || [];
+        const sorted = [...currentList].sort((a, b) => a.seq - b.seq);
+        const lastSeq = this.lastEmittedSeq.get(runId) ?? 0;
+        for (const ev of sorted) {
+          if (ev.seq > lastSeq) {
+            this.lastEmittedSeq.set(runId, ev.seq);
+            this.emitter.emit(eventName, ev);
+          }
+        }
+      }, 100);
+      if (typeof timer.unref === 'function') timer.unref();
+      this.pollTimers.set(runId, timer);
+    }
+
     return () => {
       this.emitter.off(eventName, listener);
+      if (this.emitter.listenerCount(eventName) === 0) {
+        const timer = this.pollTimers.get(runId);
+        if (timer) {
+          clearInterval(timer);
+          this.pollTimers.delete(runId);
+        }
+      }
     };
   }
 
@@ -364,6 +467,19 @@ export class MemoryRunRepository implements RunRepository {
   clear(): void {
     this.runs.clear();
     this.events.clear();
+    this.rateLimits.clear();
+    this.lastEmittedSeq.clear();
+    for (const timer of this.pollTimers.values()) {
+      clearInterval(timer);
+    }
+    this.pollTimers.clear();
+    if (this.persistPath && fs.existsSync(this.persistPath)) {
+      try {
+        fs.unlinkSync(this.persistPath);
+      } catch {
+        // Ignore
+      }
+    }
   }
 }
 

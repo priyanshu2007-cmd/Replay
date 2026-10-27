@@ -70,10 +70,13 @@ export interface PipelineDeps {
   reporterDeps?: ReporterDeps;
   videoDeps?: {
     checkFfmpeg?: () => Promise<boolean>;
+    hasFfmpeg?: () => Promise<boolean>;
     extractFrames?: (videoPath: string, outputDir: string) => Promise<import('@replay/video').FrameInfo[]>;
+    extractKeyframes?: (videoPath: string, outputDir: string) => Promise<import('@replay/video').FrameInfo[]>;
   };
   sandboxDeps?: {
     create?: typeof IsolatedWorkspaceSandbox.create;
+    createSandbox?: typeof IsolatedWorkspaceSandbox.create;
   };
 }
 
@@ -212,12 +215,17 @@ export async function runPipeline(
     }
   }
 
-  const checkFfmpegFn = deps.videoDeps?.checkFfmpeg ?? (() => VideoProcessor.checkFfmpeg());
+  const checkFfmpegFn =
+    deps.videoDeps?.checkFfmpeg ??
+    deps.videoDeps?.hasFfmpeg ??
+    (() => VideoProcessor.checkFfmpeg());
   const extractFramesFn =
     deps.videoDeps?.extractFrames ??
+    deps.videoDeps?.extractKeyframes ??
     ((vp: string, outDir: string) => VideoProcessor.extractFrames(vp, outDir));
   const createSandboxFn =
     deps.sandboxDeps?.create ??
+    deps.sandboxDeps?.createSandbox ??
     ((srcDir: string) => IsolatedWorkspaceSandbox.create(srcDir));
 
   const videoStat = options.videoPath ? await fs.promises.stat(options.videoPath).catch(() => null) : null;
@@ -445,10 +453,85 @@ export async function runPipeline(
   // --- STAGE 5: VERIFY (Reproduction Gate) ---
   await collector.emit('verify', 'verify_started', 'verifier');
 
-  const initialExec = await executeReproductionTest(reproducerOutput.test_code, {
-    demoShopRoot: targetRepoRoot,
-    testTimeoutMs: 30_000,
-  });
+  let initialExec: Awaited<ReturnType<typeof executeReproductionTest>>;
+  try {
+    initialExec = await executeReproductionTest(reproducerOutput.test_code, {
+      demoShopRoot: targetRepoRoot,
+      testTimeoutMs: 30_000,
+      createSandbox: createSandboxFn,
+    });
+  } catch (err: any) {
+    if (err instanceof SandboxUnavailableError || err?.code === 'SANDBOX_UNAVAILABLE') {
+      const safeReason = `Sandbox unavailable for reproduction execution: ${redactSecretText(err.message)}`;
+      blockedStages.push(safeReason);
+      const blockedVerifierOutput: VerifierOutput = {
+        same_defect: false,
+        classification: 'INFRASTRUCTURE_FAILURE',
+        reason: safeReason,
+        confidence: 1,
+      };
+      await collector.emit('verify', 'verify_completed', 'verifier', {
+        classification: blockedVerifierOutput.classification,
+        same_defect: false,
+        reason: safeReason,
+        sandbox_blocked: true,
+        tokens: 0,
+        duration_ms: 0,
+        model: 'sandbox-gate',
+      });
+      const reportData = {
+        runId,
+        status: 'failed' as RunState,
+        videoAnalysis,
+        bugReport,
+        locatorOutput,
+        reproducerOutput,
+        verifierOutput: blockedVerifierOutput,
+        reproBeforeFixFailed: false,
+        reproAfterFixPassed: false,
+        baselineRegressionPassed: false,
+        attempts: 0,
+        durationMs: Date.now() - startTime,
+        blockedStages,
+        errors: [safeReason],
+      };
+      const reporterRes = await generateReport(reportData, deps.reporterDeps);
+      await persistReportArtifacts(runId, reporterRes.output, artifactsDir);
+      await collector.emit('report', 'report_completed', 'reporter', {
+        status: 'failed',
+        summary: reporterRes.output.executive_summary,
+      });
+      const totalTokens = [watcherMetrics, locatorRes?.metrics, reproRes?.metrics]
+        .map((m) => m?.totalTokens ?? 0)
+        .reduce((a, b) => a + b, 0);
+      return {
+        runId,
+        status: 'failed',
+        totalTokens,
+        estimatedCostUsd: estimateCostUsd([
+          { role: 'watcher', tokens: watcherMetrics?.totalTokens ?? 0 },
+          { role: 'locator', tokens: locatorRes.metrics.totalTokens },
+          { role: 'reproducer', tokens: reproRes.metrics.totalTokens },
+        ]),
+        sampleId,
+        videoAnalysis,
+        bugReport,
+        bundle,
+        locatorOutput,
+        reproducerOutput,
+        verifierOutput: blockedVerifierOutput,
+        reporterOutput: reporterRes.output,
+        reproBeforeFixFailed: false,
+        reproAfterFixPassed: false,
+        baselineRegressionPassed: false,
+        attempts: 0,
+        durationMs: Date.now() - startTime,
+        events: collector.events,
+        summary: `Execution blocked: ${safeReason}`,
+      };
+    }
+    throw err;
+  }
 
   const verifierRes = await verifyReproduction(
     {
@@ -514,14 +597,15 @@ export async function runPipeline(
       summary: reporterRes.output.executive_summary,
     });
 
-    const totalTokens = [locatorRes, reproRes, verifierRes]
-      .map((r) => r?.metrics?.totalTokens ?? 0)
+    const totalTokens = [watcherMetrics, locatorRes?.metrics, reproRes?.metrics, verifierRes?.metrics]
+      .map((m) => m?.totalTokens ?? 0)
       .reduce((a, b) => a + b, 0);
     return {
       runId,
       status: 'unreproduced',
       totalTokens,
       estimatedCostUsd: estimateCostUsd([
+        { role: 'watcher', tokens: watcherMetrics?.totalTokens ?? 0 },
         { role: 'locator', tokens: locatorRes.metrics.totalTokens },
         { role: 'reproducer', tokens: reproRes.metrics.totalTokens },
         { role: 'verifier', tokens: verifierRes.metrics.totalTokens },

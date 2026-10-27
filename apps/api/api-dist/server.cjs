@@ -104,10 +104,10 @@ var require_package = __commonJS({
 // ../../node_modules/.pnpm/dotenv@16.6.1/node_modules/dotenv/lib/main.js
 var require_main = __commonJS({
   "../../node_modules/.pnpm/dotenv@16.6.1/node_modules/dotenv/lib/main.js"(exports2, module2) {
-    var fs16 = require("fs");
-    var path14 = require("path");
+    var fs18 = require("fs");
+    var path15 = require("path");
     var os3 = require("os");
-    var crypto4 = require("crypto");
+    var crypto5 = require("crypto");
     var packageJson = require_package();
     var version2 = packageJson.version;
     var LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/mg;
@@ -213,7 +213,7 @@ var require_main = __commonJS({
       if (options && options.path && options.path.length > 0) {
         if (Array.isArray(options.path)) {
           for (const filepath of options.path) {
-            if (fs16.existsSync(filepath)) {
+            if (fs18.existsSync(filepath)) {
               possibleVaultPath = filepath.endsWith(".vault") ? filepath : `${filepath}.vault`;
             }
           }
@@ -221,15 +221,15 @@ var require_main = __commonJS({
           possibleVaultPath = options.path.endsWith(".vault") ? options.path : `${options.path}.vault`;
         }
       } else {
-        possibleVaultPath = path14.resolve(process.cwd(), ".env.vault");
+        possibleVaultPath = path15.resolve(process.cwd(), ".env.vault");
       }
-      if (fs16.existsSync(possibleVaultPath)) {
+      if (fs18.existsSync(possibleVaultPath)) {
         return possibleVaultPath;
       }
       return null;
     }
     function _resolveHome(envPath) {
-      return envPath[0] === "~" ? path14.join(os3.homedir(), envPath.slice(1)) : envPath;
+      return envPath[0] === "~" ? path15.join(os3.homedir(), envPath.slice(1)) : envPath;
     }
     function _configVault(options) {
       const debug2 = Boolean(options && options.debug);
@@ -246,7 +246,7 @@ var require_main = __commonJS({
       return { parsed };
     }
     function configDotenv(options) {
-      const dotenvPath = path14.resolve(process.cwd(), ".env");
+      const dotenvPath = path15.resolve(process.cwd(), ".env");
       let encoding = "utf8";
       const debug2 = Boolean(options && options.debug);
       const quiet = options && "quiet" in options ? options.quiet : true;
@@ -270,13 +270,13 @@ var require_main = __commonJS({
       }
       let lastError;
       const parsedAll = {};
-      for (const path15 of optionPaths) {
+      for (const path16 of optionPaths) {
         try {
-          const parsed = DotenvModule.parse(fs16.readFileSync(path15, { encoding }));
+          const parsed = DotenvModule.parse(fs18.readFileSync(path16, { encoding }));
           DotenvModule.populate(parsedAll, parsed, options);
         } catch (e2) {
           if (debug2) {
-            _debug(`Failed to load ${path15} ${e2.message}`);
+            _debug(`Failed to load ${path16} ${e2.message}`);
           }
           lastError = e2;
         }
@@ -291,7 +291,7 @@ var require_main = __commonJS({
         const shortPaths = [];
         for (const filePath of optionPaths) {
           try {
-            const relative2 = path14.relative(process.cwd(), filePath);
+            const relative2 = path15.relative(process.cwd(), filePath);
             shortPaths.push(relative2);
           } catch (e2) {
             if (debug2) {
@@ -326,7 +326,7 @@ var require_main = __commonJS({
       const authTag = ciphertext.subarray(-16);
       ciphertext = ciphertext.subarray(12, -16);
       try {
-        const aesgcm = crypto4.createDecipheriv("aes-256-gcm", key, nonce);
+        const aesgcm = crypto5.createDecipheriv("aes-256-gcm", key, nonce);
         aesgcm.setAuthTag(authTag);
         return `${aesgcm.update(ciphertext)}${aesgcm.final()}`;
       } catch (error) {
@@ -1123,14 +1123,14 @@ var require_url_state_machine = __commonJS({
       return url.replace(/\u0009|\u000A|\u000D/g, "");
     }
     function shortenPath(url) {
-      const path14 = url.path;
-      if (path14.length === 0) {
+      const path15 = url.path;
+      if (path15.length === 0) {
         return;
       }
-      if (url.scheme === "file" && path14.length === 1 && isNormalizedWindowsDriveLetter(path14[0])) {
+      if (url.scheme === "file" && path15.length === 1 && isNormalizedWindowsDriveLetter(path15[0])) {
         return;
       }
-      path14.pop();
+      path15.pop();
     }
     function includesCredentials(url) {
       return url.username !== "" || url.password !== "";
@@ -2450,7 +2450,7 @@ var require_lib2 = __commonJS({
       let accum = [];
       let accumBytes = 0;
       let abort = false;
-      return new Body.Promise(function(resolve12, reject) {
+      return new Body.Promise(function(resolve13, reject) {
         let resTimeout;
         if (_this4.timeout) {
           resTimeout = setTimeout(function() {
@@ -2484,7 +2484,7 @@ var require_lib2 = __commonJS({
           }
           clearTimeout(resTimeout);
           try {
-            resolve12(Buffer.concat(accum, accumBytes));
+            resolve13(Buffer.concat(accum, accumBytes));
           } catch (err) {
             reject(new FetchError(`Could not create Buffer from response body for ${_this4.url}: ${err.message}`, "system", err));
           }
@@ -3159,7 +3159,7 @@ var require_lib2 = __commonJS({
         throw new Error("native promise missing, set fetch.Promise to your favorite alternative");
       }
       Body.Promise = fetch2.Promise;
-      return new fetch2.Promise(function(resolve12, reject) {
+      return new fetch2.Promise(function(resolve13, reject) {
         const request = new Request5(url, opts);
         const options = getNodeRequestOptions(request);
         const send = (options.protocol === "https:" ? https : http).request;
@@ -3292,7 +3292,7 @@ var require_lib2 = __commonJS({
                   requestOpts.body = void 0;
                   requestOpts.headers.delete("content-length");
                 }
-                resolve12(fetch2(new Request5(locationURL, requestOpts)));
+                resolve13(fetch2(new Request5(locationURL, requestOpts)));
                 finalize();
                 return;
             }
@@ -3313,7 +3313,7 @@ var require_lib2 = __commonJS({
           const codings = headers.get("Content-Encoding");
           if (!request.compress || request.method === "HEAD" || codings === null || res.statusCode === 204 || res.statusCode === 304) {
             response = new Response5(body, response_options);
-            resolve12(response);
+            resolve13(response);
             return;
           }
           const zlibOptions = {
@@ -3323,7 +3323,7 @@ var require_lib2 = __commonJS({
           if (codings == "gzip" || codings == "x-gzip") {
             body = body.pipe(zlib.createGunzip(zlibOptions));
             response = new Response5(body, response_options);
-            resolve12(response);
+            resolve13(response);
             return;
           }
           if (codings == "deflate" || codings == "x-deflate") {
@@ -3335,12 +3335,12 @@ var require_lib2 = __commonJS({
                 body = body.pipe(zlib.createInflateRaw());
               }
               response = new Response5(body, response_options);
-              resolve12(response);
+              resolve13(response);
             });
             raw2.on("end", function() {
               if (!response) {
                 response = new Response5(body, response_options);
-                resolve12(response);
+                resolve13(response);
               }
             });
             return;
@@ -3348,11 +3348,11 @@ var require_lib2 = __commonJS({
           if (codings == "br" && typeof zlib.createBrotliDecompress === "function") {
             body = body.pipe(zlib.createBrotliDecompress());
             response = new Response5(body, response_options);
-            resolve12(response);
+            resolve13(response);
             return;
           }
           response = new Response5(body, response_options);
-          resolve12(response);
+          resolve13(response);
         });
         writeToStream(req, request);
       });
@@ -6709,14 +6709,14 @@ __export(fileFromPath_exports, {
   fileFromPathSync: () => fileFromPathSync,
   isFile: () => isFile
 });
-function createFileFromPath(path14, { mtimeMs, size: size2 }, filenameOrOptions, options = {}) {
+function createFileFromPath(path15, { mtimeMs, size: size2 }, filenameOrOptions, options = {}) {
   let filename;
   if (isPlainObject_default2(filenameOrOptions)) {
     [options, filename] = [filenameOrOptions, void 0];
   } else {
     filename = filenameOrOptions;
   }
-  const file = new FileFromPath({ path: path14, size: size2, lastModified: mtimeMs });
+  const file = new FileFromPath({ path: path15, size: size2, lastModified: mtimeMs });
   if (!filename) {
     filename = file.name;
   }
@@ -6725,13 +6725,13 @@ function createFileFromPath(path14, { mtimeMs, size: size2 }, filenameOrOptions,
     lastModified: file.lastModified
   });
 }
-function fileFromPathSync(path14, filenameOrOptions, options = {}) {
-  const stats = (0, import_fs2.statSync)(path14);
-  return createFileFromPath(path14, stats, filenameOrOptions, options);
+function fileFromPathSync(path15, filenameOrOptions, options = {}) {
+  const stats = (0, import_fs2.statSync)(path15);
+  return createFileFromPath(path15, stats, filenameOrOptions, options);
 }
-async function fileFromPath2(path14, filenameOrOptions, options) {
-  const stats = await import_fs2.promises.stat(path14);
-  return createFileFromPath(path14, stats, filenameOrOptions, options);
+async function fileFromPath2(path15, filenameOrOptions, options) {
+  const stats = await import_fs2.promises.stat(path15);
+  return createFileFromPath(path15, stats, filenameOrOptions, options);
 }
 var import_fs2, import_path, import_node_domexception, __classPrivateFieldSet4, __classPrivateFieldGet5, _FileFromPath_path, _FileFromPath_start, MESSAGE, FileFromPath;
 var init_fileFromPath = __esm({
@@ -6799,9 +6799,9 @@ __export(server_exports, {
   default: () => server_default
 });
 module.exports = __toCommonJS(server_exports);
-var fs15 = __toESM(require("node:fs"), 1);
-var path13 = __toESM(require("node:path"), 1);
-var import_node_crypto4 = require("node:crypto");
+var fs17 = __toESM(require("node:fs"), 1);
+var path14 = __toESM(require("node:path"), 1);
+var import_node_crypto5 = require("node:crypto");
 var import_node_url = require("node:url");
 var import_dotenv2 = __toESM(require_main(), 1);
 
@@ -6906,26 +6906,26 @@ var throwNestingLimitExceeded = () => {
 };
 
 // ../../node_modules/.pnpm/hono@4.13.13/node_modules/hono/dist/utils/url.js
-var splitPath = (path14) => {
-  const paths = path14.split("/");
+var splitPath = (path15) => {
+  const paths = path15.split("/");
   if (paths[0] === "") paths.shift();
   return paths;
 };
 var splitRoutingPath = (routePath) => {
-  const { groups, path: path14 } = extractGroupsFromPath(routePath);
-  const paths = splitPath(path14);
+  const { groups, path: path15 } = extractGroupsFromPath(routePath);
+  const paths = splitPath(path15);
   return replaceGroupMarks(paths, groups);
 };
-var extractGroupsFromPath = (path14) => {
+var extractGroupsFromPath = (path15) => {
   const groups = [];
-  path14 = path14.replace(/\{[^}]+\}/g, (match2, index2) => {
+  path15 = path15.replace(/\{[^}]+\}/g, (match2, index2) => {
     const mark = `@${index2}`;
     groups.push([mark, match2]);
     return mark;
   });
   return {
     groups,
-    path: path14
+    path: path15
   };
 };
 var replaceGroupMarks = (paths, groups) => {
@@ -6988,8 +6988,8 @@ var getPath = (request) => {
       const queryIndex = url.indexOf("?", i2);
       const hashIndex = url.indexOf("#", i2);
       const end = queryIndex === -1 ? hashIndex === -1 ? void 0 : hashIndex : hashIndex === -1 ? queryIndex : Math.min(queryIndex, hashIndex);
-      const path14 = url.slice(start, end);
-      return tryDecodeURI(path14.includes("%25") ? path14.replace(/%25/g, "%2525") : path14);
+      const path15 = url.slice(start, end);
+      return tryDecodeURI(path15.includes("%25") ? path15.replace(/%25/g, "%2525") : path15);
     } else if (charCode === 63 || charCode === 35) break;
   }
   return url.slice(start, i2);
@@ -7002,9 +7002,9 @@ var mergePath = (base, sub, ...rest) => {
   if (rest.length) sub = mergePath(sub, ...rest);
   return `${base?.[0] === "/" ? "" : "/"}${base}${sub === "/" ? "" : `${base?.at(-1) === "/" ? "" : "/"}${sub?.[0] === "/" ? sub.slice(1) : sub}`}`;
 };
-var checkOptionalParameter = (path14) => {
-  if (path14.charCodeAt(path14.length - 1) !== 63 || !path14.includes(":")) return null;
-  const segments = path14.split("/");
+var checkOptionalParameter = (path15) => {
+  if (path15.charCodeAt(path15.length - 1) !== 63 || !path15.includes(":")) return null;
+  const segments = path15.split("/");
   const results = [];
   let basePath = "";
   segments.forEach((segment) => {
@@ -7110,9 +7110,9 @@ var HonoRequest = class {
   */
   path;
   bodyCache = {};
-  constructor(request, path14 = "/", matchResult = [[]]) {
+  constructor(request, path15 = "/", matchResult = [[]]) {
     this.raw = request;
-    this.path = path14;
+    this.path = path15;
     this.#matchResult = matchResult;
   }
   param(key) {
@@ -7842,8 +7842,8 @@ var Hono = class Hono2 {
         return this;
       };
     });
-    this.on = (method, path14, ...handlers) => {
-      for (const p2 of [path14].flat()) {
+    this.on = (method, path15, ...handlers) => {
+      for (const p2 of [path15].flat()) {
         this.#path = p2;
         for (const m2 of [method].flat()) {
           const methodName = m2.toUpperCase();
@@ -7897,8 +7897,8 @@ var Hono = class Hono2 {
   * app.route("/api", app2) // GET /api/user
   * ```
   */
-  route(path14, app) {
-    const subApp = this.basePath(path14);
+  route(path15, app) {
+    const subApp = this.basePath(path15);
     app.routes.map((r2) => {
       let handler;
       if (app.errorHandler === errorHandler) handler = r2.handler;
@@ -7923,9 +7923,9 @@ var Hono = class Hono2 {
   * const api = new Hono().basePath('/api')
   * ```
   */
-  basePath(path14) {
+  basePath(path15) {
     const subApp = this.#clone();
-    subApp._basePath = mergePath(this._basePath, path14);
+    subApp._basePath = mergePath(this._basePath, path15);
     return subApp;
   }
   /**
@@ -8001,7 +8001,7 @@ var Hono = class Hono2 {
   * })
   * ```
   */
-  mount(path14, applicationHandler, options) {
+  mount(path15, applicationHandler, options) {
     let replaceRequest;
     let optionHandler;
     if (options) {
@@ -8024,7 +8024,7 @@ var Hono = class Hono2 {
       return [c2.env, executionContext];
     };
     replaceRequest ||= (() => {
-      const mergedPath = mergePath(this._basePath, path14);
+      const mergedPath = mergePath(this._basePath, path15);
       const pathPrefixLength = mergedPath === "/" ? 0 : mergedPath.length;
       return (request) => {
         const url = new URL(request.url);
@@ -8037,18 +8037,18 @@ var Hono = class Hono2 {
       if (res) return res;
       await next();
     };
-    this.#addRoute("ALL", mergePath(path14, "*"), handler);
+    this.#addRoute("ALL", mergePath(path15, "*"), handler);
     return this;
   }
-  #addRoute(method, path14, handler, baseRoutePath) {
-    path14 = mergePath(this._basePath, path14);
+  #addRoute(method, path15, handler, baseRoutePath) {
+    path15 = mergePath(this._basePath, path15);
     const r2 = {
       basePath: baseRoutePath !== void 0 ? mergePath(this._basePath, baseRoutePath) : this._basePath,
-      path: path14,
+      path: path15,
       method,
       handler
     };
-    this.router.add(method, path14, [handler, r2]);
+    this.router.add(method, path15, [handler, r2]);
     this.routes.push(r2);
   }
   #handleError(err, c2) {
@@ -8057,10 +8057,10 @@ var Hono = class Hono2 {
   }
   #dispatch(request, executionCtx, env, method) {
     if (method === "HEAD") return (async () => new Response(null, await this.#dispatch(request, executionCtx, env, "GET")))();
-    const path14 = this.getPath(request, { env });
-    const matchResult = this.router.match(method, path14);
+    const path15 = this.getPath(request, { env });
+    const matchResult = this.router.match(method, path15);
     const c2 = new Context(request, {
-      path: path14,
+      path: path15,
       matchResult,
       env,
       executionCtx,
@@ -8148,19 +8148,19 @@ var createNullObject = () => /* @__PURE__ */ Object.create(null);
 
 // ../../node_modules/.pnpm/hono@4.13.13/node_modules/hono/dist/router/reg-exp-router/matcher.js
 var emptyParam = [];
-function match(method, path14) {
+function match(method, path15) {
   const matchers = this.buildAllMatchers();
-  const match2 = ((method2, path15) => {
+  const match2 = ((method2, path16) => {
     const matcher = matchers[method2] || matchers["ALL"];
-    const staticMatch = matcher[2][path15];
+    const staticMatch = matcher[2][path16];
     if (staticMatch) return staticMatch;
-    const match3 = path15.match(matcher[0]);
+    const match3 = path16.match(matcher[0]);
     if (!match3) return [[], emptyParam];
     const index2 = match3.indexOf("", 1);
     return [matcher[1][index2], match3];
   });
   this.match = match2;
-  return match2(method, path14);
+  return match2(method, path15);
 }
 
 // ../../node_modules/.pnpm/hono@4.13.13/node_modules/hono/dist/router/reg-exp-router/node.js
@@ -8250,14 +8250,14 @@ var Trie = class {
   #root = new Node();
   #index = 0;
   paths = createNullObject();
-  insert(path14, isStatic) {
+  insert(path15, isStatic) {
     if (isStatic) {
-      this.#root.insert(path14.split(""), 0, [], this.#context, true);
+      this.#root.insert(path15.split(""), 0, [], this.#context, true);
       return;
     }
     const paramAssoc = [];
     const groups = [];
-    let markedPath = path14;
+    let markedPath = path15;
     for (let i2 = 0; ; ) {
       let replaced = false;
       markedPath = markedPath.replace(/\{[^}]+\}/g, (m2) => {
@@ -8278,7 +8278,7 @@ var Trie = class {
       }
     }
     this.#root.insert(tokens, this.#index, paramAssoc, this.#context, false);
-    this.paths[path14] = [this.#index++, paramAssoc];
+    this.paths[path15] = [this.#index++, paramAssoc];
   }
   buildRegExp() {
     let regexp = this.#root.buildRegExpStr();
@@ -8311,11 +8311,11 @@ var Trie = class {
 
 // ../../node_modules/.pnpm/hono@4.13.13/node_modules/hono/dist/router/reg-exp-router/router.js
 var wildcardRegExpCache = createNullObject();
-function buildWildcardRegExp(path14) {
-  return wildcardRegExpCache[path14] ??= new RegExp(`^${path14.replace(/\/:[^/{}]+(?:\{\[\^\/]\+})?(?=[/{]|$)|\/?\*$|([.\\+*[^\]$()?{}|])/g, (match2, metaChar) => metaChar ? `\\${metaChar}` : match2 === "/*" ? TAIL_WILDCARD_REG_EXP_STR : match2 === "*" ? ".*" : `/:${LABEL_REG_EXP_STR}`)}$`);
+function buildWildcardRegExp(path15) {
+  return wildcardRegExpCache[path15] ??= new RegExp(`^${path15.replace(/\/:[^/{}]+(?:\{\[\^\/]\+})?(?=[/{]|$)|\/?\*$|([.\\+*[^\]$()?{}|])/g, (match2, metaChar) => metaChar ? `\\${metaChar}` : match2 === "/*" ? TAIL_WILDCARD_REG_EXP_STR : match2 === "*" ? ".*" : `/:${LABEL_REG_EXP_STR}`)}$`);
 }
-function findMiddleware(middleware, path14) {
-  for (const k2 of Object.keys(middleware).sort((a2, b3) => b3.length - a2.length)) if (buildWildcardRegExp(k2).test(path14)) return [...middleware[k2]];
+function findMiddleware(middleware, path15) {
+  for (const k2 of Object.keys(middleware).sort((a2, b3) => b3.length - a2.length)) if (buildWildcardRegExp(k2).test(path15)) return [...middleware[k2]];
 }
 var RegExpRouter = class {
   name = "RegExpRouter";
@@ -8327,14 +8327,14 @@ var RegExpRouter = class {
     this.#routes = { ["ALL"]: createNullObject() };
     this.#tries = { ["ALL"]: new Trie() };
   }
-  #insertPath(method, path14) {
+  #insertPath(method, path15) {
     try {
-      this.#tries[method].insert(path14, !/\*|\/:/.test(path14));
+      this.#tries[method].insert(path15, !/\*|\/:/.test(path15));
     } catch (e2) {
-      throw e2 === PATH_ERROR ? new UnsupportedPathError(path14) : e2;
+      throw e2 === PATH_ERROR ? new UnsupportedPathError(path15) : e2;
     }
   }
-  add(method, path14, handler) {
+  add(method, path15, handler) {
     const middleware = this.#middleware;
     const routes = this.#routes;
     if (!middleware) throw new Error(MESSAGE_MATCHER_IS_ALREADY_BUILT);
@@ -8348,24 +8348,24 @@ var RegExpRouter = class {
         }
       }
     }
-    if (path14 === "/*") path14 = "*";
+    if (path15 === "/*") path15 = "*";
     const methods = method === "ALL" ? Object.keys(middleware) : [method];
-    if (/\*$/.test(path14)) {
-      const re2 = buildWildcardRegExp(path14);
-      for (const m2 of methods) if (!middleware[m2][path14]) {
-        this.#insertPath(m2, path14);
-        middleware[m2][path14] = findMiddleware(middleware[m2], path14) || findMiddleware(middleware["ALL"], path14) || [];
+    if (/\*$/.test(path15)) {
+      const re2 = buildWildcardRegExp(path15);
+      for (const m2 of methods) if (!middleware[m2][path15]) {
+        this.#insertPath(m2, path15);
+        middleware[m2][path15] = findMiddleware(middleware[m2], path15) || findMiddleware(middleware["ALL"], path15) || [];
       }
-      for (const handlerMap of [middleware, routes]) for (const m2 of methods) for (const p2 in handlerMap[m2]) re2.test(p2) && handlerMap[m2][p2].push([handler, path14]);
+      for (const handlerMap of [middleware, routes]) for (const m2 of methods) for (const p2 in handlerMap[m2]) re2.test(p2) && handlerMap[m2][p2].push([handler, path15]);
       return;
     }
-    const paths = checkOptionalParameter(path14) || [path14];
-    for (const path15 of paths) for (const m2 of methods) {
-      if (!routes[m2][path15]) {
-        this.#insertPath(m2, path15);
-        routes[m2][path15] = findMiddleware(middleware[m2], path15) || findMiddleware(middleware["ALL"], path15) || [];
+    const paths = checkOptionalParameter(path15) || [path15];
+    for (const path16 of paths) for (const m2 of methods) {
+      if (!routes[m2][path16]) {
+        this.#insertPath(m2, path16);
+        routes[m2][path16] = findMiddleware(middleware[m2], path16) || findMiddleware(middleware["ALL"], path16) || [];
       }
-      routes[m2][path15].push([handler, path15]);
+      routes[m2][path16].push([handler, path16]);
     }
   }
   match = match;
@@ -8383,11 +8383,11 @@ var RegExpRouter = class {
     const staticMap = createNullObject();
     const handlerData = [];
     const [regexp, indexReplacementMap, paramReplacementMap] = trie.buildRegExp();
-    for (const r2 of [middleware, routes]) for (const path14 in r2) {
-      const handlers = r2[path14];
-      const pathData = trie.paths[path14];
+    for (const r2 of [middleware, routes]) for (const path15 in r2) {
+      const handlers = r2[path15];
+      const pathData = trie.paths[path15];
       if (!pathData) {
-        staticMap[path14] = [handlers.map(([h2]) => [h2, createNullObject()]), emptyParam];
+        staticMap[path15] = [handlers.map(([h2]) => [h2, createNullObject()]), emptyParam];
         continue;
       }
       handlerData[pathData[0]] = handlers.map(([h2, handlerPath]) => [h2, trie.paths[handlerPath][1].reduceRight((map, [key], i2) => {
@@ -8411,15 +8411,15 @@ var SmartRouter = class {
   constructor(init2) {
     this.#routers = init2.routers;
   }
-  add(method, path14, handler) {
+  add(method, path15, handler) {
     if (!this.#routes) throw new Error(MESSAGE_MATCHER_IS_ALREADY_BUILT);
     this.#routes.push([
       method,
-      path14,
+      path15,
       handler
     ]);
   }
-  match(method, path14) {
+  match(method, path15) {
     if (!this.#routes) throw new Error("Fatal error");
     const routers = this.#routers;
     const routes = this.#routes;
@@ -8430,7 +8430,7 @@ var SmartRouter = class {
       const router = routers[i2];
       try {
         for (let i3 = 0, len2 = routes.length; i3 < len2; i3++) router.add(...routes[i3]);
-        res = router.match(method, path14);
+        res = router.match(method, path15);
       } catch (e2) {
         if (e2 instanceof UnsupportedPathError) continue;
         throw e2;
@@ -8459,9 +8459,9 @@ var Node3 = class Node4 {
   #patterns = [];
   #pattern;
   #params = emptyParams;
-  insert(method, path14, handler) {
+  insert(method, path15, handler) {
     let curNode = this;
-    const parts = splitRoutingPath(path14);
+    const parts = splitRoutingPath(path15);
     const possibleKeys = /* @__PURE__ */ new Set();
     let i2 = 0;
     for (const p2 of parts) {
@@ -8497,11 +8497,11 @@ var Node3 = class Node4 {
       }
     }
   }
-  search(method, path14) {
+  search(method, path15) {
     const handlerSets = [];
     this.#params = emptyParams;
     let curNodes = [this];
-    const parts = splitPath(path14);
+    const parts = splitPath(path15);
     const curNodesQueue = [];
     const len = parts.length;
     let partOffsets = null;
@@ -8537,13 +8537,13 @@ var Node3 = class Node4 {
           if (matcher !== true) {
             if (!partOffsets) {
               partOffsets = [];
-              let offset = path14[0] === "/" ? 1 : 0;
+              let offset = path15[0] === "/" ? 1 : 0;
               for (let p2 = 0; p2 < len; p2++) {
                 partOffsets[p2] = offset;
                 offset += parts[p2].length + 1;
               }
             }
-            const restPathString = path14.slice(partOffsets[i2]);
+            const restPathString = path15.slice(partOffsets[i2]);
             const m2 = matcher.exec(restPathString);
             if (m2) {
               params[name] = m2[0];
@@ -8584,11 +8584,11 @@ var Node3 = class Node4 {
 var TrieRouter = class {
   name = "TrieRouter";
   #node = new Node3();
-  add(method, path14, handler) {
-    for (const result of checkOptionalParameter(path14) || [path14]) this.#node.insert(method, result, handler);
+  add(method, path15, handler) {
+    for (const result of checkOptionalParameter(path15) || [path15]) this.#node.insert(method, result, handler);
   }
-  match(method, path14) {
-    return this.#node.search(method, path14);
+  match(method, path15) {
+    return this.#node.search(method, path15);
   }
 };
 
@@ -9099,7 +9099,7 @@ var responseViaResponseObject = async (res, outgoing, options = {}) => {
         });
         if (!chunk) {
           if (i2 === 1) {
-            await new Promise((resolve12) => setTimeout(resolve12));
+            await new Promise((resolve13) => setTimeout(resolve13));
             maxReadCount = 3;
             continue;
           }
@@ -9975,8 +9975,8 @@ function getErrorMap() {
 
 // ../../node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path14, errorMaps, issueData } = params;
-  const fullPath = [...path14, ...issueData.path || []];
+  const { data, path: path15, errorMaps, issueData } = params;
+  const fullPath = [...path15, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -10092,11 +10092,11 @@ var errorUtil;
 
 // ../../node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path14, key) {
+  constructor(parent, value, path15, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path14;
+    this._path = path15;
     this._key = key;
   }
   get path() {
@@ -13539,9 +13539,9 @@ var coerce = {
 var NEVER = INVALID;
 
 // src/runs.ts
-var fs2 = __toESM(require("node:fs"), 1);
-var path = __toESM(require("node:path"), 1);
-var import_node_crypto = require("node:crypto");
+var fs4 = __toESM(require("node:fs"), 1);
+var path2 = __toESM(require("node:path"), 1);
+var import_node_crypto2 = require("node:crypto");
 var import_node_events = require("node:events");
 
 // ../../node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/index.js
@@ -13555,9 +13555,9 @@ var originError = Symbol("OriginError");
 var CLOSE = {};
 var Query = class extends Promise {
   constructor(strings, args, handler, canceller, options = {}) {
-    let resolve12, reject;
+    let resolve13, reject;
     super((a2, b3) => {
-      resolve12 = a2;
+      resolve13 = a2;
       reject = b3;
     });
     this.tagged = Array.isArray(strings.raw);
@@ -13568,7 +13568,7 @@ var Query = class extends Promise {
     this.options = options;
     this.state = null;
     this.statement = null;
-    this.resolve = (x2) => (this.active = false, resolve12(x2));
+    this.resolve = (x2) => (this.active = false, resolve13(x2));
     this.reject = (x2) => (this.active = false, reject(x2));
     this.active = false;
     this.cancelled = null;
@@ -13616,12 +13616,12 @@ var Query = class extends Promise {
           if (this.executed && !this.active)
             return { done: true };
           prev && prev();
-          const promise = new Promise((resolve12, reject) => {
+          const promise = new Promise((resolve13, reject) => {
             this.cursorFn = (value) => {
-              resolve12({ value, done: false });
+              resolve13({ value, done: false });
               return new Promise((r2) => prev = r2);
             };
-            this.resolve = () => (this.active = false, resolve12({ done: true }));
+            this.resolve = () => (this.active = false, resolve13({ done: true }));
             this.reject = (x2) => (this.active = false, reject(x2));
           });
           this.execute();
@@ -14248,12 +14248,12 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
     x2.on("drain", drain);
     return x2;
   }
-  async function cancel({ pid, secret }, resolve12, reject) {
+  async function cancel({ pid, secret }, resolve13, reject) {
     try {
       cancelMessage = bytes_default().i32(16).i32(80877102).i32(pid).i32(secret).end(16);
       await connect();
       socket.once("error", reject);
-      socket.once("close", resolve12);
+      socket.once("close", resolve13);
     } catch (error2) {
       reject(error2);
     }
@@ -15074,13 +15074,13 @@ function Subscribe(postgres2, options) {
       }
     }
     function handle(a2, b3) {
-      const path14 = b3.relation.schema + "." + b3.relation.table;
+      const path15 = b3.relation.schema + "." + b3.relation.table;
       call("*", a2, b3);
-      call("*:" + path14, a2, b3);
-      b3.relation.keys.length && call("*:" + path14 + "=" + b3.relation.keys.map((x3) => a2[x3.name]), a2, b3);
+      call("*:" + path15, a2, b3);
+      b3.relation.keys.length && call("*:" + path15 + "=" + b3.relation.keys.map((x3) => a2[x3.name]), a2, b3);
       call(b3.command, a2, b3);
-      call(b3.command + ":" + path14, a2, b3);
-      b3.relation.keys.length && call(b3.command + ":" + path14 + "=" + b3.relation.keys.map((x3) => a2[x3.name]), a2, b3);
+      call(b3.command + ":" + path15, a2, b3);
+      b3.relation.keys.length && call(b3.command + ":" + path15 + "=" + b3.relation.keys.map((x3) => a2[x3.name]), a2, b3);
     }
     function pong() {
       const x3 = Buffer.alloc(34);
@@ -15193,14 +15193,14 @@ function parseEvent(x2) {
   const xs = x2.match(/^(\*|insert|update|delete)?:?([^.]+?\.?[^=]+)?=?(.+)?/i) || [];
   if (!xs)
     throw new Error("Malformed subscribe pattern: " + x2);
-  const [, command, path14, key] = xs;
-  return (command || "*") + (path14 ? ":" + (path14.indexOf(".") === -1 ? "public." + path14 : path14) : "") + (key ? "=" + key : "");
+  const [, command, path15, key] = xs;
+  return (command || "*") + (path15 ? ":" + (path15.indexOf(".") === -1 ? "public." + path15 : path15) : "") + (key ? "=" + key : "");
 }
 
 // ../../node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/large.js
 var import_stream7 = __toESM(require("stream"), 1);
 function largeObject(sql2, oid, mode = 131072 | 262144) {
-  return new Promise(async (resolve12, reject) => {
+  return new Promise(async (resolve13, reject) => {
     await sql2.begin(async (sql3) => {
       let finish;
       !oid && ([{ oid }] = await sql3`select lo_creat(-1) as oid`);
@@ -15226,7 +15226,7 @@ function largeObject(sql2, oid, mode = 131072 | 262144) {
           ) seek
         `
       };
-      resolve12(lo);
+      resolve13(lo);
       return new Promise(async (r2) => finish = r2);
       async function readable({
         highWaterMark = 2048 * 8,
@@ -15339,10 +15339,10 @@ function Postgres(a2, b3) {
       });
       return query;
     }
-    function file(path14, args = [], options2 = {}) {
+    function file(path15, args = [], options2 = {}) {
       arguments.length === 2 && !Array.isArray(args) && (options2 = args, args = []);
       const query = new Query([], args, (query2) => {
-        import_fs.default.readFile(path14, "utf8", (err, string) => {
+        import_fs.default.readFile(path15, "utf8", (err, string) => {
           if (err)
             return query2.reject(err);
           query2.strings = [string];
@@ -15400,8 +15400,8 @@ function Postgres(a2, b3) {
   }
   async function reserve() {
     const queue = queue_default();
-    const c2 = open.length ? open.shift() : await new Promise((resolve12, reject) => {
-      const query = { reserve: resolve12, reject };
+    const c2 = open.length ? open.shift() : await new Promise((resolve13, reject) => {
+      const query = { reserve: resolve13, reject };
       queries.push(query);
       closed.length && connect(closed.shift(), query);
     });
@@ -15438,9 +15438,9 @@ function Postgres(a2, b3) {
       let uncaughtError, result;
       name && await sql3`savepoint ${sql3(name)}`;
       try {
-        result = await new Promise((resolve12, reject) => {
+        result = await new Promise((resolve13, reject) => {
           const x2 = fn2(sql3);
-          Promise.resolve(Array.isArray(x2) ? Promise.all(x2) : x2).then(resolve12, reject);
+          Promise.resolve(Array.isArray(x2) ? Promise.all(x2) : x2).then(resolve13, reject);
         });
         if (uncaughtError)
           throw uncaughtError;
@@ -15497,8 +15497,8 @@ function Postgres(a2, b3) {
     return c2.execute(query) ? move(c2, busy) : move(c2, full);
   }
   function cancel(query) {
-    return new Promise((resolve12, reject) => {
-      query.state ? query.active ? connection_default(options).cancel(query.state, resolve12, reject) : query.cancelled = { resolve: resolve12, reject } : (queries.remove(query), query.cancelled = true, query.reject(Errors.generic("57014", "canceling statement due to user request")), resolve12());
+    return new Promise((resolve13, reject) => {
+      query.state ? query.active ? connection_default(options).cancel(query.state, resolve13, reject) : query.cancelled = { resolve: resolve13, reject } : (queries.remove(query), query.cancelled = true, query.reject(Errors.generic("57014", "canceling statement due to user request")), resolve13());
     });
   }
   async function end({ timeout = null } = {}) {
@@ -15517,11 +15517,11 @@ function Postgres(a2, b3) {
   async function close() {
     await Promise.all(connections.map((c2) => c2.end()));
   }
-  async function destroy(resolve12) {
+  async function destroy(resolve13) {
     await Promise.all(connections.map((c2) => c2.terminate()));
     while (queries.length)
       queries.shift().reject(Errors.connection("CONNECTION_DESTROYED", options));
-    resolve12();
+    resolve13();
   }
   function connect(c2, query) {
     move(c2, connecting);
@@ -16752,7 +16752,7 @@ function sql(strings, ...params) {
     return new SQL([new StringChunk(str2)]);
   }
   sql2.raw = raw2;
-  function join13(chunks, separator) {
+  function join14(chunks, separator) {
     const result = [];
     for (const [i2, chunk] of chunks.entries()) {
       if (i2 > 0 && separator !== void 0) {
@@ -16762,7 +16762,7 @@ function sql(strings, ...params) {
     }
     return new SQL(result);
   }
-  sql2.join = join13;
+  sql2.join = join14;
   function identifier(value) {
     return new Name(value);
   }
@@ -17021,7 +17021,7 @@ var SelectionProxyHandler = class _SelectionProxyHandler {
 function mapResultRow(columns, row, joinsNotNullableMap) {
   const nullifyMap = {};
   const result = columns.reduce(
-    (result2, { path: path14, field }, columnIndex) => {
+    (result2, { path: path15, field }, columnIndex) => {
       let decoder;
       if (is(field, Column)) {
         decoder = field;
@@ -17033,8 +17033,8 @@ function mapResultRow(columns, row, joinsNotNullableMap) {
         decoder = field.sql.decoder;
       }
       let node = result2;
-      for (const [pathChunkIndex, pathChunk] of path14.entries()) {
-        if (pathChunkIndex < path14.length - 1) {
+      for (const [pathChunkIndex, pathChunk] of path15.entries()) {
+        if (pathChunkIndex < path15.length - 1) {
           if (!(pathChunk in node)) {
             node[pathChunk] = {};
           }
@@ -17042,8 +17042,8 @@ function mapResultRow(columns, row, joinsNotNullableMap) {
         } else {
           const rawValue = row[columnIndex];
           const value = node[pathChunk] = rawValue === null ? null : decoder.mapFromDriverValue(rawValue);
-          if (joinsNotNullableMap && is(field, Column) && path14.length === 2) {
-            const objectName = path14[0];
+          if (joinsNotNullableMap && is(field, Column) && path15.length === 2) {
+            const objectName = path15[0];
             if (!(objectName in nullifyMap)) {
               nullifyMap[objectName] = value === null ? getTableName(field.table) : false;
             } else if (typeof nullifyMap[objectName] === "string" && nullifyMap[objectName] !== getTableName(field.table)) {
@@ -20401,7 +20401,7 @@ var PgSelectQueryBuilderBase = class extends TypedQueryBuilder {
       const baseTableName = this.tableName;
       const tableName = getTableLikeName(table);
       for (const item of extractUsedTable(table)) this.usedTables.add(item);
-      if (typeof tableName === "string" && this.config.joins?.some((join13) => join13.alias === tableName)) {
+      if (typeof tableName === "string" && this.config.joins?.some((join14) => join14.alias === tableName)) {
         throw new Error(`Alias "${tableName}" is already used in this query`);
       }
       if (!this.isPartialSelect) {
@@ -21622,7 +21622,7 @@ var PgUpdateBase = class extends QueryPromise {
   createJoin(joinType) {
     return (table, on) => {
       const tableName = getTableLikeName(table);
-      if (typeof tableName === "string" && this.config.joins.some((join13) => join13.alias === tableName)) {
+      if (typeof tableName === "string" && this.config.joins.some((join14) => join14.alias === tableName)) {
         throw new Error(`Alias "${tableName}" is already used in this query`);
       }
       if (typeof on === "function") {
@@ -21718,10 +21718,10 @@ var PgUpdateBase = class extends QueryPromise {
           const fromFields = this.getTableLikeFields(this.config.from);
           fields[tableName] = fromFields;
         }
-        for (const join13 of this.config.joins) {
-          const tableName2 = getTableLikeName(join13.table);
-          if (typeof tableName2 === "string" && !is(join13.table, SQL)) {
-            const fromFields = this.getTableLikeFields(join13.table);
+        for (const join14 of this.config.joins) {
+          const tableName2 = getTableLikeName(join14.table);
+          if (typeof tableName2 === "string" && !is(join14.table, SQL)) {
+            const fromFields = this.getTableLikeFields(join14.table);
             fields[tableName2] = fromFields;
           }
         }
@@ -22653,6 +22653,7 @@ function drizzle(...params) {
 var schema_exports = {};
 __export(schema_exports, {
   artifacts: () => artifacts,
+  rateLimitHits: () => rateLimitHits,
   runEvents: () => runEvents,
   runs: () => runs,
   targets: () => targets
@@ -22727,6 +22728,123 @@ var artifacts = pgTable("artifacts", {
   index("artifacts_run_id_idx").on(table.runId),
   index("artifacts_kind_idx").on(table.kind)
 ]);
+var rateLimitHits = pgTable("rate_limit_hits", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  bucketKey: text("bucket_key").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => [
+  index("rate_limit_hits_bucket_created_idx").on(table.bucketKey, table.createdAt)
+]);
+
+// ../../packages/db/dist/migrate.js
+var fs3 = __toESM(require("node:fs"), 1);
+var path = __toESM(require("node:path"), 1);
+
+// ../../node_modules/.pnpm/drizzle-orm@0.45.4_gel@2.2.1_supports-color@7.2.0__postgres@3.4.9/node_modules/drizzle-orm/migrator.js
+var import_node_crypto = __toESM(require("node:crypto"), 1);
+var import_node_fs = __toESM(require("node:fs"), 1);
+function readMigrationFiles(config) {
+  const migrationFolderTo = config.migrationsFolder;
+  const migrationQueries = [];
+  const journalPath = `${migrationFolderTo}/meta/_journal.json`;
+  if (!import_node_fs.default.existsSync(journalPath)) {
+    throw new Error(`Can't find meta/_journal.json file`);
+  }
+  const journalAsString = import_node_fs.default.readFileSync(`${migrationFolderTo}/meta/_journal.json`).toString();
+  const journal = JSON.parse(journalAsString);
+  for (const journalEntry of journal.entries) {
+    const migrationPath = `${migrationFolderTo}/${journalEntry.tag}.sql`;
+    try {
+      const query = import_node_fs.default.readFileSync(`${migrationFolderTo}/${journalEntry.tag}.sql`).toString();
+      const result = query.split("--> statement-breakpoint").map((it2) => {
+        return it2;
+      });
+      migrationQueries.push({
+        sql: result,
+        bps: journalEntry.breakpoints,
+        folderMillis: journalEntry.when,
+        hash: import_node_crypto.default.createHash("sha256").update(query).digest("hex")
+      });
+    } catch {
+      throw new Error(`No file ${migrationPath} found in ${migrationFolderTo} folder`);
+    }
+  }
+  return migrationQueries;
+}
+
+// ../../node_modules/.pnpm/drizzle-orm@0.45.4_gel@2.2.1_supports-color@7.2.0__postgres@3.4.9/node_modules/drizzle-orm/postgres-js/migrator.js
+async function migrate(db, config) {
+  const migrations = readMigrationFiles(config);
+  await db.dialect.migrate(migrations, db.session, config);
+}
+
+// ../../packages/db/dist/migrate.js
+var DEMO_SHOP_TARGET_SEED = {
+  id: "demo-shop",
+  name: "Demo Shop",
+  repoPath: "targets/demo-shop",
+  sandboxImage: "replay-demo-shop",
+  localBaseUrl: "http://localhost:5173",
+  testCommand: "pnpm test"
+};
+function resolveMigrationsFolder(explicitFolder) {
+  if (explicitFolder)
+    return explicitFolder;
+  const moduleDir7 = false ? path.dirname((0, import_node_url.fileURLToPath)((void 0).url)) : typeof __dirname !== "undefined" ? __dirname : process.cwd();
+  const candidates = [
+    path.resolve(moduleDir7, "../migrations"),
+    path.resolve(moduleDir7, "../../packages/db/migrations"),
+    path.resolve(moduleDir7, "../../../packages/db/migrations"),
+    path.resolve(process.cwd(), "packages/db/migrations"),
+    path.resolve(process.cwd(), "migrations")
+  ];
+  for (const candidate of candidates) {
+    if (fs3.existsSync(path.join(candidate, "meta", "_journal.json"))) {
+      return candidate;
+    }
+  }
+  return candidates[0] ?? path.resolve(process.cwd(), "packages/db/migrations");
+}
+async function runMigrationsAndSeed(connectionString = process.env.DATABASE_URL, options = {}) {
+  if (!connectionString && !options.sqlClient) {
+    throw new Error("DATABASE_URL is required");
+  }
+  const migrationsFolder = resolveMigrationsFolder(options.migrationsFolder);
+  const ownsClient = !options.sqlClient;
+  const sql2 = options.sqlClient ?? src_default(connectionString, { max: 1 });
+  const db = drizzle(sql2);
+  const migrateFn = options.migrateFn ?? migrate;
+  try {
+    await migrateFn(db, { migrationsFolder });
+    await sql2`
+      CREATE TABLE IF NOT EXISTS "rate_limit_hits" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        "bucket_key" text NOT NULL,
+        "created_at" timestamp with time zone DEFAULT now() NOT NULL
+      )
+    `;
+    await sql2`
+      CREATE INDEX IF NOT EXISTS "rate_limit_hits_bucket_created_idx"
+      ON "rate_limit_hits" USING btree ("bucket_key", "created_at")
+    `;
+    await db.insert(targets).values({ ...DEMO_SHOP_TARGET_SEED }).onConflictDoNothing();
+  } finally {
+    if (ownsClient) {
+      await sql2.end().catch(() => {
+      });
+    }
+  }
+}
+var invokedScript = process.argv[1] ? path.basename(process.argv[1]) : "";
+if (invokedScript === "migrate.ts" || invokedScript === "migrate.js" || invokedScript === "migrate.cjs") {
+  runMigrationsAndSeed().then(() => {
+    console.log("[migrate] migrations applied and demo-shop target seeded");
+    process.exit(0);
+  }).catch((err) => {
+    console.error("[migrate] failed:", err.message);
+    process.exit(1);
+  });
+}
 
 // ../../packages/db/dist/index.js
 function createDb(connectionString) {
@@ -22773,6 +22891,9 @@ function isKnownSampleId(id) {
 var MemoryRunRepository = class {
   runs = /* @__PURE__ */ new Map();
   events = /* @__PURE__ */ new Map();
+  rateLimits = /* @__PURE__ */ new Map();
+  lastEmittedSeq = /* @__PURE__ */ new Map();
+  pollTimers = /* @__PURE__ */ new Map();
   emitter = new import_node_events.EventEmitter();
   persistPath;
   constructor(options) {
@@ -22785,24 +22906,41 @@ var MemoryRunRepository = class {
   loadFromFile() {
     if (!this.persistPath) return;
     try {
-      if (fs2.existsSync(this.persistPath)) {
-        const raw2 = fs2.readFileSync(this.persistPath, "utf8");
+      if (fs4.existsSync(this.persistPath)) {
+        const raw2 = fs4.readFileSync(this.persistPath, "utf8");
         const data = JSON.parse(raw2);
         if (Array.isArray(data.runs)) {
           for (const r2 of data.runs) {
-            this.runs.set(r2.id, {
-              ...r2,
-              createdAt: new Date(r2.createdAt),
-              updatedAt: new Date(r2.updatedAt),
-              workerHeartbeat: r2.workerHeartbeat ? new Date(r2.workerHeartbeat) : null,
-              completedAt: r2.completedAt ? new Date(r2.completedAt) : null
-            });
+            const incomingUpdatedAt = new Date(r2.updatedAt);
+            const existing = this.runs.get(r2.id);
+            if (!existing || incomingUpdatedAt.getTime() >= existing.updatedAt.getTime()) {
+              this.runs.set(r2.id, {
+                ...r2,
+                createdAt: new Date(r2.createdAt),
+                updatedAt: incomingUpdatedAt,
+                workerHeartbeat: r2.workerHeartbeat ? new Date(r2.workerHeartbeat) : null,
+                completedAt: r2.completedAt ? new Date(r2.completedAt) : null
+              });
+            }
           }
         }
         if (data.events && typeof data.events === "object") {
           for (const [runId, evList] of Object.entries(data.events)) {
             if (Array.isArray(evList)) {
-              this.events.set(runId, evList);
+              const incoming = evList;
+              const current = this.events.get(runId) || [];
+              if (incoming.length >= current.length) {
+                this.events.set(runId, incoming);
+              }
+            }
+          }
+        }
+        if (data.rateLimits && typeof data.rateLimits === "object") {
+          for (const [key, tsList] of Object.entries(data.rateLimits)) {
+            if (Array.isArray(tsList)) {
+              const existing = this.rateLimits.get(key) || [];
+              const merged = Array.from(/* @__PURE__ */ new Set([...existing, ...tsList])).sort((a2, b3) => a2 - b3);
+              this.rateLimits.set(key, merged);
             }
           }
         }
@@ -22813,20 +22951,49 @@ var MemoryRunRepository = class {
   saveToFile() {
     if (!this.persistPath) return;
     try {
-      const dir = path.dirname(this.persistPath);
-      if (!fs2.existsSync(dir)) {
-        fs2.mkdirSync(dir, { recursive: true });
+      const dir = path2.dirname(this.persistPath);
+      if (!fs4.existsSync(dir)) {
+        fs4.mkdirSync(dir, { recursive: true });
       }
       const data = {
         runs: Array.from(this.runs.values()),
-        events: Object.fromEntries(this.events.entries())
+        events: Object.fromEntries(this.events.entries()),
+        rateLimits: Object.fromEntries(this.rateLimits.entries())
       };
-      fs2.writeFileSync(this.persistPath, JSON.stringify(data, null, 2), "utf8");
+      const tmpPath = `${this.persistPath}.${process.pid}.${(0, import_node_crypto2.randomUUID)()}.tmp`;
+      fs4.writeFileSync(tmpPath, JSON.stringify(data, null, 2), "utf8");
+      fs4.renameSync(tmpPath, this.persistPath);
     } catch {
     }
   }
+  async checkRateLimit(key, limit2, windowMs) {
+    this.loadFromFile();
+    const now = Date.now();
+    const cutoff = now - windowMs;
+    if (this.rateLimits.size > 5e3) {
+      for (const [k2, ts] of this.rateLimits.entries()) {
+        const active = ts.filter((t2) => t2 > cutoff);
+        if (active.length === 0) {
+          this.rateLimits.delete(k2);
+        } else {
+          this.rateLimits.set(k2, active);
+        }
+      }
+    }
+    const timestamps = (this.rateLimits.get(key) || []).filter((t2) => t2 > cutoff);
+    if (timestamps.length >= limit2) {
+      this.rateLimits.set(key, timestamps);
+      this.saveToFile();
+      return { allowed: false, remaining: 0 };
+    }
+    timestamps.push(now);
+    this.rateLimits.set(key, timestamps);
+    this.saveToFile();
+    return { allowed: true, remaining: Math.max(0, limit2 - timestamps.length) };
+  }
   async createRun(input) {
-    const id = (0, import_node_crypto.randomUUID)();
+    this.loadFromFile();
+    const id = (0, import_node_crypto2.randomUUID)();
     const now = /* @__PURE__ */ new Date();
     const record = {
       id,
@@ -22860,10 +23027,12 @@ var MemoryRunRepository = class {
     return record;
   }
   async getRun(id) {
+    this.loadFromFile();
     const record = this.runs.get(id);
     return record ? { ...record } : null;
   }
   async listRuns(limit2 = 50) {
+    this.loadFromFile();
     const list = Array.from(this.runs.values());
     const sorted = list.sort((a2, b3) => {
       const diff = b3.createdAt.getTime() - a2.createdAt.getTime();
@@ -22873,6 +23042,7 @@ var MemoryRunRepository = class {
     return sorted.map((r2) => ({ ...r2 }));
   }
   async updateRun(id, updates) {
+    this.loadFromFile();
     const current = this.runs.get(id);
     if (!current) return null;
     const updated = {
@@ -22885,6 +23055,7 @@ var MemoryRunRepository = class {
     return { ...updated };
   }
   async claimQueuedRun(workerId) {
+    this.loadFromFile();
     const candidates = Array.from(this.runs.values()).filter((r2) => r2.state === "queued" && !r2.workerLock).sort((a2, b3) => a2.createdAt.getTime() - b3.createdAt.getTime());
     if (candidates.length === 0 || !candidates[0]) return null;
     const run2 = candidates[0];
@@ -22901,6 +23072,7 @@ var MemoryRunRepository = class {
     return { ...updated };
   }
   async recordHeartbeat(runId, workerId) {
+    this.loadFromFile();
     const run2 = this.runs.get(runId);
     if (!run2) return;
     if (run2.workerLock !== workerId) return;
@@ -22909,6 +23081,7 @@ var MemoryRunRepository = class {
     this.saveToFile();
   }
   async releaseRunLock(runId, workerId, nextState) {
+    this.loadFromFile();
     const run2 = this.runs.get(runId);
     if (!run2) return;
     if (run2.workerLock !== workerId) return;
@@ -22920,10 +23093,12 @@ var MemoryRunRepository = class {
     this.saveToFile();
   }
   async recoverStaleRuns(staleTimeoutMs) {
+    this.loadFromFile();
     const cutoff = Date.now() - staleTimeoutMs;
     let recovered = 0;
     for (const run2 of this.runs.values()) {
       if (run2.state === "running" && run2.workerLock) {
+        const prevWorker = run2.workerLock;
         const lastBeat = run2.workerHeartbeat ? run2.workerHeartbeat.getTime() : run2.updatedAt.getTime();
         if (lastBeat < cutoff) {
           run2.state = "failed";
@@ -22936,7 +23111,7 @@ var MemoryRunRepository = class {
             event_type: "worker_timeout_recovered",
             payload: {
               reason: `Run timed out with no heartbeat for ${Math.round(staleTimeoutMs / 1e3)}s`,
-              previousWorker: run2.workerLock
+              previousWorker: prevWorker
             }
           });
         }
@@ -22948,6 +23123,7 @@ var MemoryRunRepository = class {
     return recovered;
   }
   async addEvent(runId, event) {
+    this.loadFromFile();
     let list = this.events.get(runId);
     if (!list) {
       list = [];
@@ -22964,25 +23140,68 @@ var MemoryRunRepository = class {
       timestamp: event.timestamp ?? (/* @__PURE__ */ new Date()).toISOString()
     };
     list.push(fullEvent);
-    this.emitter.emit(`events:${runId}`, fullEvent);
+    this.lastEmittedSeq.set(runId, Math.max(this.lastEmittedSeq.get(runId) ?? 0, seq));
     this.saveToFile();
+    this.emitter.emit(`events:${runId}`, fullEvent);
     return fullEvent;
   }
   async getEvents(runId) {
+    this.loadFromFile();
     const list = this.events.get(runId) || [];
     return [...list].sort((a2, b3) => a2.seq - b3.seq);
   }
   subscribeEvents(runId, listener) {
     const eventName = `events:${runId}`;
+    this.loadFromFile();
+    const existing = this.events.get(runId) || [];
+    const maxExistingSeq = existing.reduce((max, ev) => Math.max(max, ev.seq), 0);
+    if ((this.lastEmittedSeq.get(runId) ?? 0) < maxExistingSeq) {
+      this.lastEmittedSeq.set(runId, maxExistingSeq);
+    }
     this.emitter.on(eventName, listener);
+    if (this.persistPath && !this.pollTimers.has(runId)) {
+      const timer2 = setInterval(() => {
+        this.loadFromFile();
+        const currentList = this.events.get(runId) || [];
+        const sorted = [...currentList].sort((a2, b3) => a2.seq - b3.seq);
+        const lastSeq = this.lastEmittedSeq.get(runId) ?? 0;
+        for (const ev of sorted) {
+          if (ev.seq > lastSeq) {
+            this.lastEmittedSeq.set(runId, ev.seq);
+            this.emitter.emit(eventName, ev);
+          }
+        }
+      }, 100);
+      if (typeof timer2.unref === "function") timer2.unref();
+      this.pollTimers.set(runId, timer2);
+    }
     return () => {
       this.emitter.off(eventName, listener);
+      if (this.emitter.listenerCount(eventName) === 0) {
+        const timer2 = this.pollTimers.get(runId);
+        if (timer2) {
+          clearInterval(timer2);
+          this.pollTimers.delete(runId);
+        }
+      }
     };
   }
   // Clear everything for isolated unit tests
   clear() {
     this.runs.clear();
     this.events.clear();
+    this.rateLimits.clear();
+    this.lastEmittedSeq.clear();
+    for (const timer2 of this.pollTimers.values()) {
+      clearInterval(timer2);
+    }
+    this.pollTimers.clear();
+    if (this.persistPath && fs4.existsSync(this.persistPath)) {
+      try {
+        fs4.unlinkSync(this.persistPath);
+      } catch {
+      }
+    }
   }
 };
 var PostgresRunRepository = class {
@@ -23172,16 +23391,16 @@ function getRunRepository() {
     currentRepo = new PostgresRunRepository(createDb(dbUrl));
     return currentRepo;
   }
-  const persistPath = path.resolve(process.env.REPLAY_DATA_DIR || REPO_ROOT_DATA(), "artifacts/runs.json");
+  const persistPath = path2.resolve(process.env.REPLAY_DATA_DIR || REPO_ROOT_DATA(), "artifacts/runs.json");
   currentRepo = new MemoryRunRepository({ persistPath });
   return currentRepo;
 }
 
 // src/worker.ts
-var import_node_fs2 = require("node:fs");
-var fs14 = __toESM(require("node:fs/promises"), 1);
-var path12 = __toESM(require("node:path"), 1);
-var import_node_crypto3 = require("node:crypto");
+var import_node_fs3 = require("node:fs");
+var fs16 = __toESM(require("node:fs/promises"), 1);
+var path13 = __toESM(require("node:path"), 1);
+var import_node_crypto4 = require("node:crypto");
 var import_dotenv = __toESM(require_main(), 1);
 
 // ../../node_modules/.pnpm/openai@4.104.0_zod@3.25.76/node_modules/openai/internal/qs/formats.mjs
@@ -23742,7 +23961,7 @@ init_File();
 // ../../node_modules/.pnpm/openai@4.104.0_zod@3.25.76/node_modules/openai/_shims/node-runtime.mjs
 var import_agentkeepalive = __toESM(require_agentkeepalive(), 1);
 var import_abort_controller = __toESM(require_abort_controller(), 1);
-var import_node_fs = require("node:fs");
+var import_node_fs2 = require("node:fs");
 
 // ../../node_modules/.pnpm/form-data-encoder@1.7.2/node_modules/form-data-encoder/lib/esm/util/createBoundary.js
 var alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -23931,13 +24150,13 @@ var MultipartBody = class {
 // ../../node_modules/.pnpm/openai@4.104.0_zod@3.25.76/node_modules/openai/_shims/node-runtime.mjs
 var import_web = require("node:stream/web");
 var fileFromPathWarned = false;
-async function fileFromPath3(path14, ...args) {
+async function fileFromPath3(path15, ...args) {
   const { fileFromPath: _fileFromPath } = await Promise.resolve().then(() => (init_fileFromPath(), fileFromPath_exports));
   if (!fileFromPathWarned) {
-    console.warn(`fileFromPath is deprecated; use fs.createReadStream(${JSON.stringify(path14)}) instead`);
+    console.warn(`fileFromPath is deprecated; use fs.createReadStream(${JSON.stringify(path15)}) instead`);
     fileFromPathWarned = true;
   }
-  return await _fileFromPath(path14, ...args);
+  return await _fileFromPath(path15, ...args);
 }
 var defaultHttpAgent = new import_agentkeepalive.default({ keepAlive: true, timeout: 5 * 60 * 1e3 });
 var defaultHttpsAgent = new import_agentkeepalive.default.HttpsAgent({ keepAlive: true, timeout: 5 * 60 * 1e3 });
@@ -23969,7 +24188,7 @@ function getRuntime() {
     getMultipartRequestOptions: getMultipartRequestOptions2,
     getDefaultAgent: (url) => url.startsWith("https") ? defaultHttpsAgent : defaultHttpAgent,
     fileFromPath: fileFromPath3,
-    isFsReadStream: (value) => value instanceof import_node_fs.ReadStream
+    isFsReadStream: (value) => value instanceof import_node_fs2.ReadStream
   };
 }
 
@@ -24618,8 +24837,8 @@ function _addRequestID(value, response) {
 }
 var APIPromise = class _APIPromise extends Promise {
   constructor(responsePromise, parseResponse2 = defaultParseResponse) {
-    super((resolve12) => {
-      resolve12(null);
+    super((resolve13) => {
+      resolve13(null);
     });
     this.responsePromise = responsePromise;
     this.parseResponse = parseResponse2;
@@ -24721,29 +24940,29 @@ var APIClient = class {
   defaultIdempotencyKey() {
     return `stainless-node-retry-${uuid4()}`;
   }
-  get(path14, opts) {
-    return this.methodRequest("get", path14, opts);
+  get(path15, opts) {
+    return this.methodRequest("get", path15, opts);
   }
-  post(path14, opts) {
-    return this.methodRequest("post", path14, opts);
+  post(path15, opts) {
+    return this.methodRequest("post", path15, opts);
   }
-  patch(path14, opts) {
-    return this.methodRequest("patch", path14, opts);
+  patch(path15, opts) {
+    return this.methodRequest("patch", path15, opts);
   }
-  put(path14, opts) {
-    return this.methodRequest("put", path14, opts);
+  put(path15, opts) {
+    return this.methodRequest("put", path15, opts);
   }
-  delete(path14, opts) {
-    return this.methodRequest("delete", path14, opts);
+  delete(path15, opts) {
+    return this.methodRequest("delete", path15, opts);
   }
-  methodRequest(method, path14, opts) {
+  methodRequest(method, path15, opts) {
     return this.request(Promise.resolve(opts).then(async (opts2) => {
       const body = opts2 && isBlobLike(opts2?.body) ? new DataView(await opts2.body.arrayBuffer()) : opts2?.body instanceof DataView ? opts2.body : opts2?.body instanceof ArrayBuffer ? new DataView(opts2.body) : opts2 && ArrayBuffer.isView(opts2?.body) ? new DataView(opts2.body.buffer) : opts2?.body;
-      return { method, path: path14, ...opts2, body };
+      return { method, path: path15, ...opts2, body };
     }));
   }
-  getAPIList(path14, Page2, opts) {
-    return this.requestAPIList(Page2, { method: "get", path: path14, ...opts });
+  getAPIList(path15, Page2, opts) {
+    return this.requestAPIList(Page2, { method: "get", path: path15, ...opts });
   }
   calculateContentLength(body) {
     if (typeof body === "string") {
@@ -24762,10 +24981,10 @@ var APIClient = class {
   }
   buildRequest(inputOptions, { retryCount = 0 } = {}) {
     const options = { ...inputOptions };
-    const { method, path: path14, query, headers = {} } = options;
+    const { method, path: path15, query, headers = {} } = options;
     const body = ArrayBuffer.isView(options.body) || options.__binaryRequest && typeof options.body === "string" ? options.body : isMultipartBody(options.body) ? options.body.body : options.body ? JSON.stringify(options.body, null, 2) : null;
     const contentLength = this.calculateContentLength(body);
-    const url = this.buildURL(path14, query);
+    const url = this.buildURL(path15, query);
     if ("timeout" in options)
       validatePositiveInteger("timeout", options.timeout);
     options.timeout = options.timeout ?? this.timeout;
@@ -24881,8 +25100,8 @@ var APIClient = class {
     const request = this.makeRequest(options, null);
     return new PagePromise(this, request, Page2);
   }
-  buildURL(path14, query) {
-    const url = isAbsoluteURL(path14) ? new URL(path14) : new URL(this.baseURL + (this.baseURL.endsWith("/") && path14.startsWith("/") ? path14.slice(1) : path14));
+  buildURL(path15, query) {
+    const url = isAbsoluteURL(path15) ? new URL(path15) : new URL(this.baseURL + (this.baseURL.endsWith("/") && path15.startsWith("/") ? path15.slice(1) : path15));
     const defaultQuery = this.defaultQuery();
     if (!isEmptyObj(defaultQuery)) {
       query = { ...defaultQuery, ...query };
@@ -25194,7 +25413,7 @@ var startsWithSchemeRegexp = /^[a-z][a-z0-9+.-]*:/i;
 var isAbsoluteURL = (url) => {
   return startsWithSchemeRegexp.test(url);
 };
-var sleep = (ms) => new Promise((resolve12) => setTimeout(resolve12, ms));
+var sleep = (ms) => new Promise((resolve13) => setTimeout(resolve13, ms));
 var validatePositiveInteger = (name, n2) => {
   if (typeof n2 !== "number" || !Number.isInteger(n2)) {
     throw new OpenAIError(`${name} must be an integer`);
@@ -25627,12 +25846,12 @@ var EventStream = class {
     _EventStream_errored.set(this, false);
     _EventStream_aborted.set(this, false);
     _EventStream_catchingPromiseCreated.set(this, false);
-    __classPrivateFieldSet7(this, _EventStream_connectedPromise, new Promise((resolve12, reject) => {
-      __classPrivateFieldSet7(this, _EventStream_resolveConnectedPromise, resolve12, "f");
+    __classPrivateFieldSet7(this, _EventStream_connectedPromise, new Promise((resolve13, reject) => {
+      __classPrivateFieldSet7(this, _EventStream_resolveConnectedPromise, resolve13, "f");
       __classPrivateFieldSet7(this, _EventStream_rejectConnectedPromise, reject, "f");
     }), "f");
-    __classPrivateFieldSet7(this, _EventStream_endPromise, new Promise((resolve12, reject) => {
-      __classPrivateFieldSet7(this, _EventStream_resolveEndPromise, resolve12, "f");
+    __classPrivateFieldSet7(this, _EventStream_endPromise, new Promise((resolve13, reject) => {
+      __classPrivateFieldSet7(this, _EventStream_resolveEndPromise, resolve13, "f");
       __classPrivateFieldSet7(this, _EventStream_rejectEndPromise, reject, "f");
     }), "f");
     __classPrivateFieldGet8(this, _EventStream_connectedPromise, "f").catch(() => {
@@ -25716,11 +25935,11 @@ var EventStream = class {
    *   const message = await stream.emitted('message') // rejects if the stream errors
    */
   emitted(event) {
-    return new Promise((resolve12, reject) => {
+    return new Promise((resolve13, reject) => {
       __classPrivateFieldSet7(this, _EventStream_catchingPromiseCreated, true, "f");
       if (event !== "error")
         this.once("error", reject);
-      this.once(event, resolve12);
+      this.once(event, resolve13);
     });
   }
   async done() {
@@ -25873,7 +26092,7 @@ var AssistantStream = class _AssistantStream extends EventStream {
           if (done) {
             return { value: void 0, done: true };
           }
-          return new Promise((resolve12, reject) => readQueue.push({ resolve: resolve12, reject })).then((chunk2) => chunk2 ? { value: chunk2, done: false } : { value: void 0, done: true });
+          return new Promise((resolve13, reject) => readQueue.push({ resolve: resolve13, reject })).then((chunk2) => chunk2 ? { value: chunk2, done: false } : { value: void 0, done: true });
         }
         const chunk = pushQueue.shift();
         return { value: chunk, done: false };
@@ -27491,7 +27710,7 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
           if (done) {
             return { value: void 0, done: true };
           }
-          return new Promise((resolve12, reject) => readQueue.push({ resolve: resolve12, reject })).then((chunk2) => chunk2 ? { value: chunk2, done: false } : { value: void 0, done: true });
+          return new Promise((resolve13, reject) => readQueue.push({ resolve: resolve13, reject })).then((chunk2) => chunk2 ? { value: chunk2, done: false } : { value: void 0, done: true });
         }
         const chunk = pushQueue.shift();
         return { value: chunk, done: false };
@@ -29142,7 +29361,7 @@ var ResponseStream = class _ResponseStream extends EventStream {
           if (done) {
             return { value: void 0, done: true };
           }
-          return new Promise((resolve12, reject) => readQueue.push({ resolve: resolve12, reject })).then((event2) => event2 ? { value: event2, done: false } : { value: void 0, done: true });
+          return new Promise((resolve13, reject) => readQueue.push({ resolve: resolve13, reject })).then((event2) => event2 ? { value: event2, done: false } : { value: void 0, done: true });
         }
         const event = pushQueue.shift();
         return { value: event, done: false };
@@ -30011,8 +30230,8 @@ var LlmClient = class {
 };
 
 // ../../packages/agents/dist/watcher.js
-var fs4 = __toESM(require("node:fs"), 1);
-var path2 = __toESM(require("node:path"), 1);
+var fs6 = __toESM(require("node:fs"), 1);
+var path3 = __toESM(require("node:path"), 1);
 
 // ../../packages/shared/dist/schemas.js
 var StepSchema = external_exports.object({
@@ -30411,17 +30630,17 @@ Return JSON with the following exact shape:
 var WATCHER_PROMPT_VERSION = "v1";
 var moduleDir = false ? moduleDirOf((void 0).url) : void 0;
 var PROMPT_CANDIDATES = [
-  ...moduleDir ? [path2.join(moduleDir, "../prompts/watcher.md"), path2.join(moduleDir, "../../prompts/watcher.md")] : [],
+  ...moduleDir ? [path3.join(moduleDir, "../prompts/watcher.md"), path3.join(moduleDir, "../../prompts/watcher.md")] : [],
   // CJS bundles have no import.meta: search from the working directory.
-  path2.resolve(process.cwd(), "packages/agents/prompts/watcher.md"),
-  path2.resolve(process.cwd(), "prompts/watcher.md"),
-  path2.resolve(process.env.REPLAY_PROMPTS_DIR || "", "watcher.md")
+  path3.resolve(process.cwd(), "packages/agents/prompts/watcher.md"),
+  path3.resolve(process.cwd(), "prompts/watcher.md"),
+  path3.resolve(process.env.REPLAY_PROMPTS_DIR || "", "watcher.md")
 ];
 function loadWatcherPrompt() {
   for (const p2 of PROMPT_CANDIDATES) {
     try {
-      if (fs4.existsSync(p2))
-        return fs4.readFileSync(p2, "utf8");
+      if (fs6.existsSync(p2))
+        return fs6.readFileSync(p2, "utf8");
     } catch {
     }
   }
@@ -30460,8 +30679,8 @@ async function analyzeBugVideo(input, deps = {}) {
 }
 
 // ../../packages/agents/dist/packer.js
-var fs5 = __toESM(require("node:fs/promises"), 1);
-var path3 = __toESM(require("node:path"), 1);
+var fs7 = __toESM(require("node:fs/promises"), 1);
+var path4 = __toESM(require("node:path"), 1);
 var ALWAYS_IGNORED_DIRS = /* @__PURE__ */ new Set([
   ".git",
   "node_modules",
@@ -30565,7 +30784,7 @@ var SECRET_PATTERNS2 = [
   /(^[ \t]*(?:export[ \t]+)?[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY)[A-Z0-9_]*\s*=\s*['"]?)([^\s'"#]{8,})(['"]?)/gm
 ];
 function toPosix(p2) {
-  return p2.split(path3.sep).join("/");
+  return p2.split(path4.sep).join("/");
 }
 function isSecretFileName(baseName) {
   const lower = baseName.toLowerCase();
@@ -30601,7 +30820,7 @@ function isIgnoredFileName(baseName, includeTests) {
 async function loadGitignoreNames(repoRoot) {
   const out = /* @__PURE__ */ new Set();
   try {
-    const raw2 = await fs5.readFile(path3.join(repoRoot, ".gitignore"), "utf8");
+    const raw2 = await fs7.readFile(path4.join(repoRoot, ".gitignore"), "utf8");
     for (const line2 of raw2.split(/\r?\n/)) {
       const trimmed = line2.trim();
       if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("!"))
@@ -30648,18 +30867,18 @@ async function packRepository(repoRoot, options = {}) {
   const maxFileBytes = options.maxFileBytes ?? 64 * 1024;
   const maxTotalChars = options.maxTotalChars ?? 4e5;
   const includeTests = options.includeTests ?? false;
-  const stat4 = await fs5.stat(repoRoot).catch(() => null);
+  const stat4 = await fs7.stat(repoRoot).catch(() => null);
   if (!stat4 || !stat4.isDirectory()) {
     throw new Error(`Repository root not found or not a directory: ${repoRoot}`);
   }
-  const realRepoRoot = await fs5.realpath(repoRoot);
+  const realRepoRoot = await fs7.realpath(repoRoot);
   const gitignoreEntries = await loadGitignoreNames(realRepoRoot);
   const skippedFiles = [];
   const candidateRelPaths = [];
   async function walk(currentDir, relDir) {
     let entries;
     try {
-      entries = await fs5.readdir(currentDir, { withFileTypes: true });
+      entries = await fs7.readdir(currentDir, { withFileTypes: true });
     } catch {
       if (relDir)
         skippedFiles.push({ path: relDir, reason: "unreadable" });
@@ -30668,23 +30887,23 @@ async function packRepository(repoRoot, options = {}) {
     entries.sort((a2, b3) => a2.name.localeCompare(b3.name));
     for (const entry of entries) {
       const relPath = relDir ? `${relDir}/${entry.name}` : entry.name;
-      const fullPath = path3.join(currentDir, entry.name);
+      const fullPath = path4.join(currentDir, entry.name);
       if (relPath.startsWith("..") || relPath.split("/").includes("..")) {
         skippedFiles.push({ path: relPath, reason: "symlink_escaped" });
         continue;
       }
-      const lstat2 = await fs5.lstat(fullPath).catch(() => null);
+      const lstat2 = await fs7.lstat(fullPath).catch(() => null);
       if (!lstat2) {
         skippedFiles.push({ path: relPath, reason: "unreadable" });
         continue;
       }
       if (lstat2.isSymbolicLink()) {
-        const realTarget = await fs5.realpath(fullPath).catch(() => null);
-        if (!realTarget || realTarget !== realRepoRoot && !realTarget.startsWith(realRepoRoot + path3.sep)) {
+        const realTarget = await fs7.realpath(fullPath).catch(() => null);
+        if (!realTarget || realTarget !== realRepoRoot && !realTarget.startsWith(realRepoRoot + path4.sep)) {
           skippedFiles.push({ path: relPath, reason: "symlink_escaped" });
           continue;
         }
-        const targetStat = await fs5.stat(realTarget).catch(() => null);
+        const targetStat = await fs7.stat(realTarget).catch(() => null);
         if (!targetStat || targetStat.isDirectory()) {
           skippedFiles.push({ path: relPath, reason: "symlink_escaped" });
           continue;
@@ -30709,7 +30928,7 @@ async function packRepository(repoRoot, options = {}) {
         skippedFiles.push({ path: relPath, reason: "ignored_file" });
         continue;
       }
-      const ext = path3.extname(entry.name).toLowerCase();
+      const ext = path4.extname(entry.name).toLowerCase();
       if (BINARY_EXTENSIONS.has(ext)) {
         skippedFiles.push({ path: relPath, reason: "binary" });
         continue;
@@ -30732,10 +30951,10 @@ async function packRepository(repoRoot, options = {}) {
       skippedFiles.push({ path: relPath, reason: "max_files_exceeded" });
       continue;
     }
-    const fullPath = path3.join(realRepoRoot, ...relPath.split("/"));
+    const fullPath = path4.join(realRepoRoot, ...relPath.split("/"));
     let rawBuf;
     try {
-      rawBuf = await fs5.readFile(fullPath);
+      rawBuf = await fs7.readFile(fullPath);
     } catch {
       skippedFiles.push({ path: relPath, reason: "unreadable" });
       continue;
@@ -30813,21 +31032,21 @@ ${f2.numberedContent}`);
 }
 
 // ../../packages/agents/dist/locator.js
-var fs6 = __toESM(require("node:fs"), 1);
-var path4 = __toESM(require("node:path"), 1);
+var fs8 = __toESM(require("node:fs"), 1);
+var path5 = __toESM(require("node:path"), 1);
 var LOCATOR_PROMPT_VERSION = "v1";
 var moduleDir2 = false ? moduleDirOf((void 0).url) : void 0;
 var PROMPT_CANDIDATES2 = [
-  ...moduleDir2 ? [path4.join(moduleDir2, "../prompts/locator.md"), path4.join(moduleDir2, "../../prompts/locator.md")] : [],
-  path4.resolve(process.cwd(), "packages/agents/prompts/locator.md"),
-  path4.resolve(process.cwd(), "prompts/locator.md"),
-  path4.resolve(process.env.REPLAY_PROMPTS_DIR || "", "locator.md")
+  ...moduleDir2 ? [path5.join(moduleDir2, "../prompts/locator.md"), path5.join(moduleDir2, "../../prompts/locator.md")] : [],
+  path5.resolve(process.cwd(), "packages/agents/prompts/locator.md"),
+  path5.resolve(process.cwd(), "prompts/locator.md"),
+  path5.resolve(process.env.REPLAY_PROMPTS_DIR || "", "locator.md")
 ];
 function loadLocatorPrompt() {
   for (const p2 of PROMPT_CANDIDATES2) {
     try {
-      if (fs6.existsSync(p2))
-        return fs6.readFileSync(p2, "utf8");
+      if (fs8.existsSync(p2))
+        return fs8.readFileSync(p2, "utf8");
     } catch {
     }
   }
@@ -30948,13 +31167,13 @@ async function locateSuspects(input, deps = {}) {
 }
 
 // ../../packages/agents/dist/reproducer.js
-var fs8 = __toESM(require("node:fs"), 1);
-var path6 = __toESM(require("node:path"), 1);
+var fs10 = __toESM(require("node:fs"), 1);
+var path7 = __toESM(require("node:path"), 1);
 
 // ../../packages/sandbox/dist/index.js
-var fs7 = __toESM(require("node:fs"), 1);
+var fs9 = __toESM(require("node:fs"), 1);
 var os2 = __toESM(require("node:os"), 1);
-var path5 = __toESM(require("node:path"), 1);
+var path6 = __toESM(require("node:path"), 1);
 var import_node_child_process = require("node:child_process");
 var import_node_util = require("node:util");
 var execFileAsync = (0, import_node_util.promisify)(import_node_child_process.execFile);
@@ -31047,45 +31266,45 @@ var IsolatedWorkspaceSandbox = class {
         throw new SandboxUnavailableError("Host sandbox execution is disabled. Enable Docker or set REPLAY_ALLOW_HOST_SANDBOX=1 for local development.");
       }
     }
-    const absSourceDir = path5.resolve(sourceDir);
-    const tmp = await fs7.promises.mkdtemp(path5.join(os2.tmpdir(), "replay-workspace-"));
+    const absSourceDir = path6.resolve(sourceDir);
+    const tmp = await fs9.promises.mkdtemp(path6.join(os2.tmpdir(), "replay-workspace-"));
     try {
-      const entries = await fs7.promises.readdir(absSourceDir, { withFileTypes: true });
+      const entries = await fs9.promises.readdir(absSourceDir, { withFileTypes: true });
       for (const entry of entries) {
         if (SKIPPED_SOURCE_ENTRIES.has(entry.name) || entry.name.startsWith(".env")) {
           continue;
         }
-        const s2 = path5.join(absSourceDir, entry.name);
-        const d2 = path5.join(tmp, entry.name);
+        const s2 = path6.join(absSourceDir, entry.name);
+        const d2 = path6.join(tmp, entry.name);
         if (entry.isSymbolicLink()) {
           continue;
         } else if (entry.isDirectory()) {
-          await fs7.promises.cp(s2, d2, { recursive: true });
+          await fs9.promises.cp(s2, d2, { recursive: true });
         } else if (entry.isFile()) {
-          await fs7.promises.copyFile(s2, d2);
+          await fs9.promises.copyFile(s2, d2);
         }
       }
-      const srcDist = path5.join(absSourceDir, "dist");
-      if (fs7.existsSync(srcDist)) {
-        await fs7.promises.cp(srcDist, path5.join(tmp, "dist"), { recursive: true });
+      const srcDist = path6.join(absSourceDir, "dist");
+      if (fs9.existsSync(srcDist)) {
+        await fs9.promises.cp(srcDist, path6.join(tmp, "dist"), { recursive: true });
       }
-      const srcNodeModules = path5.join(absSourceDir, "node_modules");
-      if (!useDocker && fs7.existsSync(srcNodeModules)) {
-        await fs7.promises.symlink(srcNodeModules, path5.join(tmp, "node_modules"));
+      const srcNodeModules = path6.join(absSourceDir, "node_modules");
+      if (!useDocker && fs9.existsSync(srcNodeModules)) {
+        await fs9.promises.symlink(srcNodeModules, path6.join(tmp, "node_modules"));
       }
     } catch (err) {
-      await fs7.promises.rm(tmp, { recursive: true, force: true }).catch(() => {
+      await fs9.promises.rm(tmp, { recursive: true, force: true }).catch(() => {
       });
       throw err;
     }
     const timeoutMs = options.timeoutMs ?? 6e4;
     if (useDocker) {
       const image = options.image ?? process.env.REPLAY_SANDBOX_IMAGE ?? "mcr.microsoft.com/playwright:v1.50.1-noble";
-      const srcNodeModules = path5.join(absSourceDir, "node_modules");
+      const srcNodeModules = path6.join(absSourceDir, "node_modules");
       const bindMounts = [
         { hostPath: tmp, containerPath: "/workspace", readOnly: false }
       ];
-      if (fs7.existsSync(srcNodeModules)) {
+      if (fs9.existsSync(srcNodeModules)) {
         bindMounts.push({ hostPath: srcNodeModules, containerPath: "/workspace/node_modules", readOnly: true });
       }
       return {
@@ -31117,7 +31336,7 @@ var IsolatedWorkspaceSandbox = class {
           };
         },
         async cleanup() {
-          await fs7.promises.rm(tmp, { recursive: true, force: true }).catch(() => {
+          await fs9.promises.rm(tmp, { recursive: true, force: true }).catch(() => {
           });
         }
       };
@@ -31155,7 +31374,7 @@ var IsolatedWorkspaceSandbox = class {
         }
       },
       async cleanup() {
-        await fs7.promises.rm(tmp, { recursive: true, force: true }).catch(() => {
+        await fs9.promises.rm(tmp, { recursive: true, force: true }).catch(() => {
         });
       }
     };
@@ -31170,7 +31389,7 @@ var FORBIDDEN_MOUNT_PATTERNS = [
   /^\/(etc|root|proc|sys|dev|var\/run)(\/|$)/
 ];
 function validateBindMount(mount) {
-  if (!mount.hostPath || !path5.isAbsolute(mount.hostPath) || mount.hostPath === "/") {
+  if (!mount.hostPath || !path6.isAbsolute(mount.hostPath) || mount.hostPath === "/") {
     throw new SandboxUnavailableError(`Rejected unsafe bind mount hostPath: ${mount.hostPath}`);
   }
   if (!mount.containerPath || !mount.containerPath.startsWith("/") || mount.containerPath === "/") {
@@ -31282,16 +31501,16 @@ var DockerSandbox = class {
 var REPRODUCER_PROMPT_VERSION = "v1";
 var moduleDir3 = false ? moduleDirOf((void 0).url) : void 0;
 var PROMPT_CANDIDATES3 = [
-  ...moduleDir3 ? [path6.join(moduleDir3, "../prompts/reproducer.md"), path6.join(moduleDir3, "../../prompts/reproducer.md")] : [],
-  path6.resolve(process.cwd(), "packages/agents/prompts/reproducer.md"),
-  path6.resolve(process.cwd(), "prompts/reproducer.md"),
-  path6.resolve(process.env.REPLAY_PROMPTS_DIR || "", "reproducer.md")
+  ...moduleDir3 ? [path7.join(moduleDir3, "../prompts/reproducer.md"), path7.join(moduleDir3, "../../prompts/reproducer.md")] : [],
+  path7.resolve(process.cwd(), "packages/agents/prompts/reproducer.md"),
+  path7.resolve(process.cwd(), "prompts/reproducer.md"),
+  path7.resolve(process.env.REPLAY_PROMPTS_DIR || "", "reproducer.md")
 ];
 function loadReproducerPrompt() {
   for (const p2 of PROMPT_CANDIDATES3) {
     try {
-      if (fs8.existsSync(p2))
-        return fs8.readFileSync(p2, "utf8");
+      if (fs10.existsSync(p2))
+        return fs10.readFileSync(p2, "utf8");
     } catch {
     }
   }
@@ -31435,16 +31654,17 @@ ${stderr}`;
 async function executeReproductionTest(testCode, options) {
   const { demoShopRoot } = options;
   const startTime = Date.now();
-  const sandbox = await IsolatedWorkspaceSandbox.create(demoShopRoot);
+  const createSandbox = options.createSandbox ?? ((root) => IsolatedWorkspaceSandbox.create(root));
+  const sandbox = await createSandbox(demoShopRoot);
   let stdout = "";
   let stderr = "";
   let exitCode = 0;
   try {
     const sandboxPort = "5179";
     const sandboxTestCode = testCode.replace(/https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/g, `http://127.0.0.1:${sandboxPort}`);
-    const reproDir = path6.join(sandbox.workDir, "tests", "repro");
-    await fs8.promises.mkdir(reproDir, { recursive: true });
-    await fs8.promises.writeFile(path6.join(reproDir, "generated.spec.ts"), sandboxTestCode, "utf8");
+    const reproDir = path7.join(sandbox.workDir, "tests", "repro");
+    await fs10.promises.mkdir(reproDir, { recursive: true });
+    await fs10.promises.writeFile(path7.join(reproDir, "generated.spec.ts"), sandboxTestCode, "utf8");
     const build = await sandbox.exec("npx", ["vite", "build"], { SANDBOX_TEST: "1" });
     if (build.exitCode !== 0) {
       stdout = build.stdout;
@@ -31483,21 +31703,21 @@ async function executeReproductionTest(testCode, options) {
 }
 
 // ../../packages/agents/dist/verifier.js
-var fs9 = __toESM(require("node:fs"), 1);
-var path7 = __toESM(require("node:path"), 1);
+var fs11 = __toESM(require("node:fs"), 1);
+var path8 = __toESM(require("node:path"), 1);
 var VERIFIER_PROMPT_VERSION = "v1";
 var moduleDir4 = false ? moduleDirOf((void 0).url) : void 0;
 var PROMPT_CANDIDATES4 = [
-  ...moduleDir4 ? [path7.join(moduleDir4, "../prompts/verifier.md"), path7.join(moduleDir4, "../../prompts/verifier.md")] : [],
-  path7.resolve(process.cwd(), "packages/agents/prompts/verifier.md"),
-  path7.resolve(process.cwd(), "prompts/verifier.md"),
-  path7.resolve(process.env.REPLAY_PROMPTS_DIR || "", "verifier.md")
+  ...moduleDir4 ? [path8.join(moduleDir4, "../prompts/verifier.md"), path8.join(moduleDir4, "../../prompts/verifier.md")] : [],
+  path8.resolve(process.cwd(), "packages/agents/prompts/verifier.md"),
+  path8.resolve(process.cwd(), "prompts/verifier.md"),
+  path8.resolve(process.env.REPLAY_PROMPTS_DIR || "", "verifier.md")
 ];
 function loadVerifierPrompt() {
   for (const p2 of PROMPT_CANDIDATES4) {
     try {
-      if (fs9.existsSync(p2))
-        return fs9.readFileSync(p2, "utf8");
+      if (fs11.existsSync(p2))
+        return fs11.readFileSync(p2, "utf8");
     } catch {
     }
   }
@@ -31648,21 +31868,21 @@ async function verifyReproduction(input, deps = {}) {
 }
 
 // ../../packages/agents/dist/fixer.js
-var fs10 = __toESM(require("node:fs"), 1);
-var path8 = __toESM(require("node:path"), 1);
+var fs12 = __toESM(require("node:fs"), 1);
+var path9 = __toESM(require("node:path"), 1);
 var FIXER_PROMPT_VERSION = "v1";
 var moduleDir5 = false ? moduleDirOf((void 0).url) : void 0;
 var PROMPT_CANDIDATES5 = [
-  ...moduleDir5 ? [path8.join(moduleDir5, "../prompts/fixer.md"), path8.join(moduleDir5, "../../prompts/fixer.md")] : [],
-  path8.resolve(process.cwd(), "packages/agents/prompts/fixer.md"),
-  path8.resolve(process.cwd(), "prompts/fixer.md"),
-  path8.resolve(process.env.REPLAY_PROMPTS_DIR || "", "fixer.md")
+  ...moduleDir5 ? [path9.join(moduleDir5, "../prompts/fixer.md"), path9.join(moduleDir5, "../../prompts/fixer.md")] : [],
+  path9.resolve(process.cwd(), "packages/agents/prompts/fixer.md"),
+  path9.resolve(process.cwd(), "prompts/fixer.md"),
+  path9.resolve(process.env.REPLAY_PROMPTS_DIR || "", "fixer.md")
 ];
 function loadFixerPrompt() {
   for (const p2 of PROMPT_CANDIDATES5) {
     try {
-      if (fs10.existsSync(p2))
-        return fs10.readFileSync(p2, "utf8");
+      if (fs12.existsSync(p2))
+        return fs12.readFileSync(p2, "utf8");
     } catch {
     }
   }
@@ -31720,7 +31940,7 @@ function validateCandidateRelativePathSyntax(relativePath) {
   if (/^(\\\\+|\/\/+)/.test(relativePath)) {
     return `Rejected UNC path outside the workspace: ${relativePath}`;
   }
-  if (relativePath.startsWith("/") || relativePath.startsWith("\\") || path8.isAbsolute(relativePath)) {
+  if (relativePath.startsWith("/") || relativePath.startsWith("\\") || path9.isAbsolute(relativePath)) {
     return `Rejected absolute path outside the workspace: ${relativePath}`;
   }
   if (relativePath.includes("\\")) {
@@ -31834,7 +32054,7 @@ var PROTECTED_PATH_PATTERNS = [
   /(^|\/)docker-compose(\..+)?\.ya?ml$/i
 ];
 function checkProtectedRelativePath(relFromRoot, rawInput) {
-  const parts = relFromRoot.split(path8.sep);
+  const parts = relFromRoot.split(path9.sep);
   if (parts.some((p2) => PROTECTED_PATH_PARTS.includes(p2))) {
     throw new Error(`Rejected protected path: ${rawInput}`);
   }
@@ -31846,10 +32066,10 @@ function checkProtectedRelativePath(relFromRoot, rawInput) {
 function isStrictlyInsideRoot(rootReal, targetPath) {
   if (targetPath === rootReal)
     return false;
-  const rel = path8.relative(rootReal, targetPath);
-  if (!rel || rel.startsWith("..") || path8.isAbsolute(rel))
+  const rel = path9.relative(rootReal, targetPath);
+  if (!rel || rel.startsWith("..") || path9.isAbsolute(rel))
     return false;
-  return targetPath.startsWith(rootReal + path8.sep);
+  return targetPath.startsWith(rootReal + path9.sep);
 }
 async function resolveSafeWorkspacePath(workDir, relativePath) {
   if (typeof workDir !== "string" || workDir.trim().length === 0 || workDir.includes("\0")) {
@@ -31859,21 +32079,21 @@ async function resolveSafeWorkspacePath(workDir, relativePath) {
   if (syntaxError) {
     throw new Error(syntaxError);
   }
-  const rootReal = await fs10.promises.realpath(workDir);
-  const candidate = path8.resolve(rootReal, relativePath);
+  const rootReal = await fs12.promises.realpath(workDir);
+  const candidate = path9.resolve(rootReal, relativePath);
   if (!isStrictlyInsideRoot(rootReal, candidate)) {
     throw new Error(`Rejected path outside the workspace: ${relativePath}`);
   }
-  const relFromRoot = path8.relative(rootReal, candidate);
+  const relFromRoot = path9.relative(rootReal, candidate);
   checkProtectedRelativePath(relFromRoot, relativePath);
-  const parts = relFromRoot.split(path8.sep);
+  const parts = relFromRoot.split(path9.sep);
   let existingAncestor = rootReal;
   let existingDepth = 0;
   for (let i2 = 0; i2 < parts.length; i2++) {
-    const curr = path8.join(rootReal, ...parts.slice(0, i2 + 1));
+    const curr = path9.join(rootReal, ...parts.slice(0, i2 + 1));
     let lst = null;
     try {
-      lst = await fs10.promises.lstat(curr);
+      lst = await fs12.promises.lstat(curr);
     } catch (err) {
       if (err?.code === "ENOENT") {
         break;
@@ -31881,11 +32101,11 @@ async function resolveSafeWorkspacePath(workDir, relativePath) {
       throw err;
     }
     if (lst.isSymbolicLink()) {
-      const linkReal = await fs10.promises.realpath(curr).catch(() => null);
+      const linkReal = await fs12.promises.realpath(curr).catch(() => null);
       if (!linkReal || !isStrictlyInsideRoot(rootReal, linkReal)) {
         throw new Error(`Rejected symlink escape outside the workspace: ${relativePath}`);
       }
-      const linkRel = path8.relative(rootReal, linkReal);
+      const linkRel = path9.relative(rootReal, linkReal);
       try {
         checkProtectedRelativePath(linkRel, relativePath);
       } catch {
@@ -31893,12 +32113,12 @@ async function resolveSafeWorkspacePath(workDir, relativePath) {
       }
     }
     if (i2 === parts.length - 1) {
-      const targetStat = await fs10.promises.stat(curr).catch(() => null);
+      const targetStat = await fs12.promises.stat(curr).catch(() => null);
       if (!targetStat || !targetStat.isFile()) {
         throw new Error(`Rejected non-file target: ${relativePath}`);
       }
     } else {
-      const dirStat = await fs10.promises.stat(curr).catch(() => null);
+      const dirStat = await fs12.promises.stat(curr).catch(() => null);
       if (!dirStat || !dirStat.isDirectory()) {
         throw new Error(`Rejected non-directory parent component: ${relativePath}`);
       }
@@ -31906,27 +32126,27 @@ async function resolveSafeWorkspacePath(workDir, relativePath) {
     existingAncestor = curr;
     existingDepth = i2 + 1;
   }
-  const ancestorReal = await fs10.promises.realpath(existingAncestor);
+  const ancestorReal = await fs12.promises.realpath(existingAncestor);
   if (ancestorReal !== rootReal && !isStrictlyInsideRoot(rootReal, ancestorReal)) {
     throw new Error(`Rejected parent directory symlink escape outside the workspace: ${relativePath}`);
   }
   if (ancestorReal !== rootReal) {
-    checkProtectedRelativePath(path8.relative(rootReal, ancestorReal), relativePath);
+    checkProtectedRelativePath(path9.relative(rootReal, ancestorReal), relativePath);
   }
   if (existingDepth === parts.length) {
-    const real2 = await fs10.promises.realpath(candidate).catch(() => null);
+    const real2 = await fs12.promises.realpath(candidate).catch(() => null);
     if (!real2 || !isStrictlyInsideRoot(rootReal, real2)) {
       throw new Error(`Rejected symlink escape outside the workspace: ${relativePath}`);
     }
-    checkProtectedRelativePath(path8.relative(rootReal, real2), relativePath);
+    checkProtectedRelativePath(path9.relative(rootReal, real2), relativePath);
     return real2;
   }
   const remainingParts = parts.slice(existingDepth);
-  const resolvedNewPath = path8.join(ancestorReal, ...remainingParts);
+  const resolvedNewPath = path9.join(ancestorReal, ...remainingParts);
   if (!isStrictlyInsideRoot(rootReal, resolvedNewPath)) {
     throw new Error(`Rejected path outside the workspace: ${relativePath}`);
   }
-  checkProtectedRelativePath(path8.relative(rootReal, resolvedNewPath), relativePath);
+  checkProtectedRelativePath(path9.relative(rootReal, resolvedNewPath), relativePath);
   return resolvedNewPath;
 }
 async function applyPatchToDirectory(workDir, output, options = {}) {
@@ -31937,9 +32157,9 @@ async function applyPatchToDirectory(workDir, output, options = {}) {
       throw new Error(`Rejected multi-file or mismatched diff target "${dp}" (expected "${output.target_file}")`);
     }
   }
-  const rootReal = await fs10.promises.realpath(workDir);
+  const rootReal = await fs12.promises.realpath(workDir);
   const fullPath = await resolveSafeWorkspacePath(workDir, output.target_file);
-  const lstat2 = await fs10.promises.lstat(fullPath).catch((err) => err?.code === "ENOENT" ? null : Promise.reject(err));
+  const lstat2 = await fs12.promises.lstat(fullPath).catch((err) => err?.code === "ENOENT" ? null : Promise.reject(err));
   if (lstat2?.isSymbolicLink()) {
     throw new Error(`Rejected symlink target at write boundary: ${output.target_file}`);
   }
@@ -31955,7 +32175,7 @@ async function applyPatchToDirectory(workDir, output, options = {}) {
     if (!lstat2.isFile()) {
       throw new Error(`Target file ${fullPath} is not a regular file`);
     }
-    originalContent = await fs10.promises.readFile(fullPath, "utf8");
+    originalContent = await fs12.promises.readFile(fullPath, "utf8");
   }
   let newContent = originalContent;
   if (isNewFile) {
@@ -32039,21 +32259,21 @@ async function applyPatchToDirectory(workDir, output, options = {}) {
     throw new Error(`Patch produced no content changes for ${output.target_file}`);
   }
   if (isNewFile) {
-    const parentDir = path8.dirname(fullPath);
-    await fs10.promises.mkdir(parentDir, { recursive: true });
-    const parentReal = await fs10.promises.realpath(parentDir);
+    const parentDir = path9.dirname(fullPath);
+    await fs12.promises.mkdir(parentDir, { recursive: true });
+    const parentReal = await fs12.promises.realpath(parentDir);
     if (parentReal !== rootReal && !isStrictlyInsideRoot(rootReal, parentReal)) {
       throw new Error(`Rejected parent directory escape at write boundary: ${output.target_file}`);
     }
   }
   const revalidatedPath = await resolveSafeWorkspacePath(workDir, output.target_file);
-  const preWriteLstat = await fs10.promises.lstat(revalidatedPath).catch((err) => err?.code === "ENOENT" ? null : Promise.reject(err));
+  const preWriteLstat = await fs12.promises.lstat(revalidatedPath).catch((err) => err?.code === "ENOENT" ? null : Promise.reject(err));
   if (preWriteLstat?.isSymbolicLink()) {
     throw new Error(`Rejected symlink target at write boundary: ${output.target_file}`);
   }
-  const noFollowFlag = typeof fs10.constants.O_NOFOLLOW === "number" ? fs10.constants.O_NOFOLLOW : 0;
-  const openFlags = fs10.constants.O_WRONLY | fs10.constants.O_TRUNC | (isNewFile ? fs10.constants.O_CREAT | fs10.constants.O_EXCL : 0) | noFollowFlag;
-  const fh = await fs10.promises.open(revalidatedPath, openFlags, 420);
+  const noFollowFlag = typeof fs12.constants.O_NOFOLLOW === "number" ? fs12.constants.O_NOFOLLOW : 0;
+  const openFlags = fs12.constants.O_WRONLY | fs12.constants.O_TRUNC | (isNewFile ? fs12.constants.O_CREAT | fs12.constants.O_EXCL : 0) | noFollowFlag;
+  const fh = await fs12.promises.open(revalidatedPath, openFlags, 420);
   try {
     await fh.writeFile(newContent, "utf8");
   } finally {
@@ -32068,21 +32288,21 @@ async function applyPatchToDirectory(workDir, output, options = {}) {
 }
 
 // ../../packages/agents/dist/reporter.js
-var fs11 = __toESM(require("node:fs"), 1);
-var path9 = __toESM(require("node:path"), 1);
+var fs13 = __toESM(require("node:fs"), 1);
+var path10 = __toESM(require("node:path"), 1);
 var REPORTER_PROMPT_VERSION = "v1";
 var moduleDir6 = false ? moduleDirOf((void 0).url) : void 0;
 var PROMPT_CANDIDATES6 = [
-  ...moduleDir6 ? [path9.join(moduleDir6, "../prompts/reporter.md"), path9.join(moduleDir6, "../../prompts/reporter.md")] : [],
-  path9.resolve(process.cwd(), "packages/agents/prompts/reporter.md"),
-  path9.resolve(process.cwd(), "prompts/reporter.md"),
-  path9.resolve(process.env.REPLAY_PROMPTS_DIR || "", "reporter.md")
+  ...moduleDir6 ? [path10.join(moduleDir6, "../prompts/reporter.md"), path10.join(moduleDir6, "../../prompts/reporter.md")] : [],
+  path10.resolve(process.cwd(), "packages/agents/prompts/reporter.md"),
+  path10.resolve(process.cwd(), "prompts/reporter.md"),
+  path10.resolve(process.env.REPLAY_PROMPTS_DIR || "", "reporter.md")
 ];
 function loadReporterPrompt() {
   for (const p2 of PROMPT_CANDIDATES6) {
     try {
-      if (fs11.existsSync(p2))
-        return fs11.readFileSync(p2, "utf8");
+      if (fs13.existsSync(p2))
+        return fs13.readFileSync(p2, "utf8");
     } catch {
     }
   }
@@ -32273,15 +32493,15 @@ async function generateReport(data, deps = {}) {
 }
 
 // ../../packages/agents/dist/pipeline.js
-var fs13 = __toESM(require("node:fs"), 1);
-var path11 = __toESM(require("node:path"), 1);
-var import_node_crypto2 = require("node:crypto");
+var fs15 = __toESM(require("node:fs"), 1);
+var path12 = __toESM(require("node:path"), 1);
+var import_node_crypto3 = require("node:crypto");
 
 // ../../packages/video/dist/index.js
 var import_node_child_process2 = require("node:child_process");
 var import_node_util2 = require("node:util");
-var fs12 = __toESM(require("node:fs/promises"), 1);
-var path10 = __toESM(require("node:path"), 1);
+var fs14 = __toESM(require("node:fs/promises"), 1);
+var path11 = __toESM(require("node:path"), 1);
 var execFileAsync2 = (0, import_node_util2.promisify)(import_node_child_process2.execFile);
 function resolveOptions(options) {
   return {
@@ -32302,7 +32522,7 @@ function buildSamplingArgs(videoPath, outputDir, options) {
     `fps=${o2.fps},scale='min(${o2.maxWidth},iw)':-2`,
     "-qscale:v",
     String(o2.jpegQuality),
-    path10.join(outputDir, "f_%04d.jpg")
+    path11.join(outputDir, "f_%04d.jpg")
   ];
 }
 function buildSceneArgs(videoPath, outputDir, options) {
@@ -32317,7 +32537,7 @@ function buildSceneArgs(videoPath, outputDir, options) {
     "vfr",
     "-qscale:v",
     String(o2.jpegQuality),
-    path10.join(outputDir, "s_%04d.jpg")
+    path11.join(outputDir, "s_%04d.jpg")
   ];
 }
 function parseSceneTimestamps(stderr) {
@@ -32333,7 +32553,7 @@ function framesFromListing(fileNames, outputDir, fps) {
   const interval2 = 1 / fps;
   return fileNames.map((filename, index2) => ({
     timestampS: Number((index2 * interval2).toFixed(2)),
-    filePath: path10.join(outputDir, filename),
+    filePath: path11.join(outputDir, filename),
     filename
   }));
 }
@@ -32348,8 +32568,8 @@ function mergeFrameSets(sample, scene, dedupeS = 0.15) {
 }
 async function cleanupPartial(outputDir) {
   try {
-    const files = await fs12.readdir(outputDir);
-    await Promise.all(files.filter((f2) => f2.startsWith("f_") || f2.startsWith("s_")).map((f2) => fs12.rm(path10.join(outputDir, f2), { force: true })));
+    const files = await fs14.readdir(outputDir);
+    await Promise.all(files.filter((f2) => f2.startsWith("f_") || f2.startsWith("s_")).map((f2) => fs14.rm(path11.join(outputDir, f2), { force: true })));
   } catch {
   }
 }
@@ -32386,18 +32606,18 @@ var VideoProcessor = class {
     if (!await this.checkFfmpeg(options.exec)) {
       throw new Error("ffmpeg is not installed or not available in PATH. Install ffmpeg (e.g. brew install ffmpeg) before extracting frames.");
     }
-    const stat4 = await fs12.stat(videoPath).catch(() => null);
+    const stat4 = await fs14.stat(videoPath).catch(() => null);
     if (!stat4?.isFile()) {
       throw new Error(`Video file not found: ${videoPath}`);
     }
-    await fs12.mkdir(outputDir, { recursive: true });
+    await fs14.mkdir(outputDir, { recursive: true });
     try {
       await run2("ffmpeg", buildSamplingArgs(videoPath, outputDir, options));
     } catch (err) {
       await cleanupPartial(outputDir);
       throw execError(err);
     }
-    const files = await fs12.readdir(outputDir);
+    const files = await fs14.readdir(outputDir);
     const sampleFiles = files.filter((f2) => f2.startsWith("f_") && f2.endsWith(".jpg")).sort();
     if (sampleFiles.length === 0) {
       await cleanupPartial(outputDir);
@@ -32407,7 +32627,7 @@ var VideoProcessor = class {
     if (o2.sceneChange) {
       try {
         const { stderr = "" } = await run2("ffmpeg", buildSceneArgs(videoPath, outputDir, options));
-        const sceneFiles = (await fs12.readdir(outputDir)).filter((f2) => f2.startsWith("s_") && f2.endsWith(".jpg")).sort();
+        const sceneFiles = (await fs14.readdir(outputDir)).filter((f2) => f2.startsWith("s_") && f2.endsWith(".jpg")).sort();
         const sceneTimes = parseSceneTimestamps(stderr);
         const sceneFrames = [];
         for (let i2 = 0; i2 < sceneFiles.length; i2++) {
@@ -32416,7 +32636,7 @@ var VideoProcessor = class {
             break;
           sceneFrames.push({
             timestampS: Number(t2.toFixed(2)),
-            filePath: path10.join(outputDir, sceneFiles[i2]),
+            filePath: path11.join(outputDir, sceneFiles[i2]),
             filename: sceneFiles[i2]
           });
         }
@@ -32488,8 +32708,8 @@ var EventCollector = class {
 };
 async function runPipeline(options, deps = {}) {
   const startTime = Date.now();
-  const runId = options.runId ?? (0, import_node_crypto2.randomUUID)();
-  const { targetRepoRoot, targetAppUrl = "http://localhost:5173", maxFixAttempts = 2, artifactsDir = path11.resolve("artifacts") } = options;
+  const runId = options.runId ?? (0, import_node_crypto3.randomUUID)();
+  const { targetRepoRoot, targetAppUrl = "http://localhost:5173", maxFixAttempts = 2, artifactsDir = path12.resolve("artifacts") } = options;
   let sampleId = options.sampleId;
   const collector = new EventCollector(runId, options.onEvent);
   if (sampleId && !KNOWN_SAMPLE_IDS_SET.has(sampleId)) {
@@ -32506,7 +32726,7 @@ async function runPipeline(options, deps = {}) {
     sample_id: sampleId,
     video_path: options.videoPath
   });
-  if (!fs13.existsSync(targetRepoRoot)) {
+  if (!fs15.existsSync(targetRepoRoot)) {
     throw new Error(`Target repository root does not exist: ${targetRepoRoot}`);
   }
   await collector.emit("ingest", "ingest_completed", "orchestrator", {
@@ -32523,26 +32743,26 @@ async function runPipeline(options, deps = {}) {
   let fixtureJson;
   if (sampleId && KNOWN_SAMPLE_IDS_SET.has(sampleId)) {
     const candidatePaths = [
-      path11.resolve(`samples/${sampleId}/expected.json`),
-      path11.resolve(targetRepoRoot, `../../samples/${sampleId}/expected.json`)
+      path12.resolve(`samples/${sampleId}/expected.json`),
+      path12.resolve(targetRepoRoot, `../../samples/${sampleId}/expected.json`)
     ];
     for (const p2 of candidatePaths) {
-      if (fs13.existsSync(p2)) {
-        fixtureJson = await fs13.promises.readFile(p2, "utf8");
+      if (fs15.existsSync(p2)) {
+        fixtureJson = await fs15.promises.readFile(p2, "utf8");
         break;
       }
     }
   }
-  const checkFfmpegFn = deps.videoDeps?.checkFfmpeg ?? (() => VideoProcessor.checkFfmpeg());
-  const extractFramesFn = deps.videoDeps?.extractFrames ?? ((vp, outDir) => VideoProcessor.extractFrames(vp, outDir));
-  const createSandboxFn = deps.sandboxDeps?.create ?? ((srcDir) => IsolatedWorkspaceSandbox.create(srcDir));
-  const videoStat = options.videoPath ? await fs13.promises.stat(options.videoPath).catch(() => null) : null;
+  const checkFfmpegFn = deps.videoDeps?.checkFfmpeg ?? deps.videoDeps?.hasFfmpeg ?? (() => VideoProcessor.checkFfmpeg());
+  const extractFramesFn = deps.videoDeps?.extractFrames ?? deps.videoDeps?.extractKeyframes ?? ((vp, outDir) => VideoProcessor.extractFrames(vp, outDir));
+  const createSandboxFn = deps.sandboxDeps?.create ?? deps.sandboxDeps?.createSandbox ?? ((srcDir) => IsolatedWorkspaceSandbox.create(srcDir));
+  const videoStat = options.videoPath ? await fs15.promises.stat(options.videoPath).catch(() => null) : null;
   const videoReadable = Boolean(videoStat && videoStat.isFile() && videoStat.size > 0);
   const ffmpegAvailable = videoReadable ? await checkFfmpegFn() : false;
   const hasWatcherCredential = Boolean(deps.watcherDeps?.client || resolveApiKey("watcher"));
   const liveWatcherPossible = videoReadable && ffmpegAvailable && hasWatcherCredential;
   if (liveWatcherPossible) {
-    const framesDir = path11.join(artifactsDir, "frames", runId);
+    const framesDir = path12.join(artifactsDir, "frames", runId);
     let extracted = [];
     let extractionError = null;
     try {
@@ -32552,7 +32772,7 @@ async function runPipeline(options, deps = {}) {
       }
     } catch (err) {
       extractionError = err instanceof Error ? err : new Error(String(err));
-      await fs13.promises.rm(framesDir, { recursive: true, force: true }).catch(() => {
+      await fs15.promises.rm(framesDir, { recursive: true, force: true }).catch(() => {
       });
     }
     if (extractionError) {
@@ -32589,7 +32809,7 @@ async function runPipeline(options, deps = {}) {
         const selected = extracted.filter((_2, i2) => i2 % stride === 0).slice(0, 40);
         const watcherFrames = await Promise.all(selected.map(async (f2) => ({
           timestampS: f2.timestampS,
-          jpegBase64: (await fs13.promises.readFile(f2.filePath)).toString("base64")
+          jpegBase64: (await fs15.promises.readFile(f2.filePath)).toString("base64")
         })));
         const watcherRes = await analyzeBugVideo({
           frames: watcherFrames,
@@ -32725,10 +32945,83 @@ async function runPipeline(options, deps = {}) {
     model: reproRes.model
   });
   await collector.emit("verify", "verify_started", "verifier");
-  const initialExec = await executeReproductionTest(reproducerOutput.test_code, {
-    demoShopRoot: targetRepoRoot,
-    testTimeoutMs: 3e4
-  });
+  let initialExec;
+  try {
+    initialExec = await executeReproductionTest(reproducerOutput.test_code, {
+      demoShopRoot: targetRepoRoot,
+      testTimeoutMs: 3e4,
+      createSandbox: createSandboxFn
+    });
+  } catch (err) {
+    if (err instanceof SandboxUnavailableError || err?.code === "SANDBOX_UNAVAILABLE") {
+      const safeReason = `Sandbox unavailable for reproduction execution: ${redactSecretText(err.message)}`;
+      blockedStages.push(safeReason);
+      const blockedVerifierOutput = {
+        same_defect: false,
+        classification: "INFRASTRUCTURE_FAILURE",
+        reason: safeReason,
+        confidence: 1
+      };
+      await collector.emit("verify", "verify_completed", "verifier", {
+        classification: blockedVerifierOutput.classification,
+        same_defect: false,
+        reason: safeReason,
+        sandbox_blocked: true,
+        tokens: 0,
+        duration_ms: 0,
+        model: "sandbox-gate"
+      });
+      const reportData2 = {
+        runId,
+        status: "failed",
+        videoAnalysis,
+        bugReport,
+        locatorOutput,
+        reproducerOutput,
+        verifierOutput: blockedVerifierOutput,
+        reproBeforeFixFailed: false,
+        reproAfterFixPassed: false,
+        baselineRegressionPassed: false,
+        attempts: 0,
+        durationMs: Date.now() - startTime,
+        blockedStages,
+        errors: [safeReason]
+      };
+      const reporterRes2 = await generateReport(reportData2, deps.reporterDeps);
+      await persistReportArtifacts(runId, reporterRes2.output, artifactsDir);
+      await collector.emit("report", "report_completed", "reporter", {
+        status: "failed",
+        summary: reporterRes2.output.executive_summary
+      });
+      const totalTokens2 = [watcherMetrics, locatorRes?.metrics, reproRes?.metrics].map((m2) => m2?.totalTokens ?? 0).reduce((a2, b3) => a2 + b3, 0);
+      return {
+        runId,
+        status: "failed",
+        totalTokens: totalTokens2,
+        estimatedCostUsd: estimateCostUsd([
+          { role: "watcher", tokens: watcherMetrics?.totalTokens ?? 0 },
+          { role: "locator", tokens: locatorRes.metrics.totalTokens },
+          { role: "reproducer", tokens: reproRes.metrics.totalTokens }
+        ]),
+        sampleId,
+        videoAnalysis,
+        bugReport,
+        bundle,
+        locatorOutput,
+        reproducerOutput,
+        verifierOutput: blockedVerifierOutput,
+        reporterOutput: reporterRes2.output,
+        reproBeforeFixFailed: false,
+        reproAfterFixPassed: false,
+        baselineRegressionPassed: false,
+        attempts: 0,
+        durationMs: Date.now() - startTime,
+        events: collector.events,
+        summary: `Execution blocked: ${safeReason}`
+      };
+    }
+    throw err;
+  }
   const verifierRes = await verifyReproduction({
     bugReport,
     reproducerOutput,
@@ -32782,12 +33075,13 @@ async function runPipeline(options, deps = {}) {
       status: "unreproduced",
       summary: reporterRes2.output.executive_summary
     });
-    const totalTokens2 = [locatorRes, reproRes, verifierRes].map((r2) => r2?.metrics?.totalTokens ?? 0).reduce((a2, b3) => a2 + b3, 0);
+    const totalTokens2 = [watcherMetrics, locatorRes?.metrics, reproRes?.metrics, verifierRes?.metrics].map((m2) => m2?.totalTokens ?? 0).reduce((a2, b3) => a2 + b3, 0);
     return {
       runId,
       status: "unreproduced",
       totalTokens: totalTokens2,
       estimatedCostUsd: estimateCostUsd([
+        { role: "watcher", tokens: watcherMetrics?.totalTokens ?? 0 },
         { role: "locator", tokens: locatorRes.metrics.totalTokens },
         { role: "reproducer", tokens: reproRes.metrics.totalTokens },
         { role: "verifier", tokens: verifierRes.metrics.totalTokens }
@@ -32849,9 +33143,9 @@ async function runPipeline(options, deps = {}) {
       }
       const sandboxPort = "5179";
       let sandboxTestCode = reproducerOutput.test_code.replace(/https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/g, `http://127.0.0.1:${sandboxPort}`);
-      const sandboxReproDir = path11.join(sandbox.workDir, "tests", "repro");
-      await fs13.promises.mkdir(sandboxReproDir, { recursive: true });
-      await fs13.promises.writeFile(path11.join(sandboxReproDir, "generated.spec.ts"), sandboxTestCode, "utf8");
+      const sandboxReproDir = path12.join(sandbox.workDir, "tests", "repro");
+      await fs15.promises.mkdir(sandboxReproDir, { recursive: true });
+      await fs15.promises.writeFile(path12.join(sandboxReproDir, "generated.spec.ts"), sandboxTestCode, "utf8");
       const postFixRepro = await sandbox.exec("npx", ["playwright", "test", "tests/repro/generated.spec.ts", "--output=.playwright-results-sandbox-repro"], {
         PLAYWRIGHT_TEST_MATCH: "**/tests/repro/**",
         DEMO_SHOP_PORT: sandboxPort,
@@ -32976,24 +33270,24 @@ async function runPipeline(options, deps = {}) {
 }
 async function persistReportArtifacts(runId, output, artifactsDir) {
   try {
-    const reportsDir = path11.join(artifactsDir, "reports");
-    await fs13.promises.mkdir(reportsDir, { recursive: true });
-    const mdPath = path11.join(reportsDir, `${runId}.md`);
-    const jsonPath = path11.join(reportsDir, `${runId}.json`);
-    await fs13.promises.writeFile(mdPath, output.markdown_report, "utf8");
-    await fs13.promises.writeFile(jsonPath, JSON.stringify(output, null, 2), "utf8");
+    const reportsDir = path12.join(artifactsDir, "reports");
+    await fs15.promises.mkdir(reportsDir, { recursive: true });
+    const mdPath = path12.join(reportsDir, `${runId}.md`);
+    const jsonPath = path12.join(reportsDir, `${runId}.json`);
+    await fs15.promises.writeFile(mdPath, output.markdown_report, "utf8");
+    await fs15.promises.writeFile(jsonPath, JSON.stringify(output, null, 2), "utf8");
   } catch {
   }
 }
 
 // src/worker.ts
 function findRepoRoot() {
-  if (process.env.REPLAY_WORKSPACE_ROOT) return path12.resolve(process.env.REPLAY_WORKSPACE_ROOT);
+  if (process.env.REPLAY_WORKSPACE_ROOT) return path13.resolve(process.env.REPLAY_WORKSPACE_ROOT);
   if (process.env.VERCEL) return process.cwd();
   let cwd = process.cwd();
   for (let i2 = 0; i2 < 6; i2++) {
-    if ((0, import_node_fs2.existsSync)(path12.join(cwd, "pnpm-workspace.yaml"))) return cwd;
-    const parent = path12.dirname(cwd);
+    if ((0, import_node_fs3.existsSync)(path13.join(cwd, "pnpm-workspace.yaml"))) return cwd;
+    const parent = path13.dirname(cwd);
     if (parent === cwd) break;
     cwd = parent;
   }
@@ -33001,7 +33295,7 @@ function findRepoRoot() {
 }
 var REPO_ROOT = findRepoRoot();
 var DATA_DIR = process.env.REPLAY_DATA_DIR || REPO_ROOT;
-import_dotenv.default.config({ path: path12.join(REPO_ROOT, ".env") });
+import_dotenv.default.config({ path: path13.join(REPO_ROOT, ".env") });
 var Worker = class {
   workerId;
   pollIntervalMs;
@@ -33017,7 +33311,7 @@ var Worker = class {
   heartbeatTimer = null;
   currentRunId = null;
   constructor(options) {
-    this.workerId = options?.workerId || `worker-${process.pid}-${(0, import_node_crypto3.randomUUID)().slice(0, 8)}`;
+    this.workerId = options?.workerId || `worker-${process.pid}-${(0, import_node_crypto4.randomUUID)().slice(0, 8)}`;
     this.pollIntervalMs = options?.pollIntervalMs || 1e3;
     this.staleTimeoutMs = options?.staleTimeoutMs || 3e5;
     this.heartbeatIntervalMs = options?.heartbeatIntervalMs || 1e4;
@@ -33061,16 +33355,16 @@ var Worker = class {
     const cutoff = now - 24 * 60 * 60 * 1e3;
     let removed = 0;
     const dirs = [
-      path12.join(DATA_DIR, "artifacts", "uploads"),
-      path12.join(DATA_DIR, "artifacts", "runs")
+      path13.join(DATA_DIR, "artifacts", "uploads"),
+      path13.join(DATA_DIR, "artifacts", "runs")
     ];
     for (const dir of dirs) {
-      const entries = await fs14.readdir(dir).catch(() => []);
+      const entries = await fs16.readdir(dir).catch(() => []);
       for (const entry of entries) {
-        const full = path12.join(dir, entry);
-        const stat4 = await fs14.stat(full).catch(() => null);
+        const full = path13.join(dir, entry);
+        const stat4 = await fs16.stat(full).catch(() => null);
         if (stat4 && stat4.mtimeMs < cutoff) {
-          await fs14.rm(full, { recursive: true, force: true }).catch(() => {
+          await fs16.rm(full, { recursive: true, force: true }).catch(() => {
           });
           removed++;
         }
@@ -33124,18 +33418,18 @@ var Worker = class {
   async processRun(run2) {
     this.startHeartbeat(run2.id);
     const startTime = Date.now();
-    const targetRepo = path12.resolve(this.repoRoot, "targets/demo-shop");
+    const targetRepo = path13.resolve(this.repoRoot, "targets/demo-shop");
     let sampleId;
     let videoPath;
     if (run2.isSample && isKnownSampleId(run2.videoKey)) {
       sampleId = run2.videoKey;
-      videoPath = path12.resolve(this.repoRoot, `samples/videos/${sampleId}.webm`);
-    } else if (path12.isAbsolute(run2.videoKey)) {
+      videoPath = path13.resolve(this.repoRoot, `samples/videos/${sampleId}.webm`);
+    } else if (path13.isAbsolute(run2.videoKey)) {
       videoPath = run2.videoKey;
     } else {
       const relative2 = run2.videoKey.replace(/^uploads\//, "artifacts/uploads/");
-      const resolved = path12.resolve(DATA_DIR, relative2);
-      if (!resolved.startsWith(path12.resolve(DATA_DIR) + path12.sep)) {
+      const resolved = path13.resolve(DATA_DIR, relative2);
+      if (!resolved.startsWith(path13.resolve(DATA_DIR) + path13.sep)) {
         throw new Error(`Rejected unsafe video key: ${run2.videoKey}`);
       }
       videoPath = resolved;
@@ -33159,7 +33453,7 @@ var Worker = class {
         videoPath,
         maxFixAttempts: this.maxFixAttempts,
         runId: run2.id,
-        artifactsDir: path12.resolve(DATA_DIR, `artifacts/runs/${run2.id}`),
+        artifactsDir: path13.resolve(DATA_DIR, `artifacts/runs/${run2.id}`),
         onEvent: async (event) => {
           lastEventStage = event.stage;
           await this.repo.addEvent(run2.id, {
@@ -33282,13 +33576,13 @@ if (process.env.NODE_ENV !== "test" && !process.env.REPLAY_STANDALONE_DISABLED) 
 
 // src/server.ts
 function computeRepoRoot() {
-  if (process.env.REPLAY_WORKSPACE_ROOT) return path13.resolve(process.env.REPLAY_WORKSPACE_ROOT);
+  if (process.env.REPLAY_WORKSPACE_ROOT) return path14.resolve(process.env.REPLAY_WORKSPACE_ROOT);
   if (process.env.VERCEL) return process.cwd();
   try {
-    let dir = path13.dirname((0, import_node_url.fileURLToPath)((void 0).url));
+    let dir = path14.dirname((0, import_node_url.fileURLToPath)((void 0).url));
     for (let i2 = 0; i2 < 6; i2++) {
-      if (fs15.existsSync(path13.join(dir, "pnpm-workspace.yaml"))) return dir;
-      const parent = path13.dirname(dir);
+      if (fs17.existsSync(path14.join(dir, "pnpm-workspace.yaml"))) return dir;
+      const parent = path14.dirname(dir);
       if (parent === dir) break;
       dir = parent;
     }
@@ -33296,8 +33590,8 @@ function computeRepoRoot() {
   }
   let cwd = process.cwd();
   for (let i2 = 0; i2 < 6; i2++) {
-    if (fs15.existsSync(path13.join(cwd, "pnpm-workspace.yaml"))) return cwd;
-    const parent = path13.dirname(cwd);
+    if (fs17.existsSync(path14.join(cwd, "pnpm-workspace.yaml"))) return cwd;
+    const parent = path14.dirname(cwd);
     if (parent === cwd) break;
     cwd = parent;
   }
@@ -33305,8 +33599,8 @@ function computeRepoRoot() {
 }
 var REPO_ROOT2 = computeRepoRoot();
 var DATA_DIR2 = process.env.REPLAY_DATA_DIR || REPO_ROOT2;
-if (fs15.existsSync(path13.join(REPO_ROOT2, ".env"))) {
-  import_dotenv2.default.config({ path: path13.join(REPO_ROOT2, ".env") });
+if (fs17.existsSync(path14.join(REPO_ROOT2, ".env"))) {
+  import_dotenv2.default.config({ path: path14.join(REPO_ROOT2, ".env") });
 }
 var MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 var ALLOWED_MIME_TYPES = /* @__PURE__ */ new Set([
@@ -33399,8 +33693,8 @@ function createServer(options) {
     maxAge: 86400
   }));
   app.use("/api/*", async (c2, next) => {
-    const path14 = c2.req.path;
-    if (path14 === "/api/health" || path14 === "/health") {
+    const path15 = c2.req.path;
+    if (path15 === "/api/health" || path15 === "/health") {
       await next();
       return;
     }
@@ -33453,11 +33747,11 @@ function createServer(options) {
   app.get("/api/health", healthHandler);
   app.get("/api/samples", (c2) => {
     const samples = KNOWN_SAMPLE_IDS.map((id) => {
-      const expectedPath = path13.resolve(repoRoot, `samples/${id}/expected.json`);
+      const expectedPath = path14.resolve(repoRoot, `samples/${id}/expected.json`);
       let meta = { id };
       try {
-        if (fs15.existsSync(expectedPath)) {
-          meta = JSON.parse(fs15.readFileSync(expectedPath, "utf8"));
+        if (fs17.existsSync(expectedPath)) {
+          meta = JSON.parse(fs17.readFileSync(expectedPath, "utf8"));
         } else if (process.env.VERCEL) {
           meta = SAMPLE_TITLES[id] ? { ...SAMPLE_TITLES[id], id } : { id };
         }
@@ -33470,7 +33764,7 @@ function createServer(options) {
         observedBehavior: meta.observed_behavior,
         guiltyFile: meta.guilty_file,
         guiltySymbol: meta.guilty_symbol,
-        recordingAvailable: fs15.existsSync(path13.resolve(repoRoot, `samples/videos/${id}.webm`))
+        recordingAvailable: fs17.existsSync(path14.resolve(repoRoot, `samples/videos/${id}.webm`))
       };
     });
     return c2.json({ samples });
@@ -33547,16 +33841,16 @@ function createServer(options) {
             message: `Media type "${mimeType}" is not supported. Supported: ${Array.from(ALLOWED_MIME_TYPES).join(", ")}`
           }, 415);
         }
-        const runId = (0, import_node_crypto4.randomUUID)();
+        const runId = (0, import_node_crypto5.randomUUID)();
         const ext = mimeType === "video/mp4" ? "mp4" : "webm";
-        const uploadDir = path13.resolve(DATA_DIR2, "artifacts/uploads");
-        if (!fs15.existsSync(uploadDir)) {
-          fs15.mkdirSync(uploadDir, { recursive: true });
+        const uploadDir = path14.resolve(DATA_DIR2, "artifacts/uploads");
+        if (!fs17.existsSync(uploadDir)) {
+          fs17.mkdirSync(uploadDir, { recursive: true });
         }
-        const filePath = path13.resolve(uploadDir, `${runId}.${ext}`);
+        const filePath = path14.resolve(uploadDir, `${runId}.${ext}`);
         const relativeKey = `uploads/${runId}.${ext}`;
         const buffer2 = Buffer.from(await file.arrayBuffer());
-        fs15.writeFileSync(filePath, buffer2);
+        fs17.writeFileSync(filePath, buffer2);
         const run3 = await repo.createRun({
           targetId: "demo-shop",
           videoKey: relativeKey,
@@ -33786,8 +34080,8 @@ function createServer(options) {
         const buffer2 = [];
         let unsubscribeHandler;
         let finishStream;
-        const eventPromise = new Promise((resolve12) => {
-          finishStream = resolve12;
+        const eventPromise = new Promise((resolve13) => {
+          finishStream = resolve13;
           unsubscribeHandler = repo.subscribeEvents(id, async (liveEvent) => {
             if (liveEvent.seq <= lastSentSeq) return;
             buffer2.push(liveEvent);
@@ -33817,7 +34111,7 @@ function createServer(options) {
         for (const ev of buffer2) {
           if (ev.seq > lastSentSeq) await writeEvent(ev);
         }
-        const livePromise = new Promise((resolve12) => {
+        const livePromise = new Promise((resolve13) => {
           unsubscribeHandler = repo.subscribeEvents(id, async (liveEvent) => {
             try {
               if (liveEvent.seq <= lastSentSeq) return;
@@ -33827,10 +34121,10 @@ function createServer(options) {
                   event: "stream_closed",
                   data: JSON.stringify({ reason: "pipeline_finished" })
                 });
-                resolve12();
+                resolve13();
               }
             } catch {
-              resolve12();
+              resolve13();
             }
           });
         });
