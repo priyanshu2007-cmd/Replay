@@ -4,7 +4,7 @@
     "web": {
       "root": "apps/web",
       "framework": "nextjs",
-      "buildCommand": "pnpm --filter @replay/api build && pnpm run build"
+      "buildCommand": "pnpm --filter \"@replay/api...\" build && pnpm run build"
     }
   },
   "rewrites": [
