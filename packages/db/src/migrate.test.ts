@@ -33,14 +33,24 @@ test('migration files and journal cover core schema and rate_limit_hits', () => 
 });
 
 test('runMigrationsAndSeed fails clearly when DATABASE_URL is missing', async () => {
-  await assert.rejects(
-    () => runMigrationsAndSeed(''),
-    /DATABASE_URL is required/
-  );
-  assert.throws(
-    () => createDb(''),
-    /DATABASE_URL environment variable is required/
-  );
+  const prevEnv = process.env.DATABASE_URL;
+  delete process.env.DATABASE_URL;
+  try {
+    await assert.rejects(
+      () => runMigrationsAndSeed(''),
+      /DATABASE_URL is required/
+    );
+    assert.throws(
+      () => createDb(''),
+      /DATABASE_URL environment variable is required/
+    );
+    assert.throws(
+      () => createDb(),
+      /DATABASE_URL environment variable is required/
+    );
+  } finally {
+    if (prevEnv !== undefined) process.env.DATABASE_URL = prevEnv;
+  }
 });
 
 test('runMigrationsAndSeed executes migrations and idempotent demo-shop seed twice without error', async () => {
@@ -89,31 +99,38 @@ test('real PostgreSQL migration, idempotent demo-shop seed, and FK verification 
   await runMigrationsAndSeed(dbUrl);
 
   const db = createDb(dbUrl);
-  const seeded = await db.select().from(targets).where(eq(targets.id, 'demo-shop'));
-  assert.equal(seeded.length, 1);
-  assert.equal(seeded[0]?.name, 'Demo Shop');
+  try {
+    const seeded = await db.select().from(targets).where(eq(targets.id, 'demo-shop'));
+    assert.equal(seeded.length, 1);
+    assert.equal(seeded[0]?.name, 'Demo Shop');
 
-  // Insert a run referencing demo-shop (must succeed)
-  const [insertedRun] = await db
-    .insert(runs)
-    .values({
-      targetId: 'demo-shop',
-      videoKey: 'samples/cart-nan',
-      state: 'queued',
-      stage: 'ingest',
-      isSample: true,
-    })
-    .returning();
-  assert.ok(insertedRun?.id);
+    // Insert a run referencing demo-shop (must succeed)
+    const [insertedRun] = await db
+      .insert(runs)
+      .values({
+        targetId: 'demo-shop',
+        videoKey: 'samples/cart-nan',
+        state: 'queued',
+        stage: 'ingest',
+        isSample: true,
+      })
+      .returning();
+    assert.ok(insertedRun?.id);
 
-  // Clean up test run
-  await db.delete(runs).where(eq(runs.id, insertedRun.id));
+    // Clean up test run
+    await db.delete(runs).where(eq(runs.id, insertedRun.id));
 
-  // Verify rate_limit_hits table is queryable
-  const [hit] = await db
-    .insert(rateLimitHits)
-    .values({ bucketKey: 'test:127.0.0.1' })
-    .returning();
-  assert.ok(hit?.id);
-  await db.delete(rateLimitHits).where(eq(rateLimitHits.id, hit.id));
+    // Verify rate_limit_hits table is queryable
+    const [hit] = await db
+      .insert(rateLimitHits)
+      .values({ bucketKey: 'test:127.0.0.1' })
+      .returning();
+    assert.ok(hit?.id);
+    await db.delete(rateLimitHits).where(eq(rateLimitHits.id, hit.id));
+  } finally {
+    const client = (db as any).$client;
+    if (client && typeof client.end === 'function') {
+      await client.end().catch(() => {});
+    }
+  }
 });

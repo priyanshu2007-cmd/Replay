@@ -6,7 +6,7 @@ export * from './schema.js';
 export { DEMO_SHOP_TARGET_SEED, runMigrationsAndSeed } from './migrate.js';
 
 export function createDb(connectionString?: string) {
-  const connStr = connectionString || process.env.DATABASE_URL;
+  const connStr = connectionString !== undefined ? connectionString : process.env.DATABASE_URL;
   if (!connStr) {
     throw new Error('DATABASE_URL environment variable is required to connect to the database.');
   }
