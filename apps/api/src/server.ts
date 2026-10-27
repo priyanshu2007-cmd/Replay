@@ -160,7 +160,8 @@ const RUN_RATE_WINDOW_MS = 60 * 60 * 1000;
 export function createServer(options?: { repository?: RunRepository; repoRoot?: string; runRateLimit?: number }) {
   const repo = options?.repository || getRunRepository();
   const repoRoot = options?.repoRoot || REPO_ROOT;
-  const runRateLimit = options?.runRateLimit ?? 5;
+  const envRateLimit = Number(process.env.REPLAY_RATE_LIMIT_MAX);
+  const runRateLimit = options?.runRateLimit ?? (Number.isFinite(envRateLimit) && envRateLimit > 0 ? envRateLimit : 5);
   const runAttempts = new Map<string, number[]>();
 
   async function checkRunRateLimit(ip: string): Promise<'allowed' | 'exceeded' | 'unavailable'> {
@@ -253,6 +254,14 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
       message: `Request body exceeds the ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB upload limit.`,
     }, 413),
   }));
+
+  app.onError((err, c) => {
+    console.error('[Replay API] Request error:', err?.message || err);
+    return c.json({
+      error: 'Internal Server Error',
+      message: redactSecretText(err?.message || 'An unexpected error occurred'),
+    }, 500);
+  });
 
   // Health Endpoint (supports both /health and /api/health)
   const healthHandler = (c: any) => {
