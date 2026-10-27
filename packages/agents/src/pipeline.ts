@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import {
   BugReport,
+  BugReportSchema,
   FixerOutput,
   LocatorOutput,
   ReporterOutput,
@@ -13,7 +14,7 @@ import {
   RunState,
   VerifierOutput,
 } from '@replay/shared';
-import { IsolatedWorkspaceSandbox } from '@replay/sandbox';
+import { IsolatedWorkspaceSandbox, SandboxUnavailableError } from '@replay/sandbox';
 import { packRepository, RepoBundle } from './packer.js';
 import { fixtureToBugReport, locateSuspects, LocatorDeps, SampleFixtureSchema } from './locator.js';
 import { executeReproductionTest, generateReproduction, ReproducerDeps } from './reproducer.js';
@@ -51,6 +52,7 @@ export interface PipelineOptions {
   targetRepoRoot: string;
   sampleId?: string;
   videoPath?: string;
+  note?: string;
   bugReport?: BugReport;
   targetAppUrl?: string;
   maxFixAttempts?: number;
@@ -66,7 +68,22 @@ export interface PipelineDeps {
   verifierDeps?: VerifierDeps;
   fixerDeps?: FixerDeps;
   reporterDeps?: ReporterDeps;
+  videoDeps?: {
+    checkFfmpeg?: () => Promise<boolean>;
+    extractFrames?: (videoPath: string, outputDir: string) => Promise<import('@replay/video').FrameInfo[]>;
+  };
+  sandboxDeps?: {
+    create?: typeof IsolatedWorkspaceSandbox.create;
+  };
 }
+
+const KNOWN_SAMPLE_IDS_SET = new Set([
+  'cart-nan',
+  'double-discount',
+  'string-sort',
+  'empty-email',
+  'quantity-reset',
+]);
 
 export interface PipelineRunResult {
   runId: string;
@@ -142,10 +159,16 @@ export async function runPipeline(
   let sampleId = options.sampleId;
   const collector = new EventCollector(runId, options.onEvent);
 
-  // If sampleId not provided but videoPath contains a known sample folder
-  if (!sampleId && options.videoPath) {
-    const match = options.videoPath.match(/samples\/([^/]+)/);
-    if (match) sampleId = match[1];
+  if (sampleId && !KNOWN_SAMPLE_IDS_SET.has(sampleId)) {
+    throw new Error(`Unknown sampleId "${sampleId}". Must be one of: ${Array.from(KNOWN_SAMPLE_IDS_SET).join(', ')}`);
+  }
+
+  // Only infer sampleId if videoPath points to the canonical samples/ directory (never for uploaded videos)
+  if (!sampleId && options.videoPath && !/(^|[\\/])uploads([\\/]|$)/.test(options.videoPath)) {
+    const match = options.videoPath.match(/(?:^|[\\/])samples[\\/](?:videos[\\/])?([a-z0-9-]+?)(?:\.webm|[\\/]|$)/i);
+    if (match && match[1] && KNOWN_SAMPLE_IDS_SET.has(match[1])) {
+      sampleId = match[1];
+    }
   }
 
   // --- STAGE 1: INGEST ---
@@ -174,10 +197,9 @@ export async function runPipeline(
     video_path: options.videoPath,
   });
 
-  // Load the sample fixture when available: it is the fallback and the
-  // ground truth a live Watcher result is compared against.
+  // Load the sample fixture ONLY for known validated samples: never for uploaded videos.
   let fixtureJson: string | undefined;
-  if (sampleId) {
+  if (sampleId && KNOWN_SAMPLE_IDS_SET.has(sampleId)) {
     const candidatePaths = [
       path.resolve(`samples/${sampleId}/expected.json`),
       path.resolve(targetRepoRoot, `../../samples/${sampleId}/expected.json`),
@@ -190,78 +212,120 @@ export async function runPipeline(
     }
   }
 
-  const videoReadable = !!options.videoPath && fs.existsSync(options.videoPath);
-  const liveWatcherPossible =
-    videoReadable &&
-    (await VideoProcessor.checkFfmpeg()) &&
-    !!resolveApiKey('watcher');
+  const checkFfmpegFn = deps.videoDeps?.checkFfmpeg ?? (() => VideoProcessor.checkFfmpeg());
+  const extractFramesFn =
+    deps.videoDeps?.extractFrames ??
+    ((vp: string, outDir: string) => VideoProcessor.extractFrames(vp, outDir));
+  const createSandboxFn =
+    deps.sandboxDeps?.create ??
+    ((srcDir: string) => IsolatedWorkspaceSandbox.create(srcDir));
+
+  const videoStat = options.videoPath ? await fs.promises.stat(options.videoPath).catch(() => null) : null;
+  const videoReadable = Boolean(videoStat && videoStat.isFile() && videoStat.size > 0);
+  const ffmpegAvailable = videoReadable ? await checkFfmpegFn() : false;
+  const hasWatcherCredential = Boolean(deps.watcherDeps?.client || resolveApiKey('watcher'));
+  const liveWatcherPossible = videoReadable && ffmpegAvailable && hasWatcherCredential;
 
   if (liveWatcherPossible) {
-    // Live vision: extract frames and send them to the Watcher model. Frame
-    // extraction happens inside the try: a missing or undecodable video falls
-    // back (samples) or fails with a clear code (uploads) instead of throwing
-    // out of the stage unclassified.
+    // Live vision: extract frames and send them to the Watcher model.
+    const framesDir = path.join(artifactsDir, 'frames', runId);
+    let extracted: import('@replay/video').FrameInfo[] = [];
+    let extractionError: Error | null = null;
+
     try {
-      const framesDir = path.join(artifactsDir, 'frames');
-      const extracted = await VideoProcessor.extractFrames(options.videoPath!, framesDir);
-      const stride = Math.ceil(extracted.length / 40) || 1;
-      const selected = extracted.filter((_, i) => i % stride === 0).slice(0, 40);
-      const watcherFrames = await Promise.all(
-        selected.map(async (f) => ({
-          timestampS: f.timestampS,
-          jpegBase64: (await fs.promises.readFile(f.filePath)).toString('base64'),
-        })),
-      );
-      const watcherRes = await analyzeBugVideo({
-        frames: watcherFrames,
-        route: sampleId ? `/?bug=${sampleId}` : undefined,
-      }, deps.watcherDeps);
-      bugReport = {
-        defect_found: watcherRes.report.defect_found,
-        summary: watcherRes.report.summary,
-        steps: watcherRes.report.steps.map((st) => ({
-          timestamp_s: st.timestamp_s,
-          description: st.description,
-          visible_text: st.visible_text,
-        })),
-        first_failure_timestamp_s: watcherRes.report.first_failure_timestamp_s,
-        expected_behavior: watcherRes.report.expected_behavior,
-        actual_behavior: watcherRes.report.actual_behavior,
-        visible_text: watcherRes.report.visible_text,
-        route: watcherRes.report.route,
-        confidence: watcherRes.report.confidence,
-      } as BugReport;
-      videoAnalysis = 'live';
-      watcherMetrics = watcherRes.metrics;
-      if (sampleId && fixtureJson) {
-        const expected = SampleFixtureSchema.parse(JSON.parse(fixtureJson));
-        const matches = Math.abs(expected.failure_timestamp_s - bugReport.first_failure_timestamp_s) <= 2;
-        await collector.emit('watch', 'watch_fixture_comparison', 'watcher', {
-          matches_fixture: matches,
-          expected_failure_timestamp_s: expected.failure_timestamp_s,
-          live_failure_timestamp_s: bugReport.first_failure_timestamp_s,
-        });
+      extracted = await extractFramesFn(options.videoPath!, framesDir);
+      if (!Array.isArray(extracted) || extracted.length === 0) {
+        throw new Error('No frames extracted — the video may be undecodable, empty, or in an unsupported format.');
       }
     } catch (err: any) {
-      // Live vision or frame extraction failed: fall back to the fixture, with
-      // the error on record.
-      await collector.emit('watch', 'watch_model_error', 'watcher', {
-        code: err?.code ?? 'unknown',
-        model: err?.model ?? resolveModel('watcher'),
-        message: err?.message ?? String(err),
-      });
-      if (!fixtureJson) throw err;
-      const parsedFixture = SampleFixtureSchema.parse(JSON.parse(fixtureJson));
-      bugReport = fixtureToBugReport(parsedFixture);
-      videoAnalysis = 'fixture_assisted';
-      blockedStages.push(`Live Watcher failed (${err?.code ?? 'unknown'}): using fixture metadata`);
-      await collector.emit('watch', 'watch_fixture_fallback', 'watcher', {
-        reason: `Live Watcher failed: ${err?.code ?? 'unknown'}`,
-        sample_id: sampleId,
-      });
+      extractionError = err instanceof Error ? err : new Error(String(err));
+      await fs.promises.rm(framesDir, { recursive: true, force: true }).catch(() => {});
     }
-  } else if (options.bugReport) {
-    bugReport = options.bugReport;
+
+    if (extractionError) {
+      const msg = redactSecretText(extractionError.message);
+      await collector.emit('watch', 'watch_extraction_error', 'watcher', {
+        code: 'frame_extraction_failed',
+        message: msg,
+      });
+      await collector.emit('watch', 'watch_model_error', 'watcher', {
+        code: 'frame_extraction_failed',
+        model: resolveModel('watcher'),
+        message: msg,
+      });
+
+      if (sampleId && fixtureJson) {
+        const parsedFixture = SampleFixtureSchema.parse(JSON.parse(fixtureJson));
+        bugReport = fixtureToBugReport(parsedFixture);
+        videoAnalysis = 'fixture_assisted';
+        blockedStages.push(`Frame extraction failed: using fixture metadata (${msg})`);
+        await collector.emit('watch', 'watch_fixture_fallback', 'watcher', {
+          reason: `Frame extraction failed: ${msg}`,
+          sample_id: sampleId,
+        });
+      } else {
+        await collector.emit('watch', 'watch_failed', 'watcher', {
+          reason: `Frame extraction failed: ${msg}`,
+        });
+        const fatal: any = new Error(`Cannot analyze uploaded video: ${msg}`);
+        fatal.code = 'frame_extraction_failed';
+        throw fatal;
+      }
+    } else {
+      try {
+        const stride = Math.ceil(extracted.length / 40) || 1;
+        const selected = extracted.filter((_, i) => i % stride === 0).slice(0, 40);
+        const watcherFrames = await Promise.all(
+          selected.map(async (f) => ({
+            timestampS: f.timestampS,
+            jpegBase64: (await fs.promises.readFile(f.filePath)).toString('base64'),
+          })),
+        );
+        const watcherRes = await analyzeBugVideo(
+          {
+            frames: watcherFrames,
+            note: options.note,
+            route: sampleId ? `/?bug=${sampleId}` : undefined,
+          },
+          deps.watcherDeps,
+        );
+        bugReport = BugReportSchema.parse(watcherRes.report);
+        videoAnalysis = 'live';
+        watcherMetrics = watcherRes.metrics;
+        if (sampleId && fixtureJson) {
+          const expected = SampleFixtureSchema.parse(JSON.parse(fixtureJson));
+          const matches = Math.abs(expected.failure_timestamp_s - bugReport.first_failure_timestamp_s) <= 2;
+          await collector.emit('watch', 'watch_fixture_comparison', 'watcher', {
+            matches_fixture: matches,
+            expected_failure_timestamp_s: expected.failure_timestamp_s,
+            live_failure_timestamp_s: bugReport.first_failure_timestamp_s,
+          });
+        }
+      } catch (err: any) {
+        const safeMsg = redactSecretText(err?.message ?? String(err));
+        await collector.emit('watch', 'watch_model_error', 'watcher', {
+          code: err?.code ?? 'watcher_failed',
+          model: err?.model ?? resolveModel('watcher'),
+          message: safeMsg,
+        });
+        if (!sampleId || !fixtureJson) {
+          await collector.emit('watch', 'watch_failed', 'watcher', {
+            reason: `Live Watcher analysis failed: ${safeMsg}`,
+          });
+          throw err;
+        }
+        const parsedFixture = SampleFixtureSchema.parse(JSON.parse(fixtureJson));
+        bugReport = fixtureToBugReport(parsedFixture);
+        videoAnalysis = 'fixture_assisted';
+        blockedStages.push(`Live Watcher failed (${err?.code ?? 'unknown'}): using fixture metadata`);
+        await collector.emit('watch', 'watch_fixture_fallback', 'watcher', {
+          reason: `Live Watcher failed: ${err?.code ?? 'unknown'}`,
+          sample_id: sampleId,
+        });
+      }
+    }
+  } else if (options.bugReport && !options.videoPath) {
+    bugReport = BugReportSchema.parse(options.bugReport);
     videoAnalysis = 'none';
   } else if (sampleId && fixtureJson) {
     const parsedFixture = SampleFixtureSchema.parse(JSON.parse(fixtureJson));
@@ -269,7 +333,7 @@ export async function runPipeline(
     videoAnalysis = 'fixture_assisted';
     const reason = !videoReadable
       ? 'video file missing'
-      : !(await VideoProcessor.checkFfmpeg())
+      : !ffmpegAvailable
         ? 'ffmpeg not installed'
         : 'no watcher API key configured';
     blockedStages.push(`Live Watcher unavailable: ${reason}`);
@@ -278,9 +342,27 @@ export async function runPipeline(
       sample_id: sampleId,
     });
   } else if (options.videoPath) {
-    throw new Error(
-      `Cannot analyze the uploaded video: ${!videoReadable ? 'the video file is missing or unreadable' : !(await VideoProcessor.checkFfmpeg()) ? 'ffmpeg is not installed on the worker' : 'no watcher API key configured'}.`,
-    );
+    const reason = !videoReadable
+      ? 'the video file is missing or unreadable'
+      : !ffmpegAvailable
+        ? 'ffmpeg is not installed on the worker'
+        : 'no watcher API key configured';
+    const errCode = !videoReadable ? 'video_missing' : !ffmpegAvailable ? 'ffmpeg_missing' : 'missing_key';
+    await collector.emit('watch', 'watch_model_error', 'watcher', {
+      code: errCode,
+      model: resolveModel('watcher'),
+      message: `Cannot analyze the uploaded video: ${reason}.`,
+    });
+    await collector.emit('watch', 'watch_failed', 'watcher', {
+      code: errCode,
+      reason: `Cannot analyze the uploaded video: ${reason}.`,
+    });
+    const fatal: any = new Error(`Cannot analyze the uploaded video: ${reason}.`);
+    fatal.code = errCode;
+    throw fatal;
+  } else if (options.bugReport) {
+    bugReport = BugReportSchema.parse(options.bugReport);
+    videoAnalysis = 'none';
   } else {
     throw new Error('Pipeline requires either bugReport, sampleId, or valid videoPath input.');
   }
@@ -496,9 +578,9 @@ export async function runPipeline(
       continue;
     }
 
-    const sandbox = await IsolatedWorkspaceSandbox.create(targetRepoRoot);
-
+    let sandbox: Awaited<ReturnType<typeof IsolatedWorkspaceSandbox.create>> | undefined;
     try {
+      sandbox = await createSandboxFn(targetRepoRoot);
       await applyPatchToDirectory(sandbox.workDir, lastFixerOutput);
 
       const buildRes = await sandbox.exec('npx', ['vite', 'build']);
@@ -570,12 +652,20 @@ export async function runPipeline(
       });
       break;
     } catch (err: any) {
+      reproAfterFixPassed = false;
+      baselineRegressionPassed = false;
+      const safeError = redactSecretText(err?.message || String(err));
       await collector.emit('fix', 'fix_attempt_error', 'fixer', {
         attempt,
-        error: err?.message || String(err),
+        code: err instanceof SandboxUnavailableError ? err.code : (err?.code ?? 'fix_error'),
+        error: safeError,
       });
+      if (err instanceof SandboxUnavailableError) {
+        blockedStages.push(`Fix verification blocked: ${safeError}`);
+        break;
+      }
     } finally {
-      await sandbox.cleanup();
+      await sandbox?.cleanup().catch(() => {});
     }
   }
 

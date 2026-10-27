@@ -30451,7 +30451,11 @@ async function analyzeBugVideo(input, deps = {}) {
   const res = await client.callJson(model, [
     { role: "system", content: loadWatcherPrompt() },
     { role: "user", content }
-  ], BugReportSchema);
+  ], BugReportSchema, {
+    role: "watcher",
+    temperature: 0.1,
+    enableThinking: false
+  });
   return { report: res.data, metrics: res.metrics, promptVersion: WATCHER_PROMPT_VERSION, model };
 }
 
@@ -30961,66 +30965,192 @@ var SandboxUnavailableError = class extends Error {
     this.name = "SandboxUnavailableError";
   }
 };
+function isServerlessHost() {
+  return Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NETLIFY || process.env.FUNCTIONS_WORKER_RUNTIME);
+}
 function hostExecutionAllowed() {
-  if (process.env.REPLAY_ALLOW_HOST_SANDBOX === "1")
-    return true;
+  if (isServerlessHost())
+    return false;
+  if (process.env.REPLAY_SANDBOX_MODE === "docker")
+    return false;
   if (process.env.REPLAY_ALLOW_HOST_SANDBOX === "0")
     return false;
+  if (process.env.REPLAY_ALLOW_HOST_SANDBOX === "1")
+    return true;
   return process.env.NODE_ENV !== "production";
 }
-var SANDBOX_ENV_ALLOWLIST = {
-  PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
-  HOME: process.env.HOME ?? "/tmp",
-  LANG: process.env.LANG ?? "en_US.UTF-8",
-  TMPDIR: process.env.TMPDIR ?? "/tmp",
-  CI: "1"
-};
+function getBaseSandboxEnv() {
+  return {
+    PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
+    HOME: process.env.HOME ?? "/tmp",
+    LANG: process.env.LANG ?? "en_US.UTF-8",
+    TMPDIR: process.env.TMPDIR ?? "/tmp",
+    CI: "1"
+  };
+}
+var FORBIDDEN_ENV_KEY_PATTERN = /^(NEBIUS|NVIDIA|OPENAI|ANTHROPIC|SUPABASE|DATABASE|POSTGRES|PG_|AWS_|VERCEL|GITHUB_|REDIS|PRIVATE|SECRET)|(_KEY|_TOKEN|_SECRET|_PASSWORD|DATABASE_URL|SERVICE_ROLE|BEARER|CREDENTIAL)/i;
+var ALLOWED_EXTRA_ENV_KEY_PATTERN = /^(PLAYWRIGHT_[A-Z0-9_]+|DEMO_SHOP_[A-Z0-9_]+|SANDBOX_[A-Z0-9_]+|NODE_ENV|PORT|HOST|HOSTNAME|TZ|CI|NO_COLOR|FORCE_COLOR|DEBUG|HOME|TMPDIR|PATH|LANG)$/;
+function sanitizeSandboxEnv(extraEnv = {}) {
+  const sanitized = { ...getBaseSandboxEnv() };
+  for (const [key, value] of Object.entries(extraEnv)) {
+    if (typeof value !== "string")
+      continue;
+    if (FORBIDDEN_ENV_KEY_PATTERN.test(key))
+      continue;
+    if (!ALLOWED_EXTRA_ENV_KEY_PATTERN.test(key))
+      continue;
+    sanitized[key] = value;
+  }
+  return sanitized;
+}
+var SKIPPED_SOURCE_ENTRIES = /* @__PURE__ */ new Set([
+  "node_modules",
+  ".playwright-results",
+  ".playwright-results-repro",
+  ".playwright-results-sandbox-repro",
+  ".playwright-results-sandbox-baseline",
+  "test-results",
+  "playwright-report",
+  "dist",
+  ".git",
+  ".env",
+  ".env.local",
+  ".env.production",
+  ".env.development"
+]);
 var IsolatedWorkspaceSandbox = class {
-  static async create(sourceDir) {
-    if (!hostExecutionAllowed()) {
-      throw new SandboxUnavailableError("Host sandbox execution is disabled in production. Run the fix stage with Docker available, or set REPLAY_ALLOW_HOST_SANDBOX=1 explicitly for local development.");
+  static async create(sourceDir, options = {}) {
+    const mode = options.mode ?? process.env.REPLAY_SANDBOX_MODE ?? "auto";
+    const isProd = process.env.NODE_ENV === "production";
+    const dockerRequired = mode === "docker" || isServerlessHost() || isProd && !hostExecutionAllowed();
+    let useDocker = false;
+    if (mode === "docker") {
+      const available = await DockerSandbox.isDockerAvailable(options.dockerExec);
+      if (!available) {
+        throw new SandboxUnavailableError("Docker sandbox is required (mode=docker), but the Docker daemon is unavailable. Refusing to fall back to host execution.");
+      }
+      useDocker = true;
+    } else if (mode === "host") {
+      if (!hostExecutionAllowed()) {
+        throw new SandboxUnavailableError("Host sandbox execution is disabled in production and on serverless hosts. Configure Docker or set REPLAY_ALLOW_HOST_SANDBOX=1 in local development.");
+      }
+      useDocker = false;
+    } else {
+      if (isProd || process.env.REPLAY_SANDBOX_IMAGE) {
+        const available = await DockerSandbox.isDockerAvailable(options.dockerExec);
+        if (available) {
+          useDocker = true;
+        } else if (dockerRequired || !hostExecutionAllowed()) {
+          throw new SandboxUnavailableError("Host sandbox execution is disabled in production and Docker is unavailable. Run with Docker enabled, or set REPLAY_ALLOW_HOST_SANDBOX=1 explicitly for local development.");
+        }
+      } else if (!hostExecutionAllowed()) {
+        throw new SandboxUnavailableError("Host sandbox execution is disabled. Enable Docker or set REPLAY_ALLOW_HOST_SANDBOX=1 for local development.");
+      }
     }
     const absSourceDir = path5.resolve(sourceDir);
     const tmp = await fs7.promises.mkdtemp(path5.join(os2.tmpdir(), "replay-workspace-"));
-    const entries = await fs7.promises.readdir(absSourceDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (["node_modules", ".playwright-results", "test-results", "dist"].includes(entry.name)) {
-        continue;
+    try {
+      const entries = await fs7.promises.readdir(absSourceDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (SKIPPED_SOURCE_ENTRIES.has(entry.name) || entry.name.startsWith(".env")) {
+          continue;
+        }
+        const s2 = path5.join(absSourceDir, entry.name);
+        const d2 = path5.join(tmp, entry.name);
+        if (entry.isSymbolicLink()) {
+          continue;
+        } else if (entry.isDirectory()) {
+          await fs7.promises.cp(s2, d2, { recursive: true });
+        } else if (entry.isFile()) {
+          await fs7.promises.copyFile(s2, d2);
+        }
       }
-      const s2 = path5.join(absSourceDir, entry.name);
-      const d2 = path5.join(tmp, entry.name);
-      if (entry.isDirectory()) {
-        await fs7.promises.cp(s2, d2, { recursive: true });
-      } else {
-        await fs7.promises.copyFile(s2, d2);
+      const srcDist = path5.join(absSourceDir, "dist");
+      if (fs7.existsSync(srcDist)) {
+        await fs7.promises.cp(srcDist, path5.join(tmp, "dist"), { recursive: true });
       }
+      const srcNodeModules = path5.join(absSourceDir, "node_modules");
+      if (!useDocker && fs7.existsSync(srcNodeModules)) {
+        await fs7.promises.symlink(srcNodeModules, path5.join(tmp, "node_modules"));
+      }
+    } catch (err) {
+      await fs7.promises.rm(tmp, { recursive: true, force: true }).catch(() => {
+      });
+      throw err;
     }
-    const srcNodeModules = path5.join(absSourceDir, "node_modules");
-    if (fs7.existsSync(srcNodeModules)) {
-      await fs7.promises.symlink(srcNodeModules, path5.join(tmp, "node_modules"));
-    }
-    const srcDist = path5.join(absSourceDir, "dist");
-    if (fs7.existsSync(srcDist)) {
-      await fs7.promises.cp(srcDist, path5.join(tmp, "dist"), { recursive: true });
+    const timeoutMs = options.timeoutMs ?? 6e4;
+    if (useDocker) {
+      const image = options.image ?? process.env.REPLAY_SANDBOX_IMAGE ?? "mcr.microsoft.com/playwright:v1.50.1-noble";
+      const srcNodeModules = path5.join(absSourceDir, "node_modules");
+      const bindMounts = [
+        { hostPath: tmp, containerPath: "/workspace", readOnly: false }
+      ];
+      if (fs7.existsSync(srcNodeModules)) {
+        bindMounts.push({ hostPath: srcNodeModules, containerPath: "/workspace/node_modules", readOnly: true });
+      }
+      return {
+        workDir: tmp,
+        backend: "docker",
+        async exec(command, args, env = {}) {
+          const res = await DockerSandbox.run({
+            image,
+            command: [command, ...args],
+            workDir: "/workspace",
+            timeoutMs,
+            networkMode: options.networkMode ?? "none",
+            user: options.user ?? process.env.REPLAY_SANDBOX_USER ?? "pwuser",
+            bindMounts,
+            env: sanitizeSandboxEnv({
+              ...env,
+              HOME: "/tmp",
+              TMPDIR: "/tmp"
+            }),
+            execFn: options.dockerExec,
+            signal: options.signal
+          });
+          return {
+            exitCode: res.exitCode,
+            stdout: res.stdout,
+            stderr: res.stderr,
+            durationMs: res.durationMs,
+            timedOut: res.timedOut
+          };
+        },
+        async cleanup() {
+          await fs7.promises.rm(tmp, { recursive: true, force: true }).catch(() => {
+          });
+        }
+      };
     }
     return {
       workDir: tmp,
+      backend: "host",
       async exec(command, args, env = {}) {
         const start = Date.now();
+        const safeEnv = sanitizeSandboxEnv(env);
         try {
           const res = await execFileAsync(command, args, {
             cwd: tmp,
-            // Allowlist only: untrusted code must never see host secrets.
-            env: { ...SANDBOX_ENV_ALLOWLIST, ...env },
-            timeout: 6e4
+            env: safeEnv,
+            timeout: timeoutMs,
+            maxBuffer: 10 * 1024 * 1024,
+            signal: options.signal
           });
-          return { exitCode: 0, stdout: res.stdout, stderr: res.stderr, durationMs: Date.now() - start };
-        } catch (err) {
           return {
-            exitCode: typeof err.code === "number" ? err.code : 1,
+            exitCode: 0,
+            stdout: res.stdout,
+            stderr: res.stderr,
+            durationMs: Date.now() - start,
+            timedOut: false
+          };
+        } catch (err) {
+          const timedOut = Boolean(err?.killed || err?.signal === "SIGTERM" || err?.code === "ETIMEDOUT");
+          return {
+            exitCode: typeof err.code === "number" ? err.code : timedOut ? 124 : 1,
             stdout: err.stdout ?? "",
             stderr: err.stderr ?? (err.message || ""),
-            durationMs: Date.now() - start
+            durationMs: Date.now() - start,
+            timedOut
           };
         }
       },
@@ -31029,6 +31159,122 @@ var IsolatedWorkspaceSandbox = class {
         });
       }
     };
+  }
+};
+var FORBIDDEN_MOUNT_PATTERNS = [
+  /docker\.sock/i,
+  /(^|\/)\.env(\..+)?$/i,
+  /(^|\/)\.ssh(\/|$)/i,
+  /(^|\/)\.aws(\/|$)/i,
+  /(^|\/)\.git(\/|$)/i,
+  /^\/(etc|root|proc|sys|dev|var\/run)(\/|$)/
+];
+function validateBindMount(mount) {
+  if (!mount.hostPath || !path5.isAbsolute(mount.hostPath) || mount.hostPath === "/") {
+    throw new SandboxUnavailableError(`Rejected unsafe bind mount hostPath: ${mount.hostPath}`);
+  }
+  if (!mount.containerPath || !mount.containerPath.startsWith("/") || mount.containerPath === "/") {
+    throw new SandboxUnavailableError(`Rejected unsafe bind mount containerPath: ${mount.containerPath}`);
+  }
+  if (mount.hostPath.includes("\0") || mount.containerPath.includes("\0") || mount.hostPath.includes(":")) {
+    throw new SandboxUnavailableError(`Rejected malformed bind mount path: ${mount.hostPath}`);
+  }
+  for (const pat of FORBIDDEN_MOUNT_PATTERNS) {
+    if (pat.test(mount.hostPath) || pat.test(mount.containerPath)) {
+      throw new SandboxUnavailableError(`Rejected forbidden bind mount target: ${mount.hostPath}`);
+    }
+  }
+}
+var DockerSandbox = class {
+  static async isDockerAvailable(execFn = execFileAsync) {
+    try {
+      await execFn("docker", ["info"], { timeout: 5e3 });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  static async run(options) {
+    const startTime = Date.now();
+    const runExec = options.execFn ?? execFileAsync;
+    const timeoutMs = options.timeoutMs ?? 6e4;
+    const networkMode = options.networkMode ?? "none";
+    const user = options.user ?? "pwuser";
+    if (networkMode === "host") {
+      throw new SandboxUnavailableError("Host network mode is prohibited for untrusted sandbox containers.");
+    }
+    if (user === "root" || user === "0" || user.startsWith("0:")) {
+      throw new SandboxUnavailableError("Root execution is prohibited inside untrusted sandbox containers.");
+    }
+    const containerName = `replay-sandbox-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const args = [
+      "run",
+      "--name",
+      containerName,
+      "--rm",
+      "--user",
+      user,
+      "--network",
+      networkMode,
+      "--memory",
+      "2g",
+      "--cpus",
+      "2.0",
+      "--pids-limit",
+      "256",
+      "--security-opt",
+      "no-new-privileges",
+      "--cap-drop",
+      "ALL",
+      "--tmpfs",
+      "/tmp:rw,noexec,nosuid,size=256m"
+    ];
+    if (options.bindMounts) {
+      for (const mount of options.bindMounts) {
+        validateBindMount(mount);
+        const roFlag = mount.readOnly ? ":ro" : "";
+        args.push("-v", `${mount.hostPath}:${mount.containerPath}${roFlag}`);
+      }
+    }
+    const safeEnv = sanitizeSandboxEnv(options.env ?? {});
+    for (const [k2, v2] of Object.entries(safeEnv)) {
+      args.push("-e", `${k2}=${v2}`);
+    }
+    if (options.workDir) {
+      args.push("-w", options.workDir);
+    }
+    args.push(options.image, ...options.command);
+    let timedOut = false;
+    try {
+      const { stdout, stderr } = await runExec("docker", args, {
+        timeout: timeoutMs,
+        maxBuffer: 10 * 1024 * 1024,
+        signal: options.signal
+      });
+      return {
+        exitCode: 0,
+        stdout,
+        stderr,
+        durationMs: Date.now() - startTime,
+        timedOut: false
+      };
+    } catch (err) {
+      if (err?.killed || err?.signal === "SIGTERM" || err?.code === "ETIMEDOUT" || err?.name === "AbortError") {
+        timedOut = true;
+      }
+      return {
+        exitCode: typeof err?.code === "number" ? err.code : timedOut ? 124 : 1,
+        stdout: err?.stdout ?? "",
+        stderr: err?.stderr ?? (err?.message || ""),
+        durationMs: Date.now() - startTime,
+        timedOut
+      };
+    } finally {
+      try {
+        await runExec("docker", ["rm", "-f", containerName], { timeout: 5e3 });
+      } catch {
+      }
+    }
   }
 };
 
@@ -31424,23 +31670,89 @@ function loadFixerPrompt() {
 }
 var FORBIDDEN_FILE_PATTERNS = [
   /\btests?\//i,
-  /\.spec\.[jt]sx?$/i,
-  /\.test\.[jt]sx?$/i,
+  /\b__tests__\//i,
+  /\.spec\.[cm]?[jt]sx?$/i,
+  /\.test\.[cm]?[jt]sx?$/i,
   /playwright\.config/i,
   /vite\.config/i,
+  /vitest\.config/i,
   /tsconfig/i,
-  /package\.json$/i,
+  /package(-lock)?\.json$/i,
   /\.env/i,
   /\.lock$/i,
-  /pnpm-lock/i
+  /pnpm-lock/i,
+  /pnpm-workspace/i,
+  /\.(pem|key|p12|pfx|crt|cer)$/i,
+  /(^|\/)(id_rsa|id_ed25519|id_ecdsa|id_dsa)$/i,
+  /(^|\/)node_modules(\/|$)/i,
+  /(^|\/)\.git(\/|$)/i
 ];
+function extractUnifiedDiffPaths(patchText) {
+  if (!patchText || typeof patchText !== "string")
+    return [];
+  const paths = [];
+  for (const rawLine of patchText.split(/\r?\n/)) {
+    if (!rawLine.startsWith("--- ") && !rawLine.startsWith("+++ "))
+      continue;
+    let spec = rawLine.slice(4).trim();
+    const tabIdx = spec.indexOf("	");
+    if (tabIdx !== -1)
+      spec = spec.slice(0, tabIdx).trim();
+    if (!spec || spec === "/dev/null" || spec === "a/dev/null" || spec === "b/dev/null")
+      continue;
+    if ((spec.startsWith("a/") || spec.startsWith("b/")) && !spec.startsWith("a//") && !spec.startsWith("b//")) {
+      spec = spec.slice(2);
+    }
+    paths.push(spec);
+  }
+  return paths;
+}
+function validateCandidateRelativePathSyntax(relativePath) {
+  if (typeof relativePath !== "string" || relativePath.trim().length === 0) {
+    return "Rejected empty path outside the workspace";
+  }
+  if (relativePath.includes("\0")) {
+    return "Rejected null-byte path outside the workspace";
+  }
+  if (/^[a-zA-Z]:/.test(relativePath)) {
+    return `Rejected drive-prefixed path outside the workspace: ${relativePath}`;
+  }
+  if (/^(\\\\+|\/\/+)/.test(relativePath)) {
+    return `Rejected UNC path outside the workspace: ${relativePath}`;
+  }
+  if (relativePath.startsWith("/") || relativePath.startsWith("\\") || path8.isAbsolute(relativePath)) {
+    return `Rejected absolute path outside the workspace: ${relativePath}`;
+  }
+  if (relativePath.includes("\\")) {
+    return `Rejected Windows-style path separator outside the workspace: ${relativePath}`;
+  }
+  const segments = relativePath.split("/");
+  if (segments.some((seg) => seg === ".." || seg === "." || seg.length === 0)) {
+    return `Rejected traversal or malformed path outside the workspace: ${relativePath}`;
+  }
+  return null;
+}
 function validatePatchSafety(output, bundle) {
   const errors = [];
   if (!output.fixed) {
     errors.push("Fixer indicated it could not produce a fix (fixed: false)");
     return { valid: false, errors };
   }
-  const targetFile = output.target_file.replace(/^\/+/, "");
+  const syntaxErr = validateCandidateRelativePathSyntax(output.target_file);
+  if (syntaxErr) {
+    errors.push(syntaxErr);
+    return { valid: false, errors };
+  }
+  const targetFile = output.target_file;
+  const diffPaths = extractUnifiedDiffPaths(output.patch);
+  for (const dp of diffPaths) {
+    const dpErr = validateCandidateRelativePathSyntax(dp);
+    if (dpErr) {
+      errors.push(`Invalid path in unified diff header "${dp}": ${dpErr}`);
+    } else if (dp !== targetFile) {
+      errors.push(`Unified diff references "${dp}" which does not match target_file "${targetFile}"`);
+    }
+  }
   const packedFile = bundle.files.find((f2) => f2.path === targetFile);
   if (!packedFile) {
     errors.push(`Target file "${targetFile}" does not exist in the packed repository bundle`);
@@ -31509,46 +31821,155 @@ async function proposeFix(input, deps = {}) {
     model
   };
 }
-var PROTECTED_PATH_PARTS = ["node_modules", ".git", "tests"];
+var PROTECTED_PATH_PARTS = ["node_modules", ".git", "tests", "__tests__", ".ssh", ".aws", ".vercel", ".github"];
 var PROTECTED_PATH_PATTERNS = [
-  /(^|\/)(package(-lock)?\.json|pnpm-lock\.yaml|yarn\.lock|package-lock\.json)$/,
-  /(^|\/)\.env/,
-  /(^|\/)playwright\.config\.[cm]?ts$/,
-  /(^|\/)vite\.config\.[cm]?ts$/,
-  /(^|\/)tsconfig(\.\w+)?\.json$/
+  /(^|\/)(package(-lock)?\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|yarn\.lock|bun\.lockb?)$/i,
+  /(^|\/)\.env(\..+)?$/i,
+  /(^|\/)(playwright|vite|vitest|jest|next|postcss|tailwind|eslint)\.config\.[cm]?[jt]sx?$/i,
+  /(^|\/)tsconfig(\..+)?\.json$/i,
+  /\.(spec|test)\.[cm]?[jt]sx?$/i,
+  /\.(pem|key|p12|pfx|crt|cer|der)$/i,
+  /(^|\/)(id_rsa|id_ed25519|id_ecdsa|id_dsa|authorized_keys|known_hosts)$/i,
+  /(^|\/)Dockerfile(\..+)?$/i,
+  /(^|\/)docker-compose(\..+)?\.ya?ml$/i
 ];
-async function resolveSafeWorkspacePath(workDir, relativePath) {
-  const rootReal = await fs10.promises.realpath(workDir);
-  if (path8.isAbsolute(relativePath)) {
-    throw new Error(`Rejected absolute path outside the workspace: ${relativePath}`);
+function checkProtectedRelativePath(relFromRoot, rawInput) {
+  const parts = relFromRoot.split(path8.sep);
+  if (parts.some((p2) => PROTECTED_PATH_PARTS.includes(p2))) {
+    throw new Error(`Rejected protected path: ${rawInput}`);
   }
+  const normalizedPosix = "/" + parts.join("/");
+  if (PROTECTED_PATH_PATTERNS.some((re2) => re2.test(normalizedPosix))) {
+    throw new Error(`Rejected protected file: ${rawInput}`);
+  }
+}
+function isStrictlyInsideRoot(rootReal, targetPath) {
+  if (targetPath === rootReal)
+    return false;
+  const rel = path8.relative(rootReal, targetPath);
+  if (!rel || rel.startsWith("..") || path8.isAbsolute(rel))
+    return false;
+  return targetPath.startsWith(rootReal + path8.sep);
+}
+async function resolveSafeWorkspacePath(workDir, relativePath) {
+  if (typeof workDir !== "string" || workDir.trim().length === 0 || workDir.includes("\0")) {
+    throw new Error("Rejected invalid workspace root");
+  }
+  const syntaxError = validateCandidateRelativePathSyntax(relativePath);
+  if (syntaxError) {
+    throw new Error(syntaxError);
+  }
+  const rootReal = await fs10.promises.realpath(workDir);
   const candidate = path8.resolve(rootReal, relativePath);
-  if (candidate !== rootReal && !candidate.startsWith(rootReal + path8.sep)) {
+  if (!isStrictlyInsideRoot(rootReal, candidate)) {
     throw new Error(`Rejected path outside the workspace: ${relativePath}`);
   }
   const relFromRoot = path8.relative(rootReal, candidate);
+  checkProtectedRelativePath(relFromRoot, relativePath);
   const parts = relFromRoot.split(path8.sep);
-  if (parts.some((p2) => PROTECTED_PATH_PARTS.includes(p2))) {
-    throw new Error(`Rejected protected path: ${relativePath}`);
+  let existingAncestor = rootReal;
+  let existingDepth = 0;
+  for (let i2 = 0; i2 < parts.length; i2++) {
+    const curr = path8.join(rootReal, ...parts.slice(0, i2 + 1));
+    let lst = null;
+    try {
+      lst = await fs10.promises.lstat(curr);
+    } catch (err) {
+      if (err?.code === "ENOENT") {
+        break;
+      }
+      throw err;
+    }
+    if (lst.isSymbolicLink()) {
+      const linkReal = await fs10.promises.realpath(curr).catch(() => null);
+      if (!linkReal || !isStrictlyInsideRoot(rootReal, linkReal)) {
+        throw new Error(`Rejected symlink escape outside the workspace: ${relativePath}`);
+      }
+      const linkRel = path8.relative(rootReal, linkReal);
+      try {
+        checkProtectedRelativePath(linkRel, relativePath);
+      } catch {
+        throw new Error(`Rejected symlink to protected path: ${relativePath}`);
+      }
+    }
+    if (i2 === parts.length - 1) {
+      const targetStat = await fs10.promises.stat(curr).catch(() => null);
+      if (!targetStat || !targetStat.isFile()) {
+        throw new Error(`Rejected non-file target: ${relativePath}`);
+      }
+    } else {
+      const dirStat = await fs10.promises.stat(curr).catch(() => null);
+      if (!dirStat || !dirStat.isDirectory()) {
+        throw new Error(`Rejected non-directory parent component: ${relativePath}`);
+      }
+    }
+    existingAncestor = curr;
+    existingDepth = i2 + 1;
   }
-  if (PROTECTED_PATH_PATTERNS.some((re2) => re2.test("/" + relFromRoot.split(path8.sep).join("/")))) {
-    throw new Error(`Rejected protected file: ${relativePath}`);
+  const ancestorReal = await fs10.promises.realpath(existingAncestor);
+  if (ancestorReal !== rootReal && !isStrictlyInsideRoot(rootReal, ancestorReal)) {
+    throw new Error(`Rejected parent directory symlink escape outside the workspace: ${relativePath}`);
   }
-  const real2 = await fs10.promises.realpath(candidate).catch(() => null);
-  if (real2 && real2 !== candidate && !real2.startsWith(rootReal + path8.sep)) {
-    throw new Error(`Rejected symlink escape: ${relativePath}`);
+  if (ancestorReal !== rootReal) {
+    checkProtectedRelativePath(path8.relative(rootReal, ancestorReal), relativePath);
   }
-  return candidate;
+  if (existingDepth === parts.length) {
+    const real2 = await fs10.promises.realpath(candidate).catch(() => null);
+    if (!real2 || !isStrictlyInsideRoot(rootReal, real2)) {
+      throw new Error(`Rejected symlink escape outside the workspace: ${relativePath}`);
+    }
+    checkProtectedRelativePath(path8.relative(rootReal, real2), relativePath);
+    return real2;
+  }
+  const remainingParts = parts.slice(existingDepth);
+  const resolvedNewPath = path8.join(ancestorReal, ...remainingParts);
+  if (!isStrictlyInsideRoot(rootReal, resolvedNewPath)) {
+    throw new Error(`Rejected path outside the workspace: ${relativePath}`);
+  }
+  checkProtectedRelativePath(path8.relative(rootReal, resolvedNewPath), relativePath);
+  return resolvedNewPath;
 }
-async function applyPatchToDirectory(workDir, output) {
-  const fullPath = await resolveSafeWorkspacePath(workDir, output.target_file);
-  const stat4 = await fs10.promises.stat(fullPath).catch(() => null);
-  if (!stat4 || !stat4.isFile()) {
-    throw new Error(`Target file ${fullPath} not found in workspace`);
+async function applyPatchToDirectory(workDir, output, options = {}) {
+  const diffPaths = extractUnifiedDiffPaths(output.patch);
+  for (const dp of diffPaths) {
+    await resolveSafeWorkspacePath(workDir, dp);
+    if (dp !== output.target_file) {
+      throw new Error(`Rejected multi-file or mismatched diff target "${dp}" (expected "${output.target_file}")`);
+    }
   }
-  const originalContent = await fs10.promises.readFile(fullPath, "utf8");
+  const rootReal = await fs10.promises.realpath(workDir);
+  const fullPath = await resolveSafeWorkspacePath(workDir, output.target_file);
+  const lstat2 = await fs10.promises.lstat(fullPath).catch((err) => err?.code === "ENOENT" ? null : Promise.reject(err));
+  if (lstat2?.isSymbolicLink()) {
+    throw new Error(`Rejected symlink target at write boundary: ${output.target_file}`);
+  }
+  let originalContent = "";
+  let isNewFile = false;
+  if (!lstat2) {
+    const isDevNullDiff = typeof output.patch === "string" && /^---\s+(\/dev\/null|a\/dev\/null)\b/m.test(output.patch);
+    if (!options.allowCreate && !isDevNullDiff) {
+      throw new Error(`Target file ${fullPath} not found in workspace`);
+    }
+    isNewFile = true;
+  } else {
+    if (!lstat2.isFile()) {
+      throw new Error(`Target file ${fullPath} is not a regular file`);
+    }
+    originalContent = await fs10.promises.readFile(fullPath, "utf8");
+  }
   let newContent = originalContent;
-  if (output.original_snippet && output.replacement_snippet !== void 0) {
+  if (isNewFile) {
+    if (output.replacement_snippet) {
+      newContent = output.replacement_snippet.replace(/\r\n/g, "\n");
+    } else if (output.patch) {
+      const addLines = [];
+      for (const l2 of output.patch.split(/\r?\n/)) {
+        if (l2.startsWith("+") && !l2.startsWith("+++"))
+          addLines.push(l2.slice(1));
+      }
+      newContent = addLines.join("\n");
+    }
+  } else if (output.original_snippet && output.replacement_snippet !== void 0) {
     const normOriginal = originalContent.replace(/\r\n/g, "\n");
     const normSnippet = output.original_snippet.replace(/\r\n/g, "\n").trim();
     if (normOriginal.includes(normSnippet)) {
@@ -31617,10 +32038,30 @@ async function applyPatchToDirectory(workDir, output) {
   if (newContent === originalContent) {
     throw new Error(`Patch produced no content changes for ${output.target_file}`);
   }
-  await fs10.promises.writeFile(fullPath, newContent, "utf8");
+  if (isNewFile) {
+    const parentDir = path8.dirname(fullPath);
+    await fs10.promises.mkdir(parentDir, { recursive: true });
+    const parentReal = await fs10.promises.realpath(parentDir);
+    if (parentReal !== rootReal && !isStrictlyInsideRoot(rootReal, parentReal)) {
+      throw new Error(`Rejected parent directory escape at write boundary: ${output.target_file}`);
+    }
+  }
+  const revalidatedPath = await resolveSafeWorkspacePath(workDir, output.target_file);
+  const preWriteLstat = await fs10.promises.lstat(revalidatedPath).catch((err) => err?.code === "ENOENT" ? null : Promise.reject(err));
+  if (preWriteLstat?.isSymbolicLink()) {
+    throw new Error(`Rejected symlink target at write boundary: ${output.target_file}`);
+  }
+  const noFollowFlag = typeof fs10.constants.O_NOFOLLOW === "number" ? fs10.constants.O_NOFOLLOW : 0;
+  const openFlags = fs10.constants.O_WRONLY | fs10.constants.O_TRUNC | (isNewFile ? fs10.constants.O_CREAT | fs10.constants.O_EXCL : 0) | noFollowFlag;
+  const fh = await fs10.promises.open(revalidatedPath, openFlags, 420);
+  try {
+    await fh.writeFile(newContent, "utf8");
+  } finally {
+    await fh.close();
+  }
   return {
     applied: true,
-    filePath: fullPath,
+    filePath: revalidatedPath,
     originalContent,
     newContent
   };
@@ -32008,6 +32449,13 @@ ${res.stdout ?? ""}`.trim();
     return "";
   return redactSecretText(text2.split("\n").slice(-lines).join("\n")).slice(0, 4e3);
 }
+var KNOWN_SAMPLE_IDS_SET = /* @__PURE__ */ new Set([
+  "cart-nan",
+  "double-discount",
+  "string-sort",
+  "empty-email",
+  "quantity-reset"
+]);
 var EventCollector = class {
   runId;
   onEvent;
@@ -32044,10 +32492,14 @@ async function runPipeline(options, deps = {}) {
   const { targetRepoRoot, targetAppUrl = "http://localhost:5173", maxFixAttempts = 2, artifactsDir = path11.resolve("artifacts") } = options;
   let sampleId = options.sampleId;
   const collector = new EventCollector(runId, options.onEvent);
-  if (!sampleId && options.videoPath) {
-    const match2 = options.videoPath.match(/samples\/([^/]+)/);
-    if (match2)
+  if (sampleId && !KNOWN_SAMPLE_IDS_SET.has(sampleId)) {
+    throw new Error(`Unknown sampleId "${sampleId}". Must be one of: ${Array.from(KNOWN_SAMPLE_IDS_SET).join(", ")}`);
+  }
+  if (!sampleId && options.videoPath && !/(^|[\\/])uploads([\\/]|$)/.test(options.videoPath)) {
+    const match2 = options.videoPath.match(/(?:^|[\\/])samples[\\/](?:videos[\\/])?([a-z0-9-]+?)(?:\.webm|[\\/]|$)/i);
+    if (match2 && match2[1] && KNOWN_SAMPLE_IDS_SET.has(match2[1])) {
       sampleId = match2[1];
+    }
   }
   await collector.emit("ingest", "ingest_started", "orchestrator", {
     target_repo: targetRepoRoot,
@@ -32069,7 +32521,7 @@ async function runPipeline(options, deps = {}) {
     video_path: options.videoPath
   });
   let fixtureJson;
-  if (sampleId) {
+  if (sampleId && KNOWN_SAMPLE_IDS_SET.has(sampleId)) {
     const candidatePaths = [
       path11.resolve(`samples/${sampleId}/expected.json`),
       path11.resolve(targetRepoRoot, `../../samples/${sampleId}/expected.json`)
@@ -32081,80 +32533,135 @@ async function runPipeline(options, deps = {}) {
       }
     }
   }
-  const videoReadable = !!options.videoPath && fs13.existsSync(options.videoPath);
-  const liveWatcherPossible = videoReadable && await VideoProcessor.checkFfmpeg() && !!resolveApiKey("watcher");
+  const checkFfmpegFn = deps.videoDeps?.checkFfmpeg ?? (() => VideoProcessor.checkFfmpeg());
+  const extractFramesFn = deps.videoDeps?.extractFrames ?? ((vp, outDir) => VideoProcessor.extractFrames(vp, outDir));
+  const createSandboxFn = deps.sandboxDeps?.create ?? ((srcDir) => IsolatedWorkspaceSandbox.create(srcDir));
+  const videoStat = options.videoPath ? await fs13.promises.stat(options.videoPath).catch(() => null) : null;
+  const videoReadable = Boolean(videoStat && videoStat.isFile() && videoStat.size > 0);
+  const ffmpegAvailable = videoReadable ? await checkFfmpegFn() : false;
+  const hasWatcherCredential = Boolean(deps.watcherDeps?.client || resolveApiKey("watcher"));
+  const liveWatcherPossible = videoReadable && ffmpegAvailable && hasWatcherCredential;
   if (liveWatcherPossible) {
+    const framesDir = path11.join(artifactsDir, "frames", runId);
+    let extracted = [];
+    let extractionError = null;
     try {
-      const framesDir = path11.join(artifactsDir, "frames");
-      const extracted = await VideoProcessor.extractFrames(options.videoPath, framesDir);
-      const stride = Math.ceil(extracted.length / 40) || 1;
-      const selected = extracted.filter((_2, i2) => i2 % stride === 0).slice(0, 40);
-      const watcherFrames = await Promise.all(selected.map(async (f2) => ({
-        timestampS: f2.timestampS,
-        jpegBase64: (await fs13.promises.readFile(f2.filePath)).toString("base64")
-      })));
-      const watcherRes = await analyzeBugVideo({
-        frames: watcherFrames,
-        route: sampleId ? `/?bug=${sampleId}` : void 0
-      }, deps.watcherDeps);
-      bugReport = {
-        defect_found: watcherRes.report.defect_found,
-        summary: watcherRes.report.summary,
-        steps: watcherRes.report.steps.map((st2) => ({
-          timestamp_s: st2.timestamp_s,
-          description: st2.description,
-          visible_text: st2.visible_text
-        })),
-        first_failure_timestamp_s: watcherRes.report.first_failure_timestamp_s,
-        expected_behavior: watcherRes.report.expected_behavior,
-        actual_behavior: watcherRes.report.actual_behavior,
-        visible_text: watcherRes.report.visible_text,
-        route: watcherRes.report.route,
-        confidence: watcherRes.report.confidence
-      };
-      videoAnalysis = "live";
-      watcherMetrics = watcherRes.metrics;
-      if (sampleId && fixtureJson) {
-        const expected = SampleFixtureSchema.parse(JSON.parse(fixtureJson));
-        const matches = Math.abs(expected.failure_timestamp_s - bugReport.first_failure_timestamp_s) <= 2;
-        await collector.emit("watch", "watch_fixture_comparison", "watcher", {
-          matches_fixture: matches,
-          expected_failure_timestamp_s: expected.failure_timestamp_s,
-          live_failure_timestamp_s: bugReport.first_failure_timestamp_s
-        });
+      extracted = await extractFramesFn(options.videoPath, framesDir);
+      if (!Array.isArray(extracted) || extracted.length === 0) {
+        throw new Error("No frames extracted \u2014 the video may be undecodable, empty, or in an unsupported format.");
       }
     } catch (err) {
-      await collector.emit("watch", "watch_model_error", "watcher", {
-        code: err?.code ?? "unknown",
-        model: err?.model ?? resolveModel("watcher"),
-        message: err?.message ?? String(err)
-      });
-      if (!fixtureJson)
-        throw err;
-      const parsedFixture = SampleFixtureSchema.parse(JSON.parse(fixtureJson));
-      bugReport = fixtureToBugReport(parsedFixture);
-      videoAnalysis = "fixture_assisted";
-      blockedStages.push(`Live Watcher failed (${err?.code ?? "unknown"}): using fixture metadata`);
-      await collector.emit("watch", "watch_fixture_fallback", "watcher", {
-        reason: `Live Watcher failed: ${err?.code ?? "unknown"}`,
-        sample_id: sampleId
+      extractionError = err instanceof Error ? err : new Error(String(err));
+      await fs13.promises.rm(framesDir, { recursive: true, force: true }).catch(() => {
       });
     }
-  } else if (options.bugReport) {
-    bugReport = options.bugReport;
+    if (extractionError) {
+      const msg = redactSecretText(extractionError.message);
+      await collector.emit("watch", "watch_extraction_error", "watcher", {
+        code: "frame_extraction_failed",
+        message: msg
+      });
+      await collector.emit("watch", "watch_model_error", "watcher", {
+        code: "frame_extraction_failed",
+        model: resolveModel("watcher"),
+        message: msg
+      });
+      if (sampleId && fixtureJson) {
+        const parsedFixture = SampleFixtureSchema.parse(JSON.parse(fixtureJson));
+        bugReport = fixtureToBugReport(parsedFixture);
+        videoAnalysis = "fixture_assisted";
+        blockedStages.push(`Frame extraction failed: using fixture metadata (${msg})`);
+        await collector.emit("watch", "watch_fixture_fallback", "watcher", {
+          reason: `Frame extraction failed: ${msg}`,
+          sample_id: sampleId
+        });
+      } else {
+        await collector.emit("watch", "watch_failed", "watcher", {
+          reason: `Frame extraction failed: ${msg}`
+        });
+        const fatal = new Error(`Cannot analyze uploaded video: ${msg}`);
+        fatal.code = "frame_extraction_failed";
+        throw fatal;
+      }
+    } else {
+      try {
+        const stride = Math.ceil(extracted.length / 40) || 1;
+        const selected = extracted.filter((_2, i2) => i2 % stride === 0).slice(0, 40);
+        const watcherFrames = await Promise.all(selected.map(async (f2) => ({
+          timestampS: f2.timestampS,
+          jpegBase64: (await fs13.promises.readFile(f2.filePath)).toString("base64")
+        })));
+        const watcherRes = await analyzeBugVideo({
+          frames: watcherFrames,
+          note: options.note,
+          route: sampleId ? `/?bug=${sampleId}` : void 0
+        }, deps.watcherDeps);
+        bugReport = BugReportSchema.parse(watcherRes.report);
+        videoAnalysis = "live";
+        watcherMetrics = watcherRes.metrics;
+        if (sampleId && fixtureJson) {
+          const expected = SampleFixtureSchema.parse(JSON.parse(fixtureJson));
+          const matches = Math.abs(expected.failure_timestamp_s - bugReport.first_failure_timestamp_s) <= 2;
+          await collector.emit("watch", "watch_fixture_comparison", "watcher", {
+            matches_fixture: matches,
+            expected_failure_timestamp_s: expected.failure_timestamp_s,
+            live_failure_timestamp_s: bugReport.first_failure_timestamp_s
+          });
+        }
+      } catch (err) {
+        const safeMsg = redactSecretText(err?.message ?? String(err));
+        await collector.emit("watch", "watch_model_error", "watcher", {
+          code: err?.code ?? "watcher_failed",
+          model: err?.model ?? resolveModel("watcher"),
+          message: safeMsg
+        });
+        if (!sampleId || !fixtureJson) {
+          await collector.emit("watch", "watch_failed", "watcher", {
+            reason: `Live Watcher analysis failed: ${safeMsg}`
+          });
+          throw err;
+        }
+        const parsedFixture = SampleFixtureSchema.parse(JSON.parse(fixtureJson));
+        bugReport = fixtureToBugReport(parsedFixture);
+        videoAnalysis = "fixture_assisted";
+        blockedStages.push(`Live Watcher failed (${err?.code ?? "unknown"}): using fixture metadata`);
+        await collector.emit("watch", "watch_fixture_fallback", "watcher", {
+          reason: `Live Watcher failed: ${err?.code ?? "unknown"}`,
+          sample_id: sampleId
+        });
+      }
+    }
+  } else if (options.bugReport && !options.videoPath) {
+    bugReport = BugReportSchema.parse(options.bugReport);
     videoAnalysis = "none";
   } else if (sampleId && fixtureJson) {
     const parsedFixture = SampleFixtureSchema.parse(JSON.parse(fixtureJson));
     bugReport = fixtureToBugReport(parsedFixture);
     videoAnalysis = "fixture_assisted";
-    const reason = !videoReadable ? "video file missing" : !await VideoProcessor.checkFfmpeg() ? "ffmpeg not installed" : "no watcher API key configured";
+    const reason = !videoReadable ? "video file missing" : !ffmpegAvailable ? "ffmpeg not installed" : "no watcher API key configured";
     blockedStages.push(`Live Watcher unavailable: ${reason}`);
     await collector.emit("watch", "watch_fixture_fallback", "watcher", {
       reason: `Using verified fixture clip metadata (${reason})`,
       sample_id: sampleId
     });
   } else if (options.videoPath) {
-    throw new Error(`Cannot analyze the uploaded video: ${!videoReadable ? "the video file is missing or unreadable" : !await VideoProcessor.checkFfmpeg() ? "ffmpeg is not installed on the worker" : "no watcher API key configured"}.`);
+    const reason = !videoReadable ? "the video file is missing or unreadable" : !ffmpegAvailable ? "ffmpeg is not installed on the worker" : "no watcher API key configured";
+    const errCode = !videoReadable ? "video_missing" : !ffmpegAvailable ? "ffmpeg_missing" : "missing_key";
+    await collector.emit("watch", "watch_model_error", "watcher", {
+      code: errCode,
+      model: resolveModel("watcher"),
+      message: `Cannot analyze the uploaded video: ${reason}.`
+    });
+    await collector.emit("watch", "watch_failed", "watcher", {
+      code: errCode,
+      reason: `Cannot analyze the uploaded video: ${reason}.`
+    });
+    const fatal = new Error(`Cannot analyze the uploaded video: ${reason}.`);
+    fatal.code = errCode;
+    throw fatal;
+  } else if (options.bugReport) {
+    bugReport = BugReportSchema.parse(options.bugReport);
+    videoAnalysis = "none";
   } else {
     throw new Error("Pipeline requires either bugReport, sampleId, or valid videoPath input.");
   }
@@ -32327,8 +32834,9 @@ async function runPipeline(options, deps = {}) {
       });
       continue;
     }
-    const sandbox = await IsolatedWorkspaceSandbox.create(targetRepoRoot);
+    let sandbox;
     try {
+      sandbox = await createSandboxFn(targetRepoRoot);
       await applyPatchToDirectory(sandbox.workDir, lastFixerOutput);
       const buildRes = await sandbox.exec("npx", ["vite", "build"]);
       if (buildRes.exitCode !== 0) {
@@ -32379,12 +32887,21 @@ async function runPipeline(options, deps = {}) {
       });
       break;
     } catch (err) {
+      reproAfterFixPassed = false;
+      baselineRegressionPassed = false;
+      const safeError = redactSecretText(err?.message || String(err));
       await collector.emit("fix", "fix_attempt_error", "fixer", {
         attempt,
-        error: err?.message || String(err)
+        code: err instanceof SandboxUnavailableError ? err.code : err?.code ?? "fix_error",
+        error: safeError
       });
+      if (err instanceof SandboxUnavailableError) {
+        blockedStages.push(`Fix verification blocked: ${safeError}`);
+        break;
+      }
     } finally {
-      await sandbox.cleanup();
+      await sandbox?.cleanup().catch(() => {
+      });
     }
   }
   const isFixed = reproAfterFixPassed && baselineRegressionPassed;
