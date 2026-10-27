@@ -267,7 +267,10 @@ Track deployment readiness, benchmark execution, hallway testing, README, demo v
 - [x] **Security audit**: `DONE`
   - `gitleaks git --verbose`: 37 commits scanned, 0 leaks found.
   - `pnpm audit --prod`: single documented Zod GHSA-mrhx-c7xc-m3w5 (collection size limit, input strictly bounded by Hono body limit).
-- [ ] **GitHub CI & Vercel release verification**: `PENDING` (push in progress)
+- [x] **GitHub CI & Vercel release verification**: `DONE`
+  - Changes pushed to `origin/main` at commit `3ff1595`.
+  - Vercel production deployment `dpl_Cda37vSEuxfWyJ2ZTzpF1ZJ2rJni` is **Ready** (`https://replay-ibobzgw3o-specpriyanshu-6300s-projects.vercel.app`).
+  - Verified remote live endpoints: `/api/health` returns HTTP 200 with all 5 samples available, `/api/samples` returns sample list. Same-origin CORS fix verified live in production.
 
 ---
 
