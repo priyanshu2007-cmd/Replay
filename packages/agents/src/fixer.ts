@@ -13,10 +13,11 @@ import {
 } from '@replay/shared';
 import { LlmClient, ModelMetrics, moduleDirOf, resolveApiKey, resolveModel } from './llm.js';
 import { RepoBundle } from './packer.js';
+import { DEFAULT_FIXER_PROMPT } from './prompts.js';
 
 export const FIXER_PROMPT_VERSION = 'v1';
 
-const moduleDir = moduleDirOf(import.meta.url);
+const moduleDir = typeof import.meta !== 'undefined' && import.meta.url ? moduleDirOf(import.meta.url) : undefined;
 
 const PROMPT_CANDIDATES = [
   ...(moduleDir ? [path.join(moduleDir, '../prompts/fixer.md'), path.join(moduleDir, '../../prompts/fixer.md')] : []),
@@ -25,12 +26,16 @@ const PROMPT_CANDIDATES = [
   path.resolve(process.env.REPLAY_PROMPTS_DIR || '', 'fixer.md'),
 ];
 
-/** Load the versioned Fixer system prompt from packages/agents/prompts/fixer.md. */
+/** Load the versioned Fixer system prompt from packages/agents/prompts/fixer.md with embedded fallback. */
 export function loadFixerPrompt(): string {
   for (const p of PROMPT_CANDIDATES) {
-    if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8');
+    try {
+      if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8');
+    } catch {
+      // continue to next candidate
+    }
   }
-  throw new Error('fixer.md not found in packages/agents/prompts/');
+  return DEFAULT_FIXER_PROMPT;
 }
 
 export interface FixerInput {
@@ -55,16 +60,73 @@ export interface FixerResult {
 
 const FORBIDDEN_FILE_PATTERNS = [
   /\btests?\//i,
-  /\.spec\.[jt]sx?$/i,
-  /\.test\.[jt]sx?$/i,
+  /\b__tests__\//i,
+  /\.spec\.[cm]?[jt]sx?$/i,
+  /\.test\.[cm]?[jt]sx?$/i,
   /playwright\.config/i,
   /vite\.config/i,
+  /vitest\.config/i,
   /tsconfig/i,
-  /package\.json$/i,
+  /package(-lock)?\.json$/i,
   /\.env/i,
   /\.lock$/i,
   /pnpm-lock/i,
+  /pnpm-workspace/i,
+  /\.(pem|key|p12|pfx|crt|cer)$/i,
+  /(^|\/)(id_rsa|id_ed25519|id_ecdsa|id_dsa)$/i,
+  /(^|\/)node_modules(\/|$)/i,
+  /(^|\/)\.git(\/|$)/i,
 ];
+
+/**
+ * Extract all file paths referenced in unified diff headers (`--- a/...` / `+++ b/...`),
+ * ignoring `/dev/null`.
+ */
+export function extractUnifiedDiffPaths(patchText: string): string[] {
+  if (!patchText || typeof patchText !== 'string') return [];
+  const paths: string[] = [];
+  for (const rawLine of patchText.split(/\r?\n/)) {
+    if (!rawLine.startsWith('--- ') && !rawLine.startsWith('+++ ')) continue;
+    let spec = rawLine.slice(4).trim();
+    const tabIdx = spec.indexOf('\t');
+    if (tabIdx !== -1) spec = spec.slice(0, tabIdx).trim();
+    if (!spec || spec === '/dev/null' || spec === 'a/dev/null' || spec === 'b/dev/null') continue;
+    if ((spec.startsWith('a/') || spec.startsWith('b/')) && !spec.startsWith('a//') && !spec.startsWith('b//')) {
+      spec = spec.slice(2);
+    }
+    paths.push(spec);
+  }
+  return paths;
+}
+
+/**
+ * Validate syntactic safety of a candidate relative path before any filesystem call.
+ */
+function validateCandidateRelativePathSyntax(relativePath: string): string | null {
+  if (typeof relativePath !== 'string' || relativePath.trim().length === 0) {
+    return 'Rejected empty path outside the workspace';
+  }
+  if (relativePath.includes('\0')) {
+    return 'Rejected null-byte path outside the workspace';
+  }
+  if (/^[a-zA-Z]:/.test(relativePath)) {
+    return `Rejected drive-prefixed path outside the workspace: ${relativePath}`;
+  }
+  if (/^(\\\\+|\/\/+)/.test(relativePath)) {
+    return `Rejected UNC path outside the workspace: ${relativePath}`;
+  }
+  if (relativePath.startsWith('/') || relativePath.startsWith('\\') || path.isAbsolute(relativePath)) {
+    return `Rejected absolute path outside the workspace: ${relativePath}`;
+  }
+  if (relativePath.includes('\\')) {
+    return `Rejected Windows-style path separator outside the workspace: ${relativePath}`;
+  }
+  const segments = relativePath.split('/');
+  if (segments.some((seg) => seg === '..' || seg === '.' || seg.length === 0)) {
+    return `Rejected traversal or malformed path outside the workspace: ${relativePath}`;
+  }
+  return null;
+}
 
 /** Validate that the patch targets authorized application code and does not alter tests or config. */
 export function validatePatchSafety(
@@ -78,7 +140,24 @@ export function validatePatchSafety(
     return { valid: false, errors };
   }
 
-  const targetFile = output.target_file.replace(/^\/+/, '');
+  const syntaxErr = validateCandidateRelativePathSyntax(output.target_file);
+  if (syntaxErr) {
+    errors.push(syntaxErr);
+    return { valid: false, errors };
+  }
+
+  const targetFile = output.target_file;
+
+  // Validate any unified diff headers to reject multi-file or traversal headers
+  const diffPaths = extractUnifiedDiffPaths(output.patch);
+  for (const dp of diffPaths) {
+    const dpErr = validateCandidateRelativePathSyntax(dp);
+    if (dpErr) {
+      errors.push(`Invalid path in unified diff header "${dp}": ${dpErr}`);
+    } else if (dp !== targetFile) {
+      errors.push(`Unified diff references "${dp}" which does not match target_file "${targetFile}"`);
+    }
+  }
 
   // 1. Must target an existing file in packed repository
   const packedFile = bundle.files.find(f => f.path === targetFile);

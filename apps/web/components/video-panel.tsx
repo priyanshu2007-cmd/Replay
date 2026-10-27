@@ -51,7 +51,7 @@ export function VideoPanel({
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
-    if (e.key === ' ' || e.key === 'k' || e.key === 'Spacebar') {
+    if (e.key === ' ' || e.key === 'Spacebar') {
       e.preventDefault();
       const v = videoRef.current;
       if (!v) return;

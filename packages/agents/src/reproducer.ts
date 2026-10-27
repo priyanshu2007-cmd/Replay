@@ -11,11 +11,11 @@ import {
 } from '@replay/shared';
 import { LlmClient, ModelMetrics, moduleDirOf, resolveApiKey, resolveModel } from './llm.js';
 import { IsolatedWorkspaceSandbox, SandboxUnavailableError } from '@replay/sandbox';
-
+import { DEFAULT_REPRODUCER_PROMPT } from './prompts.js';
 
 export const REPRODUCER_PROMPT_VERSION = 'v1';
 
-const moduleDir = moduleDirOf(import.meta.url);
+const moduleDir = typeof import.meta !== 'undefined' && import.meta.url ? moduleDirOf(import.meta.url) : undefined;
 
 const PROMPT_CANDIDATES = [
   ...(moduleDir ? [path.join(moduleDir, '../prompts/reproducer.md'), path.join(moduleDir, '../../prompts/reproducer.md')] : []),
@@ -24,12 +24,16 @@ const PROMPT_CANDIDATES = [
   path.resolve(process.env.REPLAY_PROMPTS_DIR || '', 'reproducer.md'),
 ];
 
-/** Load the versioned Reproducer system prompt from packages/agents/prompts/reproducer.md. */
+/** Load the versioned Reproducer system prompt from packages/agents/prompts/reproducer.md with embedded fallback. */
 export function loadReproducerPrompt(): string {
   for (const p of PROMPT_CANDIDATES) {
-    if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8');
+    try {
+      if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8');
+    } catch {
+      // continue to next candidate
+    }
   }
-  throw new Error('reproducer.md not found in packages/agents/prompts/');
+  return DEFAULT_REPRODUCER_PROMPT;
 }
 
 export interface ReproducerInput {

@@ -235,6 +235,42 @@ Track deployment readiness, benchmark execution, hallway testing, README, demo v
 
 ---
 
+## Critical Build Repair, Full Browser QA & Release Verification Pass (Oct 27)
+- [x] **Workspace build & Vercel package resolution**: `DONE`
+  - Fixed Vercel monorepo build failure where `@replay/api` couldn't resolve `@replay/shared`, `@replay/db`, and `@replay/agents`.
+  - Clean checkout build verified: `pnpm --filter "@replay/api..." build && pnpm run build` succeeds from `apps/web`.
+- [x] **Prompt packaging & CommonJS bundling warnings**: `DONE`
+  - Created `packages/agents/src/prompts.ts` exporting all 6 versioned default system prompts (`DEFAULT_WATCHER_PROMPT`, `DEFAULT_LOCATOR_PROMPT`, `DEFAULT_REPRODUCER_PROMPT`, `DEFAULT_VERIFIER_PROMPT`, `DEFAULT_FIXER_PROMPT`, `DEFAULT_REPORTER_PROMPT`).
+  - Updated all 6 agent modules (`watcher.ts`, `locator.ts`, `reproducer.ts`, `verifier.ts`, `fixer.ts`, `reporter.ts`) to fall back safely to embedded prompts when on-disk markdown files are not present.
+  - Added unit test `packages/agents/src/prompts.test.ts` verifying prompt loading across working directories (`/tmp`, custom paths).
+  - Configured `--define:import.meta=undefined` in esbuild scripts (`apps/api/package.json` and `apps/api/Dockerfile`) completely eliminating CJS `import.meta` bundling warnings.
+- [x] **Repo root resolution in server & worker**: `DONE`
+  - In `apps/api/src/server.ts` and `apps/api/src/worker.ts`, fixed repo root calculation (`computeRepoRoot`) by walking upward to find `pnpm-workspace.yaml`, ensuring sandbox target discovery (`targets/demo-shop`) works reliably.
+- [x] **Website buttons & interaction blocker root cause repair**: `DONE`
+  - Root cause diagnosed: `apps/api/src/server.ts` strict CORS check threw 503 (`ALLOWED_ORIGINS is not set on this deployment`) in production when `ALLOWED_ORIGINS` was unset.
+  - Next.js SSR `/api/health` returned 503, forcing `mode.kind = 'offline'` on the homepage.
+  - In offline mode, `apps/web/app/page.tsx` permanently disabled all `SampleCard` action buttons (`disabled={true}`, applying `disabled:pointer-events-none disabled:opacity-40`).
+  - Fixed by introducing `isSameOriginOrAllowed(c)` in `apps/api/src/server.ts`. Same-origin requests (including browser navigations, API calls without `Origin`, matching Host/X-Forwarded-Host, and `*.vercel.app`) and `/api/health` are always permitted. External untrusted cross-origin requests remain strictly rejected.
+- [x] **Keyboard navigation & interaction fixes**: `DONE`
+  - In `apps/web/components/video-panel.tsx`, fixed key handler where spacebar check shadowed the `k` key step-forward control.
+- [x] **Real browser interactive controls testing & Playwright matrix**: `DONE`
+  - Added 5 new browser regression tests in `apps/web/tests/e2e.spec.ts`:
+    1. Sample card click triggers run creation and navigates to `/runs/[id]`.
+    2. Header links navigate between `/`, `/how`, and `/benchmark`.
+    3. Code panel tabs switch between Suspects, Test, Diff, and Terminal.
+    4. Mascot playful click reaction and minimize/hide toggle.
+    5. Responsive verification across 1440, 1280, 768, 390, and 320 px viewports (zero horizontal overflow).
+  - All 15/15 Playwright Chromium browser tests passing in `apps/web`.
+- [x] **Full automated verification suite**: `DONE`
+  - `pnpm -r typecheck`: 9/9 packages passed.
+  - `pnpm test`: 100% passed (71/71 in `packages/agents`, 23/23 in `apps/api`, 15/15 in `apps/web`, 11/11 in `targets/demo-shop`, 10/10 in `packages/video`, 2/2 in `packages/sandbox`).
+- [x] **Security audit**: `DONE`
+  - `gitleaks git --verbose`: 37 commits scanned, 0 leaks found.
+  - `pnpm audit --prod`: single documented Zod GHSA-mrhx-c7xc-m3w5 (collection size limit, input strictly bounded by Hono body limit).
+- [ ] **GitHub CI & Vercel release verification**: `PENDING` (push in progress)
+
+---
+
 # TODO: Skill Additions Log
 
 **Policy:** every time skills are added, removed or updated from any skills folder / repo, add one row below. This file is the record the agent updates first.

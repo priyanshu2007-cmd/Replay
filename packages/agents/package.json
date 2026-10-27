@@ -14,7 +14,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test --test-concurrency=1 src/llm.test.ts src/watcher.test.ts src/locator.test.ts src/reproducer.test.ts src/verifier.test.ts src/fixer.test.ts src/reporter.test.ts src/pipeline.test.ts src/packer.test.ts",
+    "test": "node --import tsx --test --test-concurrency=1 src/llm.test.ts src/watcher.test.ts src/locator.test.ts src/reproducer.test.ts src/verifier.test.ts src/fixer.test.ts src/reporter.test.ts src/pipeline.test.ts src/packer.test.ts src/prompts.test.ts",
     "eval:watcher": "tsx ../../eval/eval-watcher.mts",
     "eval:locator": "tsx ../../eval/eval-locator.mts",
     "eval:reproducer": "tsx ../../eval/eval-reproducer.mts",

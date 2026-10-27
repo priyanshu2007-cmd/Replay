@@ -13,10 +13,11 @@ import {
   VerifierOutput,
 } from '@replay/shared';
 import { LlmClient, LlmError, ModelMetrics, moduleDirOf, resolveApiKey, resolveModel, toLlmError } from './llm.js';
+import { DEFAULT_REPORTER_PROMPT } from './prompts.js';
 
 export const REPORTER_PROMPT_VERSION = 'v1';
 
-const moduleDir = moduleDirOf(import.meta.url);
+const moduleDir = typeof import.meta !== 'undefined' && import.meta.url ? moduleDirOf(import.meta.url) : undefined;
 const PROMPT_CANDIDATES = [
   ...(moduleDir ? [path.join(moduleDir, '../prompts/reporter.md'), path.join(moduleDir, '../../prompts/reporter.md')] : []),
   path.resolve(process.cwd(), 'packages/agents/prompts/reporter.md'),
@@ -26,9 +27,13 @@ const PROMPT_CANDIDATES = [
 
 export function loadReporterPrompt(): string {
   for (const p of PROMPT_CANDIDATES) {
-    if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8');
+    try {
+      if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8');
+    } catch {
+      // continue to next candidate
+    }
   }
-  throw new Error('reporter.md not found in packages/agents/prompts/');
+  return DEFAULT_REPORTER_PROMPT;
 }
 
 export interface ReportInputData {

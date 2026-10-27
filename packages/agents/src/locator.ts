@@ -5,10 +5,11 @@ import { z } from 'zod';
 import { BugReport, BugReportSchema, LocatorOutput, LocatorOutputSchema } from '@replay/shared';
 import { LlmClient, ModelMetrics, moduleDirOf, resolveApiKey, resolveModel } from './llm.js';
 import { PackedFile, RepoBundle } from './packer.js';
+import { DEFAULT_LOCATOR_PROMPT } from './prompts.js';
 
 export const LOCATOR_PROMPT_VERSION = 'v1';
 
-const moduleDir = moduleDirOf(import.meta.url);
+const moduleDir = typeof import.meta !== 'undefined' && import.meta.url ? moduleDirOf(import.meta.url) : undefined;
 
 const PROMPT_CANDIDATES = [
   ...(moduleDir ? [path.join(moduleDir, '../prompts/locator.md'), path.join(moduleDir, '../../prompts/locator.md')] : []),
@@ -17,12 +18,16 @@ const PROMPT_CANDIDATES = [
   path.resolve(process.env.REPLAY_PROMPTS_DIR || '', 'locator.md'),
 ];
 
-/** Load the versioned Locator system prompt from packages/agents/prompts/locator.md. */
+/** Load the versioned Locator system prompt from packages/agents/prompts/locator.md with embedded fallback. */
 export function loadLocatorPrompt(): string {
   for (const p of PROMPT_CANDIDATES) {
-    if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8');
+    try {
+      if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8');
+    } catch {
+      // continue to next candidate
+    }
   }
-  throw new Error('locator.md not found in packages/agents/prompts/');
+  return DEFAULT_LOCATOR_PROMPT;
 }
 
 /** Schema for samples/<id>/expected.json fixtures. */

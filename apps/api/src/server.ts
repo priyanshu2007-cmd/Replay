@@ -19,14 +19,29 @@ import {
 import { Worker } from './worker.js';
 
 // Repo root: filesystem-relative paths only matter outside serverless hosts.
-// The CJS bundle for Vercel has no import.meta, so fall back to cwd there.
+// Walk upward to locate pnpm-workspace.yaml so both src and dist resolve cleanly.
 function computeRepoRoot(): string {
+  if (process.env.REPLAY_WORKSPACE_ROOT) return path.resolve(process.env.REPLAY_WORKSPACE_ROOT);
   if (process.env.VERCEL) return process.cwd();
   try {
-    return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+    let dir = path.dirname(fileURLToPath(import.meta.url));
+    for (let i = 0; i < 6; i++) {
+      if (fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) return dir;
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
   } catch {
-    return process.cwd();
+    // fall through to process.cwd() walk
   }
+  let cwd = process.cwd();
+  for (let i = 0; i < 6; i++) {
+    if (fs.existsSync(path.join(cwd, 'pnpm-workspace.yaml'))) return cwd;
+    const parent = path.dirname(cwd);
+    if (parent === cwd) break;
+    cwd = parent;
+  }
+  return process.cwd();
 }
 const REPO_ROOT = computeRepoRoot();
 // Serverless hosts (Vercel) have a read-only repo: transient uploads and run
@@ -123,21 +138,47 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
   const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '')
     .split(',').map((s) => s.trim()).filter(Boolean);
   if (isProd && allowedOrigins.length === 0) {
-    console.error('[Replay API] ALLOWED_ORIGINS is not set; API routes will refuse requests until it is configured.');
+    console.error('[Replay API] ALLOWED_ORIGINS is not set; external cross-origin requests will be refused.');
+  }
+
+  function isSameOriginOrAllowed(c: any): boolean {
+    const origin = c.req.header('origin');
+    if (!origin) return true; // Same-origin GET, navigation, or internal fetch
+    if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) return true;
+    const host = c.req.header('host') || c.req.header('x-forwarded-host');
+    if (host && (origin === `https://${host}` || origin === `http://${host}`)) return true;
+    if (process.env.VERCEL && (origin.endsWith('.vercel.app') || origin === 'https://vercel.app')) return true;
+    return false;
   }
 
   app.use('*', cors({
-    origin: isProd ? allowedOrigins : '*',
+    origin: (origin, c) => {
+      if (!origin) return '*';
+      if (!isProd) return origin;
+      if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) return origin;
+      const host = c.req.header('host') || c.req.header('x-forwarded-host');
+      if (host && (origin === `https://${host}` || origin === `http://${host}`)) return origin;
+      if (process.env.VERCEL && (origin.endsWith('.vercel.app') || origin === 'https://vercel.app')) return origin;
+      return null;
+    },
     allowMethods: ['GET', 'POST', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
     maxAge: 86400,
   }));
 
-  // Production safety gate: refuse API requests when the origin allowlist
-  // was never configured (builds must not require runtime env).
+  // Production safety gate: refuse untrusted cross-origin requests.
+  // Same-origin requests, health checks, and configured allowed origins are always permitted.
   app.use('/api/*', async (c, next) => {
-    if (isProd && allowedOrigins.length === 0) {
-      return c.json({ error: 'Server misconfigured', message: 'ALLOWED_ORIGINS is not set on this deployment.' }, 503);
+    const path = c.req.path;
+    if (path === '/api/health' || path === '/health') {
+      await next();
+      return;
+    }
+    if (isProd && !isSameOriginOrAllowed(c)) {
+      if (allowedOrigins.length === 0) {
+        return c.json({ error: 'Server misconfigured', message: 'ALLOWED_ORIGINS is not set on this deployment.' }, 503);
+      }
+      return c.json({ error: 'Forbidden', message: 'Cross-origin request not allowed.' }, 403);
     }
     await next();
     return;

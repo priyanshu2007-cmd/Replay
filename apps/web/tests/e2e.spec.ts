@@ -106,4 +106,82 @@ test.describe('Replay web', () => {
     const playing = await page.locator('video[controls]').evaluate((v) => !(v as HTMLVideoElement).paused);
     expect(playing).toBe(true);
   });
+
+  test('clicking Run sample button starts a run and navigates to the run workspace', async ({ page }) => {
+    await page.goto('/');
+    const firstRunButton = page.getByRole('button', { name: 'Run sample' }).first();
+    await expect(firstRunButton).toBeVisible({ timeout: 15000 });
+    await expect(firstRunButton).toBeEnabled();
+    await firstRunButton.click();
+    await expect(page).toHaveURL(/\/runs\/[a-f0-9-]+/, { timeout: 15000 });
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.getByLabel('Bug recording')).toBeVisible();
+  });
+
+  test('header navigation links between home, how it works, and benchmark', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('link', { name: 'How it works' }).click();
+    await expect(page).toHaveURL(/\/how$/);
+    await expect(page.getByRole('heading', { name: 'How Replay works' })).toBeVisible();
+
+    await page.getByRole('link', { name: 'Benchmark' }).click();
+    await expect(page).toHaveURL(/\/benchmark$/);
+    await expect(page.getByRole('heading', { name: 'Benchmark' })).toBeVisible();
+
+    await page.getByRole('link', { name: 'replay', exact: true }).click();
+    await expect(page).toHaveURL(/\/$/);
+  });
+
+  test('code tabs can be switched between suspects, test, diff, and terminal', async ({ request, page }) => {
+    const created = await request.post(`${API}/api/runs`, {
+      data: { sampleId: 'cart-nan' },
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const run = (await created.json()) as { id: string };
+    await page.goto(`/runs/${run.id}`);
+
+    const tablist = page.getByRole('tablist', { name: 'Run artifacts' });
+    await expect(tablist).toBeVisible({ timeout: 15000 });
+
+    // Test tab
+    await page.getByRole('tab', { name: 'Test' }).click();
+    await expect(page.getByRole('tabpanel')).toBeVisible();
+
+    // Diff tab
+    await page.getByRole('tab', { name: 'Diff' }).click();
+    await expect(page.getByRole('tabpanel')).toBeVisible();
+
+    // Terminal tab
+    await page.getByRole('tab', { name: 'Terminal' }).click();
+    await expect(page.getByRole('tabpanel')).toBeVisible();
+
+    // Back to Suspects
+    await page.getByRole('tab', { name: 'Suspects' }).click();
+    await expect(page.getByRole('tabpanel')).toBeVisible();
+  });
+
+  test('mascot playful reaction on click and minimize button hide', async ({ page }) => {
+    await page.goto('/');
+    const mascot = page.getByRole('button', { name: /Reel, the Replay mascot/ });
+    await expect(mascot).toBeVisible({ timeout: 15000 });
+    await mascot.click();
+
+    const hideButton = page.getByRole('button', { name: 'Hide Reel' });
+    await expect(hideButton).toBeVisible();
+    await hideButton.click();
+    await expect(mascot).toHaveCount(0);
+  });
+
+  test('responsive layout verification across 1440, 1280, 768, 390, and 320 viewports', async ({ page }) => {
+    for (const width of [1440, 1280, 768, 390, 320]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto('/');
+      await page.waitForTimeout(300);
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow, `Overflow detected at ${width}px`).toBeLessThanOrEqual(0);
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    }
+  });
 });

@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -6,11 +7,19 @@ import { runPipeline, PipelineOptions, PipelineRunResult } from '@replay/agents'
 import { RunEvent, RunStage, RunState } from '@replay/shared';
 import { getRunRepository, RunRecord, RunRepository, isKnownSampleId } from './runs.js';
 
-const REPO_ROOT = process.env.VERCEL
-  ? process.cwd()
-  : process.env.REPLAY_WORKSPACE_ROOT
-    ? path.resolve(process.env.REPLAY_WORKSPACE_ROOT)
-    : path.resolve(process.cwd());
+function findRepoRoot(): string {
+  if (process.env.REPLAY_WORKSPACE_ROOT) return path.resolve(process.env.REPLAY_WORKSPACE_ROOT);
+  if (process.env.VERCEL) return process.cwd();
+  let cwd = process.cwd();
+  for (let i = 0; i < 6; i++) {
+    if (existsSync(path.join(cwd, 'pnpm-workspace.yaml'))) return cwd;
+    const parent = path.dirname(cwd);
+    if (parent === cwd) break;
+    cwd = parent;
+  }
+  return process.cwd();
+}
+const REPO_ROOT = findRepoRoot();
 // Writable data dir on serverless hosts (repo is read-only there).
 const DATA_DIR = process.env.REPLAY_DATA_DIR || REPO_ROOT;
 

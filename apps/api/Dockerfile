@@ -29,8 +29,8 @@ COPY targets/demo-shop targets/demo-shop
 # server and worker to self-contained CJS (pnpm symlinked node_modules does
 # not survive Docker COPY).
 RUN pnpm --filter "@replay/api..." build \
-    && cd apps/api && npx esbuild src/server.ts --bundle --platform=node --format=cjs --outfile=api-dist/server.cjs \
-    && npx esbuild src/worker.ts --bundle --platform=node --format=cjs --outfile=api-dist/worker.cjs
+    && cd apps/api && npx esbuild src/server.ts --bundle --platform=node --format=cjs --define:import.meta=undefined --outfile=api-dist/server.cjs \
+    && npx esbuild src/worker.ts --bundle --platform=node --format=cjs --define:import.meta=undefined --outfile=api-dist/worker.cjs
 
 FROM base AS runtime
 ENV NODE_ENV=production

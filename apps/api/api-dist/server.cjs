@@ -105,7 +105,7 @@ var require_package = __commonJS({
 var require_main = __commonJS({
   "../../node_modules/.pnpm/dotenv@16.6.1/node_modules/dotenv/lib/main.js"(exports2, module2) {
     var fs16 = require("fs");
-    var path15 = require("path");
+    var path14 = require("path");
     var os3 = require("os");
     var crypto4 = require("crypto");
     var packageJson = require_package();
@@ -221,7 +221,7 @@ var require_main = __commonJS({
           possibleVaultPath = options.path.endsWith(".vault") ? options.path : `${options.path}.vault`;
         }
       } else {
-        possibleVaultPath = path15.resolve(process.cwd(), ".env.vault");
+        possibleVaultPath = path14.resolve(process.cwd(), ".env.vault");
       }
       if (fs16.existsSync(possibleVaultPath)) {
         return possibleVaultPath;
@@ -229,7 +229,7 @@ var require_main = __commonJS({
       return null;
     }
     function _resolveHome(envPath) {
-      return envPath[0] === "~" ? path15.join(os3.homedir(), envPath.slice(1)) : envPath;
+      return envPath[0] === "~" ? path14.join(os3.homedir(), envPath.slice(1)) : envPath;
     }
     function _configVault(options) {
       const debug2 = Boolean(options && options.debug);
@@ -246,7 +246,7 @@ var require_main = __commonJS({
       return { parsed };
     }
     function configDotenv(options) {
-      const dotenvPath = path15.resolve(process.cwd(), ".env");
+      const dotenvPath = path14.resolve(process.cwd(), ".env");
       let encoding = "utf8";
       const debug2 = Boolean(options && options.debug);
       const quiet = options && "quiet" in options ? options.quiet : true;
@@ -270,13 +270,13 @@ var require_main = __commonJS({
       }
       let lastError;
       const parsedAll = {};
-      for (const path16 of optionPaths) {
+      for (const path15 of optionPaths) {
         try {
-          const parsed = DotenvModule.parse(fs16.readFileSync(path16, { encoding }));
+          const parsed = DotenvModule.parse(fs16.readFileSync(path15, { encoding }));
           DotenvModule.populate(parsedAll, parsed, options);
         } catch (e2) {
           if (debug2) {
-            _debug(`Failed to load ${path16} ${e2.message}`);
+            _debug(`Failed to load ${path15} ${e2.message}`);
           }
           lastError = e2;
         }
@@ -291,7 +291,7 @@ var require_main = __commonJS({
         const shortPaths = [];
         for (const filePath of optionPaths) {
           try {
-            const relative2 = path15.relative(process.cwd(), filePath);
+            const relative2 = path14.relative(process.cwd(), filePath);
             shortPaths.push(relative2);
           } catch (e2) {
             if (debug2) {
@@ -1123,14 +1123,14 @@ var require_url_state_machine = __commonJS({
       return url.replace(/\u0009|\u000A|\u000D/g, "");
     }
     function shortenPath(url) {
-      const path15 = url.path;
-      if (path15.length === 0) {
+      const path14 = url.path;
+      if (path14.length === 0) {
         return;
       }
-      if (url.scheme === "file" && path15.length === 1 && isNormalizedWindowsDriveLetter(path15[0])) {
+      if (url.scheme === "file" && path14.length === 1 && isNormalizedWindowsDriveLetter(path14[0])) {
         return;
       }
-      path15.pop();
+      path14.pop();
     }
     function includesCredentials(url) {
       return url.username !== "" || url.password !== "";
@@ -6709,14 +6709,14 @@ __export(fileFromPath_exports, {
   fileFromPathSync: () => fileFromPathSync,
   isFile: () => isFile
 });
-function createFileFromPath(path15, { mtimeMs, size: size2 }, filenameOrOptions, options = {}) {
+function createFileFromPath(path14, { mtimeMs, size: size2 }, filenameOrOptions, options = {}) {
   let filename;
   if (isPlainObject_default2(filenameOrOptions)) {
     [options, filename] = [filenameOrOptions, void 0];
   } else {
     filename = filenameOrOptions;
   }
-  const file = new FileFromPath({ path: path15, size: size2, lastModified: mtimeMs });
+  const file = new FileFromPath({ path: path14, size: size2, lastModified: mtimeMs });
   if (!filename) {
     filename = file.name;
   }
@@ -6725,13 +6725,13 @@ function createFileFromPath(path15, { mtimeMs, size: size2 }, filenameOrOptions,
     lastModified: file.lastModified
   });
 }
-function fileFromPathSync(path15, filenameOrOptions, options = {}) {
-  const stats = (0, import_fs2.statSync)(path15);
-  return createFileFromPath(path15, stats, filenameOrOptions, options);
+function fileFromPathSync(path14, filenameOrOptions, options = {}) {
+  const stats = (0, import_fs2.statSync)(path14);
+  return createFileFromPath(path14, stats, filenameOrOptions, options);
 }
-async function fileFromPath2(path15, filenameOrOptions, options) {
-  const stats = await import_fs2.promises.stat(path15);
-  return createFileFromPath(path15, stats, filenameOrOptions, options);
+async function fileFromPath2(path14, filenameOrOptions, options) {
+  const stats = await import_fs2.promises.stat(path14);
+  return createFileFromPath(path14, stats, filenameOrOptions, options);
 }
 var import_fs2, import_path, import_node_domexception, __classPrivateFieldSet4, __classPrivateFieldGet5, _FileFromPath_path, _FileFromPath_start, MESSAGE, FileFromPath;
 var init_fileFromPath = __esm({
@@ -6800,7 +6800,7 @@ __export(server_exports, {
 });
 module.exports = __toCommonJS(server_exports);
 var fs15 = __toESM(require("node:fs"), 1);
-var path14 = __toESM(require("node:path"), 1);
+var path13 = __toESM(require("node:path"), 1);
 var import_node_crypto4 = require("node:crypto");
 var import_node_url = require("node:url");
 var import_dotenv2 = __toESM(require_main(), 1);
@@ -6906,26 +6906,26 @@ var throwNestingLimitExceeded = () => {
 };
 
 // ../../node_modules/.pnpm/hono@4.13.13/node_modules/hono/dist/utils/url.js
-var splitPath = (path15) => {
-  const paths = path15.split("/");
+var splitPath = (path14) => {
+  const paths = path14.split("/");
   if (paths[0] === "") paths.shift();
   return paths;
 };
 var splitRoutingPath = (routePath) => {
-  const { groups, path: path15 } = extractGroupsFromPath(routePath);
-  const paths = splitPath(path15);
+  const { groups, path: path14 } = extractGroupsFromPath(routePath);
+  const paths = splitPath(path14);
   return replaceGroupMarks(paths, groups);
 };
-var extractGroupsFromPath = (path15) => {
+var extractGroupsFromPath = (path14) => {
   const groups = [];
-  path15 = path15.replace(/\{[^}]+\}/g, (match2, index2) => {
+  path14 = path14.replace(/\{[^}]+\}/g, (match2, index2) => {
     const mark = `@${index2}`;
     groups.push([mark, match2]);
     return mark;
   });
   return {
     groups,
-    path: path15
+    path: path14
   };
 };
 var replaceGroupMarks = (paths, groups) => {
@@ -6988,8 +6988,8 @@ var getPath = (request) => {
       const queryIndex = url.indexOf("?", i2);
       const hashIndex = url.indexOf("#", i2);
       const end = queryIndex === -1 ? hashIndex === -1 ? void 0 : hashIndex : hashIndex === -1 ? queryIndex : Math.min(queryIndex, hashIndex);
-      const path15 = url.slice(start, end);
-      return tryDecodeURI(path15.includes("%25") ? path15.replace(/%25/g, "%2525") : path15);
+      const path14 = url.slice(start, end);
+      return tryDecodeURI(path14.includes("%25") ? path14.replace(/%25/g, "%2525") : path14);
     } else if (charCode === 63 || charCode === 35) break;
   }
   return url.slice(start, i2);
@@ -7002,9 +7002,9 @@ var mergePath = (base, sub, ...rest) => {
   if (rest.length) sub = mergePath(sub, ...rest);
   return `${base?.[0] === "/" ? "" : "/"}${base}${sub === "/" ? "" : `${base?.at(-1) === "/" ? "" : "/"}${sub?.[0] === "/" ? sub.slice(1) : sub}`}`;
 };
-var checkOptionalParameter = (path15) => {
-  if (path15.charCodeAt(path15.length - 1) !== 63 || !path15.includes(":")) return null;
-  const segments = path15.split("/");
+var checkOptionalParameter = (path14) => {
+  if (path14.charCodeAt(path14.length - 1) !== 63 || !path14.includes(":")) return null;
+  const segments = path14.split("/");
   const results = [];
   let basePath = "";
   segments.forEach((segment) => {
@@ -7110,9 +7110,9 @@ var HonoRequest = class {
   */
   path;
   bodyCache = {};
-  constructor(request, path15 = "/", matchResult = [[]]) {
+  constructor(request, path14 = "/", matchResult = [[]]) {
     this.raw = request;
-    this.path = path15;
+    this.path = path14;
     this.#matchResult = matchResult;
   }
   param(key) {
@@ -7842,8 +7842,8 @@ var Hono = class Hono2 {
         return this;
       };
     });
-    this.on = (method, path15, ...handlers) => {
-      for (const p2 of [path15].flat()) {
+    this.on = (method, path14, ...handlers) => {
+      for (const p2 of [path14].flat()) {
         this.#path = p2;
         for (const m2 of [method].flat()) {
           const methodName = m2.toUpperCase();
@@ -7897,8 +7897,8 @@ var Hono = class Hono2 {
   * app.route("/api", app2) // GET /api/user
   * ```
   */
-  route(path15, app) {
-    const subApp = this.basePath(path15);
+  route(path14, app) {
+    const subApp = this.basePath(path14);
     app.routes.map((r2) => {
       let handler;
       if (app.errorHandler === errorHandler) handler = r2.handler;
@@ -7923,9 +7923,9 @@ var Hono = class Hono2 {
   * const api = new Hono().basePath('/api')
   * ```
   */
-  basePath(path15) {
+  basePath(path14) {
     const subApp = this.#clone();
-    subApp._basePath = mergePath(this._basePath, path15);
+    subApp._basePath = mergePath(this._basePath, path14);
     return subApp;
   }
   /**
@@ -8001,7 +8001,7 @@ var Hono = class Hono2 {
   * })
   * ```
   */
-  mount(path15, applicationHandler, options) {
+  mount(path14, applicationHandler, options) {
     let replaceRequest;
     let optionHandler;
     if (options) {
@@ -8024,7 +8024,7 @@ var Hono = class Hono2 {
       return [c2.env, executionContext];
     };
     replaceRequest ||= (() => {
-      const mergedPath = mergePath(this._basePath, path15);
+      const mergedPath = mergePath(this._basePath, path14);
       const pathPrefixLength = mergedPath === "/" ? 0 : mergedPath.length;
       return (request) => {
         const url = new URL(request.url);
@@ -8037,18 +8037,18 @@ var Hono = class Hono2 {
       if (res) return res;
       await next();
     };
-    this.#addRoute("ALL", mergePath(path15, "*"), handler);
+    this.#addRoute("ALL", mergePath(path14, "*"), handler);
     return this;
   }
-  #addRoute(method, path15, handler, baseRoutePath) {
-    path15 = mergePath(this._basePath, path15);
+  #addRoute(method, path14, handler, baseRoutePath) {
+    path14 = mergePath(this._basePath, path14);
     const r2 = {
       basePath: baseRoutePath !== void 0 ? mergePath(this._basePath, baseRoutePath) : this._basePath,
-      path: path15,
+      path: path14,
       method,
       handler
     };
-    this.router.add(method, path15, [handler, r2]);
+    this.router.add(method, path14, [handler, r2]);
     this.routes.push(r2);
   }
   #handleError(err, c2) {
@@ -8057,10 +8057,10 @@ var Hono = class Hono2 {
   }
   #dispatch(request, executionCtx, env, method) {
     if (method === "HEAD") return (async () => new Response(null, await this.#dispatch(request, executionCtx, env, "GET")))();
-    const path15 = this.getPath(request, { env });
-    const matchResult = this.router.match(method, path15);
+    const path14 = this.getPath(request, { env });
+    const matchResult = this.router.match(method, path14);
     const c2 = new Context(request, {
-      path: path15,
+      path: path14,
       matchResult,
       env,
       executionCtx,
@@ -8148,19 +8148,19 @@ var createNullObject = () => /* @__PURE__ */ Object.create(null);
 
 // ../../node_modules/.pnpm/hono@4.13.13/node_modules/hono/dist/router/reg-exp-router/matcher.js
 var emptyParam = [];
-function match(method, path15) {
+function match(method, path14) {
   const matchers = this.buildAllMatchers();
-  const match2 = ((method2, path16) => {
+  const match2 = ((method2, path15) => {
     const matcher = matchers[method2] || matchers["ALL"];
-    const staticMatch = matcher[2][path16];
+    const staticMatch = matcher[2][path15];
     if (staticMatch) return staticMatch;
-    const match3 = path16.match(matcher[0]);
+    const match3 = path15.match(matcher[0]);
     if (!match3) return [[], emptyParam];
     const index2 = match3.indexOf("", 1);
     return [matcher[1][index2], match3];
   });
   this.match = match2;
-  return match2(method, path15);
+  return match2(method, path14);
 }
 
 // ../../node_modules/.pnpm/hono@4.13.13/node_modules/hono/dist/router/reg-exp-router/node.js
@@ -8250,14 +8250,14 @@ var Trie = class {
   #root = new Node();
   #index = 0;
   paths = createNullObject();
-  insert(path15, isStatic) {
+  insert(path14, isStatic) {
     if (isStatic) {
-      this.#root.insert(path15.split(""), 0, [], this.#context, true);
+      this.#root.insert(path14.split(""), 0, [], this.#context, true);
       return;
     }
     const paramAssoc = [];
     const groups = [];
-    let markedPath = path15;
+    let markedPath = path14;
     for (let i2 = 0; ; ) {
       let replaced = false;
       markedPath = markedPath.replace(/\{[^}]+\}/g, (m2) => {
@@ -8278,7 +8278,7 @@ var Trie = class {
       }
     }
     this.#root.insert(tokens, this.#index, paramAssoc, this.#context, false);
-    this.paths[path15] = [this.#index++, paramAssoc];
+    this.paths[path14] = [this.#index++, paramAssoc];
   }
   buildRegExp() {
     let regexp = this.#root.buildRegExpStr();
@@ -8311,11 +8311,11 @@ var Trie = class {
 
 // ../../node_modules/.pnpm/hono@4.13.13/node_modules/hono/dist/router/reg-exp-router/router.js
 var wildcardRegExpCache = createNullObject();
-function buildWildcardRegExp(path15) {
-  return wildcardRegExpCache[path15] ??= new RegExp(`^${path15.replace(/\/:[^/{}]+(?:\{\[\^\/]\+})?(?=[/{]|$)|\/?\*$|([.\\+*[^\]$()?{}|])/g, (match2, metaChar) => metaChar ? `\\${metaChar}` : match2 === "/*" ? TAIL_WILDCARD_REG_EXP_STR : match2 === "*" ? ".*" : `/:${LABEL_REG_EXP_STR}`)}$`);
+function buildWildcardRegExp(path14) {
+  return wildcardRegExpCache[path14] ??= new RegExp(`^${path14.replace(/\/:[^/{}]+(?:\{\[\^\/]\+})?(?=[/{]|$)|\/?\*$|([.\\+*[^\]$()?{}|])/g, (match2, metaChar) => metaChar ? `\\${metaChar}` : match2 === "/*" ? TAIL_WILDCARD_REG_EXP_STR : match2 === "*" ? ".*" : `/:${LABEL_REG_EXP_STR}`)}$`);
 }
-function findMiddleware(middleware, path15) {
-  for (const k2 of Object.keys(middleware).sort((a2, b3) => b3.length - a2.length)) if (buildWildcardRegExp(k2).test(path15)) return [...middleware[k2]];
+function findMiddleware(middleware, path14) {
+  for (const k2 of Object.keys(middleware).sort((a2, b3) => b3.length - a2.length)) if (buildWildcardRegExp(k2).test(path14)) return [...middleware[k2]];
 }
 var RegExpRouter = class {
   name = "RegExpRouter";
@@ -8327,14 +8327,14 @@ var RegExpRouter = class {
     this.#routes = { ["ALL"]: createNullObject() };
     this.#tries = { ["ALL"]: new Trie() };
   }
-  #insertPath(method, path15) {
+  #insertPath(method, path14) {
     try {
-      this.#tries[method].insert(path15, !/\*|\/:/.test(path15));
+      this.#tries[method].insert(path14, !/\*|\/:/.test(path14));
     } catch (e2) {
-      throw e2 === PATH_ERROR ? new UnsupportedPathError(path15) : e2;
+      throw e2 === PATH_ERROR ? new UnsupportedPathError(path14) : e2;
     }
   }
-  add(method, path15, handler) {
+  add(method, path14, handler) {
     const middleware = this.#middleware;
     const routes = this.#routes;
     if (!middleware) throw new Error(MESSAGE_MATCHER_IS_ALREADY_BUILT);
@@ -8348,24 +8348,24 @@ var RegExpRouter = class {
         }
       }
     }
-    if (path15 === "/*") path15 = "*";
+    if (path14 === "/*") path14 = "*";
     const methods = method === "ALL" ? Object.keys(middleware) : [method];
-    if (/\*$/.test(path15)) {
-      const re2 = buildWildcardRegExp(path15);
-      for (const m2 of methods) if (!middleware[m2][path15]) {
-        this.#insertPath(m2, path15);
-        middleware[m2][path15] = findMiddleware(middleware[m2], path15) || findMiddleware(middleware["ALL"], path15) || [];
+    if (/\*$/.test(path14)) {
+      const re2 = buildWildcardRegExp(path14);
+      for (const m2 of methods) if (!middleware[m2][path14]) {
+        this.#insertPath(m2, path14);
+        middleware[m2][path14] = findMiddleware(middleware[m2], path14) || findMiddleware(middleware["ALL"], path14) || [];
       }
-      for (const handlerMap of [middleware, routes]) for (const m2 of methods) for (const p2 in handlerMap[m2]) re2.test(p2) && handlerMap[m2][p2].push([handler, path15]);
+      for (const handlerMap of [middleware, routes]) for (const m2 of methods) for (const p2 in handlerMap[m2]) re2.test(p2) && handlerMap[m2][p2].push([handler, path14]);
       return;
     }
-    const paths = checkOptionalParameter(path15) || [path15];
-    for (const path16 of paths) for (const m2 of methods) {
-      if (!routes[m2][path16]) {
-        this.#insertPath(m2, path16);
-        routes[m2][path16] = findMiddleware(middleware[m2], path16) || findMiddleware(middleware["ALL"], path16) || [];
+    const paths = checkOptionalParameter(path14) || [path14];
+    for (const path15 of paths) for (const m2 of methods) {
+      if (!routes[m2][path15]) {
+        this.#insertPath(m2, path15);
+        routes[m2][path15] = findMiddleware(middleware[m2], path15) || findMiddleware(middleware["ALL"], path15) || [];
       }
-      routes[m2][path16].push([handler, path16]);
+      routes[m2][path15].push([handler, path15]);
     }
   }
   match = match;
@@ -8383,11 +8383,11 @@ var RegExpRouter = class {
     const staticMap = createNullObject();
     const handlerData = [];
     const [regexp, indexReplacementMap, paramReplacementMap] = trie.buildRegExp();
-    for (const r2 of [middleware, routes]) for (const path15 in r2) {
-      const handlers = r2[path15];
-      const pathData = trie.paths[path15];
+    for (const r2 of [middleware, routes]) for (const path14 in r2) {
+      const handlers = r2[path14];
+      const pathData = trie.paths[path14];
       if (!pathData) {
-        staticMap[path15] = [handlers.map(([h2]) => [h2, createNullObject()]), emptyParam];
+        staticMap[path14] = [handlers.map(([h2]) => [h2, createNullObject()]), emptyParam];
         continue;
       }
       handlerData[pathData[0]] = handlers.map(([h2, handlerPath]) => [h2, trie.paths[handlerPath][1].reduceRight((map, [key], i2) => {
@@ -8411,15 +8411,15 @@ var SmartRouter = class {
   constructor(init2) {
     this.#routers = init2.routers;
   }
-  add(method, path15, handler) {
+  add(method, path14, handler) {
     if (!this.#routes) throw new Error(MESSAGE_MATCHER_IS_ALREADY_BUILT);
     this.#routes.push([
       method,
-      path15,
+      path14,
       handler
     ]);
   }
-  match(method, path15) {
+  match(method, path14) {
     if (!this.#routes) throw new Error("Fatal error");
     const routers = this.#routers;
     const routes = this.#routes;
@@ -8430,7 +8430,7 @@ var SmartRouter = class {
       const router = routers[i2];
       try {
         for (let i3 = 0, len2 = routes.length; i3 < len2; i3++) router.add(...routes[i3]);
-        res = router.match(method, path15);
+        res = router.match(method, path14);
       } catch (e2) {
         if (e2 instanceof UnsupportedPathError) continue;
         throw e2;
@@ -8459,9 +8459,9 @@ var Node3 = class Node4 {
   #patterns = [];
   #pattern;
   #params = emptyParams;
-  insert(method, path15, handler) {
+  insert(method, path14, handler) {
     let curNode = this;
-    const parts = splitRoutingPath(path15);
+    const parts = splitRoutingPath(path14);
     const possibleKeys = /* @__PURE__ */ new Set();
     let i2 = 0;
     for (const p2 of parts) {
@@ -8497,11 +8497,11 @@ var Node3 = class Node4 {
       }
     }
   }
-  search(method, path15) {
+  search(method, path14) {
     const handlerSets = [];
     this.#params = emptyParams;
     let curNodes = [this];
-    const parts = splitPath(path15);
+    const parts = splitPath(path14);
     const curNodesQueue = [];
     const len = parts.length;
     let partOffsets = null;
@@ -8537,13 +8537,13 @@ var Node3 = class Node4 {
           if (matcher !== true) {
             if (!partOffsets) {
               partOffsets = [];
-              let offset = path15[0] === "/" ? 1 : 0;
+              let offset = path14[0] === "/" ? 1 : 0;
               for (let p2 = 0; p2 < len; p2++) {
                 partOffsets[p2] = offset;
                 offset += parts[p2].length + 1;
               }
             }
-            const restPathString = path15.slice(partOffsets[i2]);
+            const restPathString = path14.slice(partOffsets[i2]);
             const m2 = matcher.exec(restPathString);
             if (m2) {
               params[name] = m2[0];
@@ -8584,11 +8584,11 @@ var Node3 = class Node4 {
 var TrieRouter = class {
   name = "TrieRouter";
   #node = new Node3();
-  add(method, path15, handler) {
-    for (const result of checkOptionalParameter(path15) || [path15]) this.#node.insert(method, result, handler);
+  add(method, path14, handler) {
+    for (const result of checkOptionalParameter(path14) || [path14]) this.#node.insert(method, result, handler);
   }
-  match(method, path15) {
-    return this.#node.search(method, path15);
+  match(method, path14) {
+    return this.#node.search(method, path14);
   }
 };
 
@@ -9975,8 +9975,8 @@ function getErrorMap() {
 
 // ../../node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path15, errorMaps, issueData } = params;
-  const fullPath = [...path15, ...issueData.path || []];
+  const { data, path: path14, errorMaps, issueData } = params;
+  const fullPath = [...path14, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -10092,11 +10092,11 @@ var errorUtil;
 
 // ../../node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path15, key) {
+  constructor(parent, value, path14, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path15;
+    this._path = path14;
     this._key = key;
   }
   get path() {
@@ -15074,13 +15074,13 @@ function Subscribe(postgres2, options) {
       }
     }
     function handle(a2, b3) {
-      const path15 = b3.relation.schema + "." + b3.relation.table;
+      const path14 = b3.relation.schema + "." + b3.relation.table;
       call("*", a2, b3);
-      call("*:" + path15, a2, b3);
-      b3.relation.keys.length && call("*:" + path15 + "=" + b3.relation.keys.map((x3) => a2[x3.name]), a2, b3);
+      call("*:" + path14, a2, b3);
+      b3.relation.keys.length && call("*:" + path14 + "=" + b3.relation.keys.map((x3) => a2[x3.name]), a2, b3);
       call(b3.command, a2, b3);
-      call(b3.command + ":" + path15, a2, b3);
-      b3.relation.keys.length && call(b3.command + ":" + path15 + "=" + b3.relation.keys.map((x3) => a2[x3.name]), a2, b3);
+      call(b3.command + ":" + path14, a2, b3);
+      b3.relation.keys.length && call(b3.command + ":" + path14 + "=" + b3.relation.keys.map((x3) => a2[x3.name]), a2, b3);
     }
     function pong() {
       const x3 = Buffer.alloc(34);
@@ -15193,8 +15193,8 @@ function parseEvent(x2) {
   const xs = x2.match(/^(\*|insert|update|delete)?:?([^.]+?\.?[^=]+)?=?(.+)?/i) || [];
   if (!xs)
     throw new Error("Malformed subscribe pattern: " + x2);
-  const [, command, path15, key] = xs;
-  return (command || "*") + (path15 ? ":" + (path15.indexOf(".") === -1 ? "public." + path15 : path15) : "") + (key ? "=" + key : "");
+  const [, command, path14, key] = xs;
+  return (command || "*") + (path14 ? ":" + (path14.indexOf(".") === -1 ? "public." + path14 : path14) : "") + (key ? "=" + key : "");
 }
 
 // ../../node_modules/.pnpm/postgres@3.4.9/node_modules/postgres/src/large.js
@@ -15339,10 +15339,10 @@ function Postgres(a2, b3) {
       });
       return query;
     }
-    function file(path15, args = [], options2 = {}) {
+    function file(path14, args = [], options2 = {}) {
       arguments.length === 2 && !Array.isArray(args) && (options2 = args, args = []);
       const query = new Query([], args, (query2) => {
-        import_fs.default.readFile(path15, "utf8", (err, string) => {
+        import_fs.default.readFile(path14, "utf8", (err, string) => {
           if (err)
             return query2.reject(err);
           query2.strings = [string];
@@ -17021,7 +17021,7 @@ var SelectionProxyHandler = class _SelectionProxyHandler {
 function mapResultRow(columns, row, joinsNotNullableMap) {
   const nullifyMap = {};
   const result = columns.reduce(
-    (result2, { path: path15, field }, columnIndex) => {
+    (result2, { path: path14, field }, columnIndex) => {
       let decoder;
       if (is(field, Column)) {
         decoder = field;
@@ -17033,8 +17033,8 @@ function mapResultRow(columns, row, joinsNotNullableMap) {
         decoder = field.sql.decoder;
       }
       let node = result2;
-      for (const [pathChunkIndex, pathChunk] of path15.entries()) {
-        if (pathChunkIndex < path15.length - 1) {
+      for (const [pathChunkIndex, pathChunk] of path14.entries()) {
+        if (pathChunkIndex < path14.length - 1) {
           if (!(pathChunk in node)) {
             node[pathChunk] = {};
           }
@@ -17042,8 +17042,8 @@ function mapResultRow(columns, row, joinsNotNullableMap) {
         } else {
           const rawValue = row[columnIndex];
           const value = node[pathChunk] = rawValue === null ? null : decoder.mapFromDriverValue(rawValue);
-          if (joinsNotNullableMap && is(field, Column) && path15.length === 2) {
-            const objectName = path15[0];
+          if (joinsNotNullableMap && is(field, Column) && path14.length === 2) {
+            const objectName = path14[0];
             if (!(objectName in nullifyMap)) {
               nullifyMap[objectName] = value === null ? getTableName(field.table) : false;
             } else if (typeof nullifyMap[objectName] === "string" && nullifyMap[objectName] !== getTableName(field.table)) {
@@ -23178,8 +23178,9 @@ function getRunRepository() {
 }
 
 // src/worker.ts
+var import_node_fs2 = require("node:fs");
 var fs14 = __toESM(require("node:fs/promises"), 1);
-var path13 = __toESM(require("node:path"), 1);
+var path12 = __toESM(require("node:path"), 1);
 var import_node_crypto3 = require("node:crypto");
 var import_dotenv = __toESM(require_main(), 1);
 
@@ -23930,13 +23931,13 @@ var MultipartBody = class {
 // ../../node_modules/.pnpm/openai@4.104.0_zod@3.25.76/node_modules/openai/_shims/node-runtime.mjs
 var import_web = require("node:stream/web");
 var fileFromPathWarned = false;
-async function fileFromPath3(path15, ...args) {
+async function fileFromPath3(path14, ...args) {
   const { fileFromPath: _fileFromPath } = await Promise.resolve().then(() => (init_fileFromPath(), fileFromPath_exports));
   if (!fileFromPathWarned) {
-    console.warn(`fileFromPath is deprecated; use fs.createReadStream(${JSON.stringify(path15)}) instead`);
+    console.warn(`fileFromPath is deprecated; use fs.createReadStream(${JSON.stringify(path14)}) instead`);
     fileFromPathWarned = true;
   }
-  return await _fileFromPath(path15, ...args);
+  return await _fileFromPath(path14, ...args);
 }
 var defaultHttpAgent = new import_agentkeepalive.default({ keepAlive: true, timeout: 5 * 60 * 1e3 });
 var defaultHttpsAgent = new import_agentkeepalive.default.HttpsAgent({ keepAlive: true, timeout: 5 * 60 * 1e3 });
@@ -24720,29 +24721,29 @@ var APIClient = class {
   defaultIdempotencyKey() {
     return `stainless-node-retry-${uuid4()}`;
   }
-  get(path15, opts) {
-    return this.methodRequest("get", path15, opts);
+  get(path14, opts) {
+    return this.methodRequest("get", path14, opts);
   }
-  post(path15, opts) {
-    return this.methodRequest("post", path15, opts);
+  post(path14, opts) {
+    return this.methodRequest("post", path14, opts);
   }
-  patch(path15, opts) {
-    return this.methodRequest("patch", path15, opts);
+  patch(path14, opts) {
+    return this.methodRequest("patch", path14, opts);
   }
-  put(path15, opts) {
-    return this.methodRequest("put", path15, opts);
+  put(path14, opts) {
+    return this.methodRequest("put", path14, opts);
   }
-  delete(path15, opts) {
-    return this.methodRequest("delete", path15, opts);
+  delete(path14, opts) {
+    return this.methodRequest("delete", path14, opts);
   }
-  methodRequest(method, path15, opts) {
+  methodRequest(method, path14, opts) {
     return this.request(Promise.resolve(opts).then(async (opts2) => {
       const body = opts2 && isBlobLike(opts2?.body) ? new DataView(await opts2.body.arrayBuffer()) : opts2?.body instanceof DataView ? opts2.body : opts2?.body instanceof ArrayBuffer ? new DataView(opts2.body) : opts2 && ArrayBuffer.isView(opts2?.body) ? new DataView(opts2.body.buffer) : opts2?.body;
-      return { method, path: path15, ...opts2, body };
+      return { method, path: path14, ...opts2, body };
     }));
   }
-  getAPIList(path15, Page2, opts) {
-    return this.requestAPIList(Page2, { method: "get", path: path15, ...opts });
+  getAPIList(path14, Page2, opts) {
+    return this.requestAPIList(Page2, { method: "get", path: path14, ...opts });
   }
   calculateContentLength(body) {
     if (typeof body === "string") {
@@ -24761,10 +24762,10 @@ var APIClient = class {
   }
   buildRequest(inputOptions, { retryCount = 0 } = {}) {
     const options = { ...inputOptions };
-    const { method, path: path15, query, headers = {} } = options;
+    const { method, path: path14, query, headers = {} } = options;
     const body = ArrayBuffer.isView(options.body) || options.__binaryRequest && typeof options.body === "string" ? options.body : isMultipartBody(options.body) ? options.body.body : options.body ? JSON.stringify(options.body, null, 2) : null;
     const contentLength = this.calculateContentLength(body);
-    const url = this.buildURL(path15, query);
+    const url = this.buildURL(path14, query);
     if ("timeout" in options)
       validatePositiveInteger("timeout", options.timeout);
     options.timeout = options.timeout ?? this.timeout;
@@ -24880,8 +24881,8 @@ var APIClient = class {
     const request = this.makeRequest(options, null);
     return new PagePromise(this, request, Page2);
   }
-  buildURL(path15, query) {
-    const url = isAbsoluteURL(path15) ? new URL(path15) : new URL(this.baseURL + (this.baseURL.endsWith("/") && path15.startsWith("/") ? path15.slice(1) : path15));
+  buildURL(path14, query) {
+    const url = isAbsoluteURL(path14) ? new URL(path14) : new URL(this.baseURL + (this.baseURL.endsWith("/") && path14.startsWith("/") ? path14.slice(1) : path14));
     const defaultQuery = this.defaultQuery();
     if (!isEmptyObj(defaultQuery)) {
       query = { ...defaultQuery, ...query };
@@ -29780,7 +29781,6 @@ OpenAI.ContainerListResponsesPage = ContainerListResponsesPage;
 var openai_default = OpenAI;
 
 // ../../packages/agents/dist/llm.js
-var path2 = __toESM(require("node:path"), 1);
 var NEBIUS_BASE_URL_DEFAULT = "https://api.tokenfactory.nebius.com/v1/";
 var AGENT_MODEL_DEFAULTS = {
   watcher: { model: "nvidia/Nemotron-3.5-Super-VL", apiKeyEnv: "NEBIUS_API_KEY_WATCHER" },
@@ -29862,16 +29862,6 @@ function maxTokensFor(role, override) {
   return 2e3;
 }
 var RETRY_DELAYS_MS = [1e3, 3e3];
-function moduleDirOf(importMetaUrl) {
-  try {
-    const { fileURLToPath: fileURLToPath2 } = require("node:url");
-    if (!importMetaUrl)
-      return void 0;
-    return path2.dirname(fileURLToPath2(importMetaUrl));
-  } catch {
-    return void 0;
-  }
-}
 var sleep2 = (ms) => new Promise((r2) => setTimeout(r2, ms + Math.floor(Math.random() * 250)));
 function stripJsonFence(raw2) {
   return raw2.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
@@ -30022,7 +30012,7 @@ var LlmClient = class {
 
 // ../../packages/agents/dist/watcher.js
 var fs4 = __toESM(require("node:fs"), 1);
-var path3 = __toESM(require("node:path"), 1);
+var path2 = __toESM(require("node:path"), 1);
 
 // ../../packages/shared/dist/schemas.js
 var StepSchema = external_exports.object({
@@ -30156,23 +30146,286 @@ var ReporterOutputSchema = external_exports.object({
   markdown_report: external_exports.string().min(1)
 });
 
+// ../../packages/agents/dist/prompts.js
+var DEFAULT_WATCHER_PROMPT = `# Watcher \u2014 v1
+
+## Role
+You are the Watcher in Replay, a system that reproduces web-app bugs from screen recordings. You are a vision analyst: you describe only what is visible.
+
+## Inputs
+- An ordered list of video frames. Each image is preceded by a text label \`t=<seconds>s\` giving its timestamp in the recording.
+- Optionally, a reporter note and a known target route.
+
+## Job (one sentence)
+Determine what the user did, what the application visibly displayed, and the earliest frame where a defect is first visible.
+
+## Rules
+- Describe only what is visible in the frames. Never guess at code, causes, filenames, functions, or line numbers.
+- List user actions in chronological order, each stamped with the \`t=\` of the frame where it happens.
+- Quote on-screen text exactly as shown (button labels, prices, error messages, values).
+- Identify the single earliest frame where the defect is visible; use its \`t=\` value as \`first_failure_timestamp_s\`.
+- State expected behavior (what the app should have shown) and actual behavior (what it showed), based on the frames alone.
+- If frames are too sparse or ambiguous to establish a defect, set \`defect_found\` to false and lower \`confidence\` \u2014 do not guess.
+
+## Tools
+None in v1 (single pass over the provided frames). When uncertain, report lower confidence and explain in \`summary\` what could not be determined. Denser-frame requests arrive in a later version.
+
+## Output
+Return ONLY JSON matching this schema (field names exact):
+{
+  "defect_found": boolean,
+  "summary": string,                     // one sentence, e.g. "Cart total shows NaN after clearing quantity"
+  "steps": [ { "timestamp_s": number, "description": string, "visible_text": string } ],
+  "first_failure_timestamp_s": number,   // t= of the earliest frame showing the defect; 0-style value only if truly frame 0
+  "expected_behavior": string,
+  "actual_behavior": string,
+  "visible_text": string[],              // exact on-screen strings relevant to the defect
+  "route": string | null,                // URL path if visible in frames, else null
+  "confidence": number                   // 0..1
+}
+
+Return only JSON. No markdown, no commentary.
+
+## Example of a valid output
+{
+  "defect_found": true,
+  "summary": "Cart total shows $NaN after the quantity field is cleared",
+  "steps": [
+    { "timestamp_s": 2.0, "description": "User clicks Add to Cart on Ergonomic Mouse", "visible_text": "Add to Cart" },
+    { "timestamp_s": 4.5, "description": "User opens the cart", "visible_text": "Cart (1)" },
+    { "timestamp_s": 7.0, "description": "User clears the quantity field", "visible_text": "" }
+  ],
+  "first_failure_timestamp_s": 8.0,
+  "expected_behavior": "Clearing quantity treats it as 0 or removes the item; total stays a number",
+  "actual_behavior": "Cart total and subtotal display $NaN",
+  "visible_text": ["$NaN", "Cart (1)", "Demo Gear Shop"],
+  "route": "/",
+  "confidence": 0.9
+}
+`;
+var DEFAULT_LOCATOR_PROMPT = `# Locator \u2014 v1
+
+## Role
+You are the Locator in Replay, a system that reproduces web-app bugs from screen recordings. You are a static source-code analyst: you trace reported UI symptoms to candidate source locations in the packed repository.
+
+## Inputs
+- A structured \`BugReport\` describing what the user did, expected behavior, actual behavior, visible text, and optional route.
+- A packed repository bundle containing source files with relative paths (\`=== FILE: <path> (lines 1-N) ===\`) and 1-based line numbers (\`1: ...\`).
+
+## Job (one sentence)
+Rank at most 5 candidate source code locations most likely involved in the reported defect, backed by verbatim source evidence.
+
+## Rules
+- Every \`file\` MUST match an exact \`=== FILE: <path> ... ===\` header in the provided bundle. Never invent file paths.
+- Every \`start_line\` and \`end_line\` MUST be valid 1-based line numbers (\`1 <= start_line <= end_line <= N\`) covering the enclosing function or handler block so \`evidence\` is strictly inside \`start_line..end_line\`.
+- Every \`symbol\` MUST be the exact function, variable, hook, or component name present in \`start_line..end_line\` of that file.
+- Every \`evidence\` MUST be a single contiguous line of code (without the leading \`N: \` line-number prefix and without \`...\` ellipses) copied verbatim from inside \`start_line..end_line\` of that file.
+- In \`symptom_link\`, write one concise sentence distinguishing direct source evidence (what the code visibly does) from hypothesis (how that could produce the reported symptom). Never claim a candidate is a proven root cause without execution.
+- Rank 1 to 3 genuinely relevant suspects (maximum 5) in descending order of \`confidence\` (\`0..1\`). Do not pad the list with weak or redundant sub-blocks from the same function.
+- If the packed bundle does not contain source code relevant to the bug report, return \`"suspects": []\`.
+- If the report or source is ambiguous, lower \`confidence\` (\`<= 0.4\`) and state what is uncertain in \`symptom_link\`.
+- Keep internal reasoning brief (under 10 sentences) and emit the JSON object immediately.
+- Never output patches, rewrites, markdown fences, or prose outside the JSON object.
+
+## Tools
+None in v1 (single pass over the packed repository bundle). All file paths, line ranges, symbols, and evidence snippets must come directly from the provided bundle.
+
+## Output
+Return ONLY JSON matching this schema (field names exact):
+{
+  "suspects": [
+    {
+      "file": string,
+      "start_line": number,
+      "end_line": number,
+      "symbol": string,
+      "confidence": number,
+      "symptom_link": string,
+      "evidence": string
+    }
+  ],
+  "suggested_test_selectors": string[],
+  "route": string | null
+}
+
+Return only JSON. No markdown, no commentary.
+
+## Example of a valid output
+{
+  "suspects": [
+    {
+      "file": "src/components/SearchBar.tsx",
+      "start_line": 18,
+      "end_line": 26,
+      "symbol": "handleFilterChange",
+      "confidence": 0.92,
+      "symptom_link": "Direct source evidence shows query.toLowerCase() is called before checking for null; hypothesis: clearing the filter passes null and throws a TypeError.",
+      "evidence": "const normalized = query.toLowerCase();"
+    }
+  ],
+  "suggested_test_selectors": ["search-input", "clear-filter-btn"],
+  "route": "/search"
+}
+`;
+var DEFAULT_REPRODUCER_PROMPT = `# Reproducer \u2014 v1
+
+## Role
+You are the Reproducer in Replay, an autonomous system that converts web application bug reports into verified, automated Playwright reproduction tests.
+
+## Inputs
+- A structured \`BugReport\` describing the reported defect: user actions, expected behavior, and observed actual behavior.
+- A \`LocatorOutput\` providing suspect code locations, symbols, evidence, and suggested test selectors.
+- Target app conventions: route URL and available test IDs.
+
+## Job (one sentence)
+Write a minimal, robust Playwright test in TypeScript that faithfully reproduces the reported scenario and asserts the EXPECTED correct behavior so that the test fails on the buggy application.
+
+## Rules
+- The test MUST use Playwright Test syntax: \`import { test, expect } from '@playwright/test';\`.
+- Prefer \`page.getByTestId('...')\` selectors matching the application's elements (e.g. \`nav-cart\`, \`add-to-cart-*\`, \`coupon-input\`, \`apply-coupon-btn\`, \`cart-total\`, \`cart-item-qty-*\`, \`sort-select\`, \`checkout-btn\`).
+- The test MUST assert the **expected correct behavior** (not the bug itself). Because the app currently has the bug, the assertion will fail. When the bug is subsequently fixed, this exact test will pass without modifications.
+- The assertion MUST be specific: check element text, value, or visibility corresponding to the defect (e.g. \`await expect(page.getByTestId('cart-total')).toHaveText('$20.00');\` or \`await expect(page.getByTestId('cart-total')).not.toHaveText('$NaN');\`).
+- Never write tests that trivially pass or tests without assertions.
+- Do NOT catch assertion errors inside the test. The test MUST fail with an \`AssertionError\` on the buggy code.
+- Avoid arbitrary \`page.waitForTimeout(...)\` unless absolutely necessary; use Playwright auto-waiting assertions.
+- Return ONLY JSON matching the required schema. No markdown fences or prose outside the JSON.
+
+## Output Schema
+Return JSON with the following exact shape:
+{
+  "reproduced": boolean,
+  "test_name": string,
+  "assertion": string,
+  "failure_message": string,
+  "test_code": string
+}
+
+- \`reproduced\`: set \`true\` if you were able to construct a plausible reproduction test for the reported defect; \`false\` if the report lacks actionable steps.
+- \`test_name\`: concise test description (e.g. "reproduce: cart total becomes NaN after clearing quantity field").
+- \`assertion\`: the primary assertion statement in the test (e.g. "expect(page.getByTestId('cart-total')).not.toHaveText('$NaN')").
+- \`failure_message\`: what error message the assertion is expected to produce on the buggy code (e.g. "Expected not: '$NaN', Received: '$NaN'").
+- \`test_code\`: complete, self-contained TypeScript file content for the reproduction test.
+
+## Example of a valid output
+{
+  "reproduced": true,
+  "test_name": "reproduce: cart total becomes NaN after clearing quantity field",
+  "assertion": "await expect(page.getByTestId('cart-total')).not.toHaveText('$NaN')",
+  "failure_message": "Expected string not matching '$NaN', received '$NaN'",
+  "test_code": "import { test, expect } from '@playwright/test';\\n\\ntest.describe('Reproduction: Cart NaN', () => {\\n  test('cart total does not become NaN after clearing quantity', async ({ page }) => {\\n    await page.goto('/?bug=cart-nan');\\n    await page.getByTestId('add-to-cart-prod-mouse').click();\\n    await page.getByTestId('nav-cart').click();\\n    const qtyInput = page.getByTestId('cart-item-qty-prod-mouse');\\n    await qtyInput.fill('');\\n    await expect(page.getByTestId('cart-total')).not.toHaveText('$NaN');\\n  });\\n});\\n"
+}
+`;
+var DEFAULT_VERIFIER_PROMPT = `# Verifier \u2014 v1
+
+## Role
+You are the Verifier in Replay. Your job is to determine with high precision whether a generated reproduction test has faithfully reproduced the reported defect.
+
+## Inputs
+- \`BugReport\`: the reported symptom, user steps, expected behavior, and observed actual behavior.
+- \`ReproducerOutput\`: the generated Playwright reproduction test name, assertion, and expected failure message.
+- \`ExecutionResult\`: the test run results (exit code, classification, stdout, stderr, and failure trace).
+
+## Outcomes
+You must classify the outcome into exactly one of these categories:
+1. \`GENUINE_REPRODUCTION\`: The test failed because the assertion caught the reported defect (e.g. expected value vs received buggy value). This is the ONLY outcome where \`same_defect\` is true.
+2. \`UNEXPECTED_PASS\`: The test passed (exit code 0), meaning the defect was not triggered or the assertion was too weak.
+3. \`UNRELATED_ASSERTION_FAILURE\`: An assertion failed, but on an unrelated element, unrelated value, or unrelated page state not described in the bug report.
+4. \`SELECTOR_OR_TIMEOUT\`: The test timed out or a DOM element / selector was not found.
+5. \`COMPILATION_OR_RUNTIME_ERROR\`: Syntax error, module import error, or unhandled runtime TypeError in the test script.
+6. \`INFRASTRUCTURE_FAILURE\`: Server was unreachable (ECONNREFUSED) or port conflict.
+7. \`INCONCLUSIVE\`: Execution logs are ambiguous or truncated such that defect reproduction cannot be verified.
+
+## Critical Rules
+- **Execution evidence is ground truth.** Never allow model reasoning or speculation to override contradictory execution output.
+- If the test passed (exitCode 0), \`same_defect\` MUST be \`false\`.
+- If the failure is a timeout, selector-not-found, or compilation error, \`same_defect\` MUST be \`false\`.
+`;
+var DEFAULT_FIXER_PROMPT = `# Fixer \u2014 v1
+
+## Role
+You are the Fixer in Replay, an autonomous engineering system that fixes web application bugs. Your job is to produce a surgical, minimal, and reviewable patch that resolves the verified defect.
+
+## Inputs
+- \`BugReport\`: defect summary, expected behavior, and observed actual behavior.
+- \`LocatorOutput\`: suspect files, line ranges, symbols, and grounded code evidence.
+- \`ReproducerOutput\`: the verified failing Playwright test, target assertion, and error message.
+- \`PackedRepository\`: actual source files from the target repository with 1-based line numbers.
+
+## Job (one sentence)
+Generate the smallest possible code change that makes the reproduction test pass while preserving all existing application behavior and baseline tests.
+
+## Rules
+- **Surgical patch only:** Change only the lines necessary to fix the defect. Do NOT reformat code, rewrite unrelated functions, or introduce new libraries/dependencies. For numerical inputs, sanitize empty or invalid values to 0 without deleting or filtering the item from state.
+- **Allowed targets:** You may ONLY propose changes to authorized source code files under \`src/\` (e.g. \`src/App.tsx\`, \`src/products.ts\`).
+- **Forbidden targets:** NEVER edit test files (\`tests/\`, \`*.spec.*\`), config files (\`vite.config.*\`, \`playwright.config.*\`, \`tsconfig.*\`), \`package.json\`, or \`.env\`. Modifying tests to manufacture a pass is strictly prohibited and will be rejected.
+- **Grounding:** The \`original_snippet\` MUST match existing source code in the target file verbatim.
+- Output ONLY valid JSON matching the schema. No markdown fences, no explanatory text outside the JSON.
+
+## Output Schema
+{
+  "fixed": boolean,
+  "target_file": string,
+  "original_snippet": string,
+  "replacement_snippet": string,
+  "patch": string,
+  "explanation": string,
+  "attempts": number
+}
+
+## Example Output
+{
+  "fixed": true,
+  "target_file": "src/App.tsx",
+  "explanation": "Ensure empty or non-numeric quantity input falls back to 0 instead of storing NaN in cart state.",
+  "original_snippet": "      // BUG 1: Unvalidated parseInt on empty string produces NaN in state\\n      const qty = parseInt(rawValue, 10);\\n      setCart((prev) =>\\n        prev.map((item) => (item.product.id === productId ? { ...item, quantity: qty } : item))\\n      );\\n      return;",
+  "replacement_snippet": "      let qty = parseInt(rawValue, 10);\\n      if (isNaN(qty) || qty < 0) qty = 0;\\n      setCart((prev) =>\\n        prev.map((item) => (item.product.id === productId ? { ...item, quantity: qty } : item))\\n      );\\n      return;",
+  "patch": "--- a/src/App.tsx\\n+++ b/src/App.tsx\\n@@ -86,5 +86,6 @@\\n-      // BUG 1: Unvalidated parseInt on empty string produces NaN in state\\n-      const qty = parseInt(rawValue, 10);\\n+      let qty = parseInt(rawValue, 10);\\n+      if (isNaN(qty) || qty < 0) qty = 0;\\n       setCart((prev) =>\\n         prev.map((item) => (item.product.id === productId ? { ...item, quantity: qty } : item))\\n       );\\n",
+  "attempts": 1
+}
+`;
+var DEFAULT_REPORTER_PROMPT = `# Reporter \u2014 v1
+
+## Role
+You are the Reporter in Replay, an autonomous bug repair and verification system. Your job is to convert real, validated execution artifacts into a concise, factual executive summary and clean GitHub pull request / issue description.
+
+## Rules
+- Rely ONLY on the supplied run artifacts, tool outputs, diffs, and verdicts.
+- NEVER invent test counts, model findings, source locations, benchmark metrics, or successful repairs.
+- Always be completely explicit about whether video analysis was live or fixture-assisted.
+- If a stage failed, timed out, or was blocked, report it transparently without spin.
+- The tone should be technical, objective, and evidence-grounded.
+
+## Output Schema
+Return JSON with the following exact shape:
+\`\`\`json
+{
+  "title": string,
+  "executive_summary": string
+}
+\`\`\`
+- \`title\`: Short PR/Issue title (e.g. "fix: prevent NaN cart total when clearing item quantity")
+- \`executive_summary\`: 2-3 paragraph markdown summary describing what defect was observed, how it was reproduced and verified, and what change fixed it.
+`;
+
 // ../../packages/agents/dist/watcher.js
-var import_meta = {};
 var WATCHER_PROMPT_VERSION = "v1";
-var moduleDir = moduleDirOf(import_meta.url);
+var moduleDir = false ? moduleDirOf((void 0).url) : void 0;
 var PROMPT_CANDIDATES = [
-  ...moduleDir ? [path3.join(moduleDir, "../prompts/watcher.md"), path3.join(moduleDir, "../../prompts/watcher.md")] : [],
+  ...moduleDir ? [path2.join(moduleDir, "../prompts/watcher.md"), path2.join(moduleDir, "../../prompts/watcher.md")] : [],
   // CJS bundles have no import.meta: search from the working directory.
-  path3.resolve(process.cwd(), "packages/agents/prompts/watcher.md"),
-  path3.resolve(process.cwd(), "prompts/watcher.md"),
-  path3.resolve(process.env.REPLAY_PROMPTS_DIR || "", "watcher.md")
+  path2.resolve(process.cwd(), "packages/agents/prompts/watcher.md"),
+  path2.resolve(process.cwd(), "prompts/watcher.md"),
+  path2.resolve(process.env.REPLAY_PROMPTS_DIR || "", "watcher.md")
 ];
 function loadWatcherPrompt() {
   for (const p2 of PROMPT_CANDIDATES) {
-    if (fs4.existsSync(p2))
-      return fs4.readFileSync(p2, "utf8");
+    try {
+      if (fs4.existsSync(p2))
+        return fs4.readFileSync(p2, "utf8");
+    } catch {
+    }
   }
-  throw new Error("watcher.md not found in packages/agents/prompts/");
+  return DEFAULT_WATCHER_PROMPT;
 }
 var MAX_FRAMES_PER_REQUEST = 40;
 async function analyzeBugVideo(input, deps = {}) {
@@ -30204,7 +30457,7 @@ async function analyzeBugVideo(input, deps = {}) {
 
 // ../../packages/agents/dist/packer.js
 var fs5 = __toESM(require("node:fs/promises"), 1);
-var path4 = __toESM(require("node:path"), 1);
+var path3 = __toESM(require("node:path"), 1);
 var ALWAYS_IGNORED_DIRS = /* @__PURE__ */ new Set([
   ".git",
   "node_modules",
@@ -30308,7 +30561,7 @@ var SECRET_PATTERNS2 = [
   /(^[ \t]*(?:export[ \t]+)?[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY)[A-Z0-9_]*\s*=\s*['"]?)([^\s'"#]{8,})(['"]?)/gm
 ];
 function toPosix(p2) {
-  return p2.split(path4.sep).join("/");
+  return p2.split(path3.sep).join("/");
 }
 function isSecretFileName(baseName) {
   const lower = baseName.toLowerCase();
@@ -30344,7 +30597,7 @@ function isIgnoredFileName(baseName, includeTests) {
 async function loadGitignoreNames(repoRoot) {
   const out = /* @__PURE__ */ new Set();
   try {
-    const raw2 = await fs5.readFile(path4.join(repoRoot, ".gitignore"), "utf8");
+    const raw2 = await fs5.readFile(path3.join(repoRoot, ".gitignore"), "utf8");
     for (const line2 of raw2.split(/\r?\n/)) {
       const trimmed = line2.trim();
       if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("!"))
@@ -30411,7 +30664,7 @@ async function packRepository(repoRoot, options = {}) {
     entries.sort((a2, b3) => a2.name.localeCompare(b3.name));
     for (const entry of entries) {
       const relPath = relDir ? `${relDir}/${entry.name}` : entry.name;
-      const fullPath = path4.join(currentDir, entry.name);
+      const fullPath = path3.join(currentDir, entry.name);
       if (relPath.startsWith("..") || relPath.split("/").includes("..")) {
         skippedFiles.push({ path: relPath, reason: "symlink_escaped" });
         continue;
@@ -30423,7 +30676,7 @@ async function packRepository(repoRoot, options = {}) {
       }
       if (lstat2.isSymbolicLink()) {
         const realTarget = await fs5.realpath(fullPath).catch(() => null);
-        if (!realTarget || realTarget !== realRepoRoot && !realTarget.startsWith(realRepoRoot + path4.sep)) {
+        if (!realTarget || realTarget !== realRepoRoot && !realTarget.startsWith(realRepoRoot + path3.sep)) {
           skippedFiles.push({ path: relPath, reason: "symlink_escaped" });
           continue;
         }
@@ -30452,7 +30705,7 @@ async function packRepository(repoRoot, options = {}) {
         skippedFiles.push({ path: relPath, reason: "ignored_file" });
         continue;
       }
-      const ext = path4.extname(entry.name).toLowerCase();
+      const ext = path3.extname(entry.name).toLowerCase();
       if (BINARY_EXTENSIONS.has(ext)) {
         skippedFiles.push({ path: relPath, reason: "binary" });
         continue;
@@ -30475,7 +30728,7 @@ async function packRepository(repoRoot, options = {}) {
       skippedFiles.push({ path: relPath, reason: "max_files_exceeded" });
       continue;
     }
-    const fullPath = path4.join(realRepoRoot, ...relPath.split("/"));
+    const fullPath = path3.join(realRepoRoot, ...relPath.split("/"));
     let rawBuf;
     try {
       rawBuf = await fs5.readFile(fullPath);
@@ -30557,22 +30810,24 @@ ${f2.numberedContent}`);
 
 // ../../packages/agents/dist/locator.js
 var fs6 = __toESM(require("node:fs"), 1);
-var path5 = __toESM(require("node:path"), 1);
-var import_meta2 = {};
+var path4 = __toESM(require("node:path"), 1);
 var LOCATOR_PROMPT_VERSION = "v1";
-var moduleDir2 = moduleDirOf(import_meta2.url);
+var moduleDir2 = false ? moduleDirOf((void 0).url) : void 0;
 var PROMPT_CANDIDATES2 = [
-  ...moduleDir2 ? [path5.join(moduleDir2, "../prompts/locator.md"), path5.join(moduleDir2, "../../prompts/locator.md")] : [],
-  path5.resolve(process.cwd(), "packages/agents/prompts/locator.md"),
-  path5.resolve(process.cwd(), "prompts/locator.md"),
-  path5.resolve(process.env.REPLAY_PROMPTS_DIR || "", "locator.md")
+  ...moduleDir2 ? [path4.join(moduleDir2, "../prompts/locator.md"), path4.join(moduleDir2, "../../prompts/locator.md")] : [],
+  path4.resolve(process.cwd(), "packages/agents/prompts/locator.md"),
+  path4.resolve(process.cwd(), "prompts/locator.md"),
+  path4.resolve(process.env.REPLAY_PROMPTS_DIR || "", "locator.md")
 ];
 function loadLocatorPrompt() {
   for (const p2 of PROMPT_CANDIDATES2) {
-    if (fs6.existsSync(p2))
-      return fs6.readFileSync(p2, "utf8");
+    try {
+      if (fs6.existsSync(p2))
+        return fs6.readFileSync(p2, "utf8");
+    } catch {
+    }
   }
-  throw new Error("locator.md not found in packages/agents/prompts/");
+  return DEFAULT_LOCATOR_PROMPT;
 }
 var SampleFixtureSchema = external_exports.object({
   id: external_exports.string().min(1),
@@ -30690,12 +30945,12 @@ async function locateSuspects(input, deps = {}) {
 
 // ../../packages/agents/dist/reproducer.js
 var fs8 = __toESM(require("node:fs"), 1);
-var path7 = __toESM(require("node:path"), 1);
+var path6 = __toESM(require("node:path"), 1);
 
 // ../../packages/sandbox/dist/index.js
 var fs7 = __toESM(require("node:fs"), 1);
 var os2 = __toESM(require("node:os"), 1);
-var path6 = __toESM(require("node:path"), 1);
+var path5 = __toESM(require("node:path"), 1);
 var import_node_child_process = require("node:child_process");
 var import_node_util = require("node:util");
 var execFileAsync = (0, import_node_util.promisify)(import_node_child_process.execFile);
@@ -30725,28 +30980,28 @@ var IsolatedWorkspaceSandbox = class {
     if (!hostExecutionAllowed()) {
       throw new SandboxUnavailableError("Host sandbox execution is disabled in production. Run the fix stage with Docker available, or set REPLAY_ALLOW_HOST_SANDBOX=1 explicitly for local development.");
     }
-    const absSourceDir = path6.resolve(sourceDir);
-    const tmp = await fs7.promises.mkdtemp(path6.join(os2.tmpdir(), "replay-workspace-"));
+    const absSourceDir = path5.resolve(sourceDir);
+    const tmp = await fs7.promises.mkdtemp(path5.join(os2.tmpdir(), "replay-workspace-"));
     const entries = await fs7.promises.readdir(absSourceDir, { withFileTypes: true });
     for (const entry of entries) {
       if (["node_modules", ".playwright-results", "test-results", "dist"].includes(entry.name)) {
         continue;
       }
-      const s2 = path6.join(absSourceDir, entry.name);
-      const d2 = path6.join(tmp, entry.name);
+      const s2 = path5.join(absSourceDir, entry.name);
+      const d2 = path5.join(tmp, entry.name);
       if (entry.isDirectory()) {
         await fs7.promises.cp(s2, d2, { recursive: true });
       } else {
         await fs7.promises.copyFile(s2, d2);
       }
     }
-    const srcNodeModules = path6.join(absSourceDir, "node_modules");
+    const srcNodeModules = path5.join(absSourceDir, "node_modules");
     if (fs7.existsSync(srcNodeModules)) {
-      await fs7.promises.symlink(srcNodeModules, path6.join(tmp, "node_modules"));
+      await fs7.promises.symlink(srcNodeModules, path5.join(tmp, "node_modules"));
     }
-    const srcDist = path6.join(absSourceDir, "dist");
+    const srcDist = path5.join(absSourceDir, "dist");
     if (fs7.existsSync(srcDist)) {
-      await fs7.promises.cp(srcDist, path6.join(tmp, "dist"), { recursive: true });
+      await fs7.promises.cp(srcDist, path5.join(tmp, "dist"), { recursive: true });
     }
     return {
       workDir: tmp,
@@ -30778,21 +31033,23 @@ var IsolatedWorkspaceSandbox = class {
 };
 
 // ../../packages/agents/dist/reproducer.js
-var import_meta3 = {};
 var REPRODUCER_PROMPT_VERSION = "v1";
-var moduleDir3 = moduleDirOf(import_meta3.url);
+var moduleDir3 = false ? moduleDirOf((void 0).url) : void 0;
 var PROMPT_CANDIDATES3 = [
-  ...moduleDir3 ? [path7.join(moduleDir3, "../prompts/reproducer.md"), path7.join(moduleDir3, "../../prompts/reproducer.md")] : [],
-  path7.resolve(process.cwd(), "packages/agents/prompts/reproducer.md"),
-  path7.resolve(process.cwd(), "prompts/reproducer.md"),
-  path7.resolve(process.env.REPLAY_PROMPTS_DIR || "", "reproducer.md")
+  ...moduleDir3 ? [path6.join(moduleDir3, "../prompts/reproducer.md"), path6.join(moduleDir3, "../../prompts/reproducer.md")] : [],
+  path6.resolve(process.cwd(), "packages/agents/prompts/reproducer.md"),
+  path6.resolve(process.cwd(), "prompts/reproducer.md"),
+  path6.resolve(process.env.REPLAY_PROMPTS_DIR || "", "reproducer.md")
 ];
 function loadReproducerPrompt() {
   for (const p2 of PROMPT_CANDIDATES3) {
-    if (fs8.existsSync(p2))
-      return fs8.readFileSync(p2, "utf8");
+    try {
+      if (fs8.existsSync(p2))
+        return fs8.readFileSync(p2, "utf8");
+    } catch {
+    }
   }
-  throw new Error("reproducer.md not found in packages/agents/prompts/");
+  return DEFAULT_REPRODUCER_PROMPT;
 }
 function validateReproductionTestCode(code) {
   const errors = [];
@@ -30939,9 +31196,9 @@ async function executeReproductionTest(testCode, options) {
   try {
     const sandboxPort = "5179";
     const sandboxTestCode = testCode.replace(/https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/g, `http://127.0.0.1:${sandboxPort}`);
-    const reproDir = path7.join(sandbox.workDir, "tests", "repro");
+    const reproDir = path6.join(sandbox.workDir, "tests", "repro");
     await fs8.promises.mkdir(reproDir, { recursive: true });
-    await fs8.promises.writeFile(path7.join(reproDir, "generated.spec.ts"), sandboxTestCode, "utf8");
+    await fs8.promises.writeFile(path6.join(reproDir, "generated.spec.ts"), sandboxTestCode, "utf8");
     const build = await sandbox.exec("npx", ["vite", "build"], { SANDBOX_TEST: "1" });
     if (build.exitCode !== 0) {
       stdout = build.stdout;
@@ -30981,22 +31238,24 @@ async function executeReproductionTest(testCode, options) {
 
 // ../../packages/agents/dist/verifier.js
 var fs9 = __toESM(require("node:fs"), 1);
-var path8 = __toESM(require("node:path"), 1);
-var import_meta4 = {};
+var path7 = __toESM(require("node:path"), 1);
 var VERIFIER_PROMPT_VERSION = "v1";
-var moduleDir4 = moduleDirOf(import_meta4.url);
+var moduleDir4 = false ? moduleDirOf((void 0).url) : void 0;
 var PROMPT_CANDIDATES4 = [
-  ...moduleDir4 ? [path8.join(moduleDir4, "../prompts/verifier.md"), path8.join(moduleDir4, "../../prompts/verifier.md")] : [],
-  path8.resolve(process.cwd(), "packages/agents/prompts/verifier.md"),
-  path8.resolve(process.cwd(), "prompts/verifier.md"),
-  path8.resolve(process.env.REPLAY_PROMPTS_DIR || "", "verifier.md")
+  ...moduleDir4 ? [path7.join(moduleDir4, "../prompts/verifier.md"), path7.join(moduleDir4, "../../prompts/verifier.md")] : [],
+  path7.resolve(process.cwd(), "packages/agents/prompts/verifier.md"),
+  path7.resolve(process.cwd(), "prompts/verifier.md"),
+  path7.resolve(process.env.REPLAY_PROMPTS_DIR || "", "verifier.md")
 ];
 function loadVerifierPrompt() {
   for (const p2 of PROMPT_CANDIDATES4) {
-    if (fs9.existsSync(p2))
-      return fs9.readFileSync(p2, "utf8");
+    try {
+      if (fs9.existsSync(p2))
+        return fs9.readFileSync(p2, "utf8");
+    } catch {
+    }
   }
-  throw new Error("verifier.md not found in packages/agents/prompts/");
+  return DEFAULT_VERIFIER_PROMPT;
 }
 function buildVerifierMessages(input) {
   const report = BugReportSchema.parse(input.bugReport);
@@ -31144,22 +31403,24 @@ async function verifyReproduction(input, deps = {}) {
 
 // ../../packages/agents/dist/fixer.js
 var fs10 = __toESM(require("node:fs"), 1);
-var path9 = __toESM(require("node:path"), 1);
-var import_meta5 = {};
+var path8 = __toESM(require("node:path"), 1);
 var FIXER_PROMPT_VERSION = "v1";
-var moduleDir5 = moduleDirOf(import_meta5.url);
+var moduleDir5 = false ? moduleDirOf((void 0).url) : void 0;
 var PROMPT_CANDIDATES5 = [
-  ...moduleDir5 ? [path9.join(moduleDir5, "../prompts/fixer.md"), path9.join(moduleDir5, "../../prompts/fixer.md")] : [],
-  path9.resolve(process.cwd(), "packages/agents/prompts/fixer.md"),
-  path9.resolve(process.cwd(), "prompts/fixer.md"),
-  path9.resolve(process.env.REPLAY_PROMPTS_DIR || "", "fixer.md")
+  ...moduleDir5 ? [path8.join(moduleDir5, "../prompts/fixer.md"), path8.join(moduleDir5, "../../prompts/fixer.md")] : [],
+  path8.resolve(process.cwd(), "packages/agents/prompts/fixer.md"),
+  path8.resolve(process.cwd(), "prompts/fixer.md"),
+  path8.resolve(process.env.REPLAY_PROMPTS_DIR || "", "fixer.md")
 ];
 function loadFixerPrompt() {
   for (const p2 of PROMPT_CANDIDATES5) {
-    if (fs10.existsSync(p2))
-      return fs10.readFileSync(p2, "utf8");
+    try {
+      if (fs10.existsSync(p2))
+        return fs10.readFileSync(p2, "utf8");
+    } catch {
+    }
   }
-  throw new Error("fixer.md not found in packages/agents/prompts/");
+  return DEFAULT_FIXER_PROMPT;
 }
 var FORBIDDEN_FILE_PATTERNS = [
   /\btests?\//i,
@@ -31258,23 +31519,23 @@ var PROTECTED_PATH_PATTERNS = [
 ];
 async function resolveSafeWorkspacePath(workDir, relativePath) {
   const rootReal = await fs10.promises.realpath(workDir);
-  if (path9.isAbsolute(relativePath)) {
+  if (path8.isAbsolute(relativePath)) {
     throw new Error(`Rejected absolute path outside the workspace: ${relativePath}`);
   }
-  const candidate = path9.resolve(rootReal, relativePath);
-  if (candidate !== rootReal && !candidate.startsWith(rootReal + path9.sep)) {
+  const candidate = path8.resolve(rootReal, relativePath);
+  if (candidate !== rootReal && !candidate.startsWith(rootReal + path8.sep)) {
     throw new Error(`Rejected path outside the workspace: ${relativePath}`);
   }
-  const relFromRoot = path9.relative(rootReal, candidate);
-  const parts = relFromRoot.split(path9.sep);
+  const relFromRoot = path8.relative(rootReal, candidate);
+  const parts = relFromRoot.split(path8.sep);
   if (parts.some((p2) => PROTECTED_PATH_PARTS.includes(p2))) {
     throw new Error(`Rejected protected path: ${relativePath}`);
   }
-  if (PROTECTED_PATH_PATTERNS.some((re2) => re2.test("/" + relFromRoot.split(path9.sep).join("/")))) {
+  if (PROTECTED_PATH_PATTERNS.some((re2) => re2.test("/" + relFromRoot.split(path8.sep).join("/")))) {
     throw new Error(`Rejected protected file: ${relativePath}`);
   }
   const real2 = await fs10.promises.realpath(candidate).catch(() => null);
-  if (real2 && real2 !== candidate && !real2.startsWith(rootReal + path9.sep)) {
+  if (real2 && real2 !== candidate && !real2.startsWith(rootReal + path8.sep)) {
     throw new Error(`Rejected symlink escape: ${relativePath}`);
   }
   return candidate;
@@ -31367,22 +31628,24 @@ async function applyPatchToDirectory(workDir, output) {
 
 // ../../packages/agents/dist/reporter.js
 var fs11 = __toESM(require("node:fs"), 1);
-var path10 = __toESM(require("node:path"), 1);
-var import_meta6 = {};
+var path9 = __toESM(require("node:path"), 1);
 var REPORTER_PROMPT_VERSION = "v1";
-var moduleDir6 = moduleDirOf(import_meta6.url);
+var moduleDir6 = false ? moduleDirOf((void 0).url) : void 0;
 var PROMPT_CANDIDATES6 = [
-  ...moduleDir6 ? [path10.join(moduleDir6, "../prompts/reporter.md"), path10.join(moduleDir6, "../../prompts/reporter.md")] : [],
-  path10.resolve(process.cwd(), "packages/agents/prompts/reporter.md"),
-  path10.resolve(process.cwd(), "prompts/reporter.md"),
-  path10.resolve(process.env.REPLAY_PROMPTS_DIR || "", "reporter.md")
+  ...moduleDir6 ? [path9.join(moduleDir6, "../prompts/reporter.md"), path9.join(moduleDir6, "../../prompts/reporter.md")] : [],
+  path9.resolve(process.cwd(), "packages/agents/prompts/reporter.md"),
+  path9.resolve(process.cwd(), "prompts/reporter.md"),
+  path9.resolve(process.env.REPLAY_PROMPTS_DIR || "", "reporter.md")
 ];
 function loadReporterPrompt() {
   for (const p2 of PROMPT_CANDIDATES6) {
-    if (fs11.existsSync(p2))
-      return fs11.readFileSync(p2, "utf8");
+    try {
+      if (fs11.existsSync(p2))
+        return fs11.readFileSync(p2, "utf8");
+    } catch {
+    }
   }
-  throw new Error("reporter.md not found in packages/agents/prompts/");
+  return DEFAULT_REPORTER_PROMPT;
 }
 var ReporterLlmResponseSchema = external_exports.object({
   title: external_exports.string().min(1),
@@ -31570,14 +31833,14 @@ async function generateReport(data, deps = {}) {
 
 // ../../packages/agents/dist/pipeline.js
 var fs13 = __toESM(require("node:fs"), 1);
-var path12 = __toESM(require("node:path"), 1);
+var path11 = __toESM(require("node:path"), 1);
 var import_node_crypto2 = require("node:crypto");
 
 // ../../packages/video/dist/index.js
 var import_node_child_process2 = require("node:child_process");
 var import_node_util2 = require("node:util");
 var fs12 = __toESM(require("node:fs/promises"), 1);
-var path11 = __toESM(require("node:path"), 1);
+var path10 = __toESM(require("node:path"), 1);
 var execFileAsync2 = (0, import_node_util2.promisify)(import_node_child_process2.execFile);
 function resolveOptions(options) {
   return {
@@ -31598,7 +31861,7 @@ function buildSamplingArgs(videoPath, outputDir, options) {
     `fps=${o2.fps},scale='min(${o2.maxWidth},iw)':-2`,
     "-qscale:v",
     String(o2.jpegQuality),
-    path11.join(outputDir, "f_%04d.jpg")
+    path10.join(outputDir, "f_%04d.jpg")
   ];
 }
 function buildSceneArgs(videoPath, outputDir, options) {
@@ -31613,7 +31876,7 @@ function buildSceneArgs(videoPath, outputDir, options) {
     "vfr",
     "-qscale:v",
     String(o2.jpegQuality),
-    path11.join(outputDir, "s_%04d.jpg")
+    path10.join(outputDir, "s_%04d.jpg")
   ];
 }
 function parseSceneTimestamps(stderr) {
@@ -31629,7 +31892,7 @@ function framesFromListing(fileNames, outputDir, fps) {
   const interval2 = 1 / fps;
   return fileNames.map((filename, index2) => ({
     timestampS: Number((index2 * interval2).toFixed(2)),
-    filePath: path11.join(outputDir, filename),
+    filePath: path10.join(outputDir, filename),
     filename
   }));
 }
@@ -31645,7 +31908,7 @@ function mergeFrameSets(sample, scene, dedupeS = 0.15) {
 async function cleanupPartial(outputDir) {
   try {
     const files = await fs12.readdir(outputDir);
-    await Promise.all(files.filter((f2) => f2.startsWith("f_") || f2.startsWith("s_")).map((f2) => fs12.rm(path11.join(outputDir, f2), { force: true })));
+    await Promise.all(files.filter((f2) => f2.startsWith("f_") || f2.startsWith("s_")).map((f2) => fs12.rm(path10.join(outputDir, f2), { force: true })));
   } catch {
   }
 }
@@ -31712,7 +31975,7 @@ var VideoProcessor = class {
             break;
           sceneFrames.push({
             timestampS: Number(t2.toFixed(2)),
-            filePath: path11.join(outputDir, sceneFiles[i2]),
+            filePath: path10.join(outputDir, sceneFiles[i2]),
             filename: sceneFiles[i2]
           });
         }
@@ -31778,7 +32041,7 @@ var EventCollector = class {
 async function runPipeline(options, deps = {}) {
   const startTime = Date.now();
   const runId = options.runId ?? (0, import_node_crypto2.randomUUID)();
-  const { targetRepoRoot, targetAppUrl = "http://localhost:5173", maxFixAttempts = 2, artifactsDir = path12.resolve("artifacts") } = options;
+  const { targetRepoRoot, targetAppUrl = "http://localhost:5173", maxFixAttempts = 2, artifactsDir = path11.resolve("artifacts") } = options;
   let sampleId = options.sampleId;
   const collector = new EventCollector(runId, options.onEvent);
   if (!sampleId && options.videoPath) {
@@ -31808,8 +32071,8 @@ async function runPipeline(options, deps = {}) {
   let fixtureJson;
   if (sampleId) {
     const candidatePaths = [
-      path12.resolve(`samples/${sampleId}/expected.json`),
-      path12.resolve(targetRepoRoot, `../../samples/${sampleId}/expected.json`)
+      path11.resolve(`samples/${sampleId}/expected.json`),
+      path11.resolve(targetRepoRoot, `../../samples/${sampleId}/expected.json`)
     ];
     for (const p2 of candidatePaths) {
       if (fs13.existsSync(p2)) {
@@ -31822,7 +32085,7 @@ async function runPipeline(options, deps = {}) {
   const liveWatcherPossible = videoReadable && await VideoProcessor.checkFfmpeg() && !!resolveApiKey("watcher");
   if (liveWatcherPossible) {
     try {
-      const framesDir = path12.join(artifactsDir, "frames");
+      const framesDir = path11.join(artifactsDir, "frames");
       const extracted = await VideoProcessor.extractFrames(options.videoPath, framesDir);
       const stride = Math.ceil(extracted.length / 40) || 1;
       const selected = extracted.filter((_2, i2) => i2 % stride === 0).slice(0, 40);
@@ -32078,9 +32341,9 @@ async function runPipeline(options, deps = {}) {
       }
       const sandboxPort = "5179";
       let sandboxTestCode = reproducerOutput.test_code.replace(/https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/g, `http://127.0.0.1:${sandboxPort}`);
-      const sandboxReproDir = path12.join(sandbox.workDir, "tests", "repro");
+      const sandboxReproDir = path11.join(sandbox.workDir, "tests", "repro");
       await fs13.promises.mkdir(sandboxReproDir, { recursive: true });
-      await fs13.promises.writeFile(path12.join(sandboxReproDir, "generated.spec.ts"), sandboxTestCode, "utf8");
+      await fs13.promises.writeFile(path11.join(sandboxReproDir, "generated.spec.ts"), sandboxTestCode, "utf8");
       const postFixRepro = await sandbox.exec("npx", ["playwright", "test", "tests/repro/generated.spec.ts", "--output=.playwright-results-sandbox-repro"], {
         PLAYWRIGHT_TEST_MATCH: "**/tests/repro/**",
         DEMO_SHOP_PORT: sandboxPort,
@@ -32196,10 +32459,10 @@ async function runPipeline(options, deps = {}) {
 }
 async function persistReportArtifacts(runId, output, artifactsDir) {
   try {
-    const reportsDir = path12.join(artifactsDir, "reports");
+    const reportsDir = path11.join(artifactsDir, "reports");
     await fs13.promises.mkdir(reportsDir, { recursive: true });
-    const mdPath = path12.join(reportsDir, `${runId}.md`);
-    const jsonPath = path12.join(reportsDir, `${runId}.json`);
+    const mdPath = path11.join(reportsDir, `${runId}.md`);
+    const jsonPath = path11.join(reportsDir, `${runId}.json`);
     await fs13.promises.writeFile(mdPath, output.markdown_report, "utf8");
     await fs13.promises.writeFile(jsonPath, JSON.stringify(output, null, 2), "utf8");
   } catch {
@@ -32207,9 +32470,21 @@ async function persistReportArtifacts(runId, output, artifactsDir) {
 }
 
 // src/worker.ts
-var REPO_ROOT = process.env.VERCEL ? process.cwd() : process.env.REPLAY_WORKSPACE_ROOT ? path13.resolve(process.env.REPLAY_WORKSPACE_ROOT) : path13.resolve(process.cwd());
+function findRepoRoot() {
+  if (process.env.REPLAY_WORKSPACE_ROOT) return path12.resolve(process.env.REPLAY_WORKSPACE_ROOT);
+  if (process.env.VERCEL) return process.cwd();
+  let cwd = process.cwd();
+  for (let i2 = 0; i2 < 6; i2++) {
+    if ((0, import_node_fs2.existsSync)(path12.join(cwd, "pnpm-workspace.yaml"))) return cwd;
+    const parent = path12.dirname(cwd);
+    if (parent === cwd) break;
+    cwd = parent;
+  }
+  return process.cwd();
+}
+var REPO_ROOT = findRepoRoot();
 var DATA_DIR = process.env.REPLAY_DATA_DIR || REPO_ROOT;
-import_dotenv.default.config({ path: path13.join(REPO_ROOT, ".env") });
+import_dotenv.default.config({ path: path12.join(REPO_ROOT, ".env") });
 var Worker = class {
   workerId;
   pollIntervalMs;
@@ -32269,13 +32544,13 @@ var Worker = class {
     const cutoff = now - 24 * 60 * 60 * 1e3;
     let removed = 0;
     const dirs = [
-      path13.join(DATA_DIR, "artifacts", "uploads"),
-      path13.join(DATA_DIR, "artifacts", "runs")
+      path12.join(DATA_DIR, "artifacts", "uploads"),
+      path12.join(DATA_DIR, "artifacts", "runs")
     ];
     for (const dir of dirs) {
       const entries = await fs14.readdir(dir).catch(() => []);
       for (const entry of entries) {
-        const full = path13.join(dir, entry);
+        const full = path12.join(dir, entry);
         const stat4 = await fs14.stat(full).catch(() => null);
         if (stat4 && stat4.mtimeMs < cutoff) {
           await fs14.rm(full, { recursive: true, force: true }).catch(() => {
@@ -32332,18 +32607,18 @@ var Worker = class {
   async processRun(run2) {
     this.startHeartbeat(run2.id);
     const startTime = Date.now();
-    const targetRepo = path13.resolve(this.repoRoot, "targets/demo-shop");
+    const targetRepo = path12.resolve(this.repoRoot, "targets/demo-shop");
     let sampleId;
     let videoPath;
     if (run2.isSample && isKnownSampleId(run2.videoKey)) {
       sampleId = run2.videoKey;
-      videoPath = path13.resolve(this.repoRoot, `samples/videos/${sampleId}.webm`);
-    } else if (path13.isAbsolute(run2.videoKey)) {
+      videoPath = path12.resolve(this.repoRoot, `samples/videos/${sampleId}.webm`);
+    } else if (path12.isAbsolute(run2.videoKey)) {
       videoPath = run2.videoKey;
     } else {
       const relative2 = run2.videoKey.replace(/^uploads\//, "artifacts/uploads/");
-      const resolved = path13.resolve(DATA_DIR, relative2);
-      if (!resolved.startsWith(path13.resolve(DATA_DIR) + path13.sep)) {
+      const resolved = path12.resolve(DATA_DIR, relative2);
+      if (!resolved.startsWith(path12.resolve(DATA_DIR) + path12.sep)) {
         throw new Error(`Rejected unsafe video key: ${run2.videoKey}`);
       }
       videoPath = resolved;
@@ -32367,7 +32642,7 @@ var Worker = class {
         videoPath,
         maxFixAttempts: this.maxFixAttempts,
         runId: run2.id,
-        artifactsDir: path13.resolve(DATA_DIR, `artifacts/runs/${run2.id}`),
+        artifactsDir: path12.resolve(DATA_DIR, `artifacts/runs/${run2.id}`),
         onEvent: async (event) => {
           lastEventStage = event.stage;
           await this.repo.addEvent(run2.id, {
@@ -32489,19 +32764,32 @@ if (process.env.NODE_ENV !== "test" && !process.env.REPLAY_STANDALONE_DISABLED) 
 }
 
 // src/server.ts
-var import_meta7 = {};
 function computeRepoRoot() {
+  if (process.env.REPLAY_WORKSPACE_ROOT) return path13.resolve(process.env.REPLAY_WORKSPACE_ROOT);
   if (process.env.VERCEL) return process.cwd();
   try {
-    return path14.resolve(path14.dirname((0, import_node_url.fileURLToPath)(import_meta7.url)), "../..");
+    let dir = path13.dirname((0, import_node_url.fileURLToPath)((void 0).url));
+    for (let i2 = 0; i2 < 6; i2++) {
+      if (fs15.existsSync(path13.join(dir, "pnpm-workspace.yaml"))) return dir;
+      const parent = path13.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
   } catch {
-    return process.cwd();
   }
+  let cwd = process.cwd();
+  for (let i2 = 0; i2 < 6; i2++) {
+    if (fs15.existsSync(path13.join(cwd, "pnpm-workspace.yaml"))) return cwd;
+    const parent = path13.dirname(cwd);
+    if (parent === cwd) break;
+    cwd = parent;
+  }
+  return process.cwd();
 }
 var REPO_ROOT2 = computeRepoRoot();
 var DATA_DIR2 = process.env.REPLAY_DATA_DIR || REPO_ROOT2;
-if (fs15.existsSync(path14.join(REPO_ROOT2, ".env"))) {
-  import_dotenv2.default.config({ path: path14.join(REPO_ROOT2, ".env") });
+if (fs15.existsSync(path13.join(REPO_ROOT2, ".env"))) {
+  import_dotenv2.default.config({ path: path13.join(REPO_ROOT2, ".env") });
 }
 var MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 var ALLOWED_MIME_TYPES = /* @__PURE__ */ new Set([
@@ -32568,17 +32856,42 @@ function createServer(options) {
   const isProd = process.env.NODE_ENV === "production";
   const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "").split(",").map((s2) => s2.trim()).filter(Boolean);
   if (isProd && allowedOrigins.length === 0) {
-    console.error("[Replay API] ALLOWED_ORIGINS is not set; API routes will refuse requests until it is configured.");
+    console.error("[Replay API] ALLOWED_ORIGINS is not set; external cross-origin requests will be refused.");
+  }
+  function isSameOriginOrAllowed(c2) {
+    const origin = c2.req.header("origin");
+    if (!origin) return true;
+    if (allowedOrigins.includes(origin) || allowedOrigins.includes("*")) return true;
+    const host = c2.req.header("host") || c2.req.header("x-forwarded-host");
+    if (host && (origin === `https://${host}` || origin === `http://${host}`)) return true;
+    if (process.env.VERCEL && (origin.endsWith(".vercel.app") || origin === "https://vercel.app")) return true;
+    return false;
   }
   app.use("*", cors({
-    origin: isProd ? allowedOrigins : "*",
+    origin: (origin, c2) => {
+      if (!origin) return "*";
+      if (!isProd) return origin;
+      if (allowedOrigins.includes(origin) || allowedOrigins.includes("*")) return origin;
+      const host = c2.req.header("host") || c2.req.header("x-forwarded-host");
+      if (host && (origin === `https://${host}` || origin === `http://${host}`)) return origin;
+      if (process.env.VERCEL && (origin.endsWith(".vercel.app") || origin === "https://vercel.app")) return origin;
+      return null;
+    },
     allowMethods: ["GET", "POST", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
     maxAge: 86400
   }));
   app.use("/api/*", async (c2, next) => {
-    if (isProd && allowedOrigins.length === 0) {
-      return c2.json({ error: "Server misconfigured", message: "ALLOWED_ORIGINS is not set on this deployment." }, 503);
+    const path14 = c2.req.path;
+    if (path14 === "/api/health" || path14 === "/health") {
+      await next();
+      return;
+    }
+    if (isProd && !isSameOriginOrAllowed(c2)) {
+      if (allowedOrigins.length === 0) {
+        return c2.json({ error: "Server misconfigured", message: "ALLOWED_ORIGINS is not set on this deployment." }, 503);
+      }
+      return c2.json({ error: "Forbidden", message: "Cross-origin request not allowed." }, 403);
     }
     await next();
     return;
@@ -32623,7 +32936,7 @@ function createServer(options) {
   app.get("/api/health", healthHandler);
   app.get("/api/samples", (c2) => {
     const samples = KNOWN_SAMPLE_IDS.map((id) => {
-      const expectedPath = path14.resolve(repoRoot, `samples/${id}/expected.json`);
+      const expectedPath = path13.resolve(repoRoot, `samples/${id}/expected.json`);
       let meta = { id };
       try {
         if (fs15.existsSync(expectedPath)) {
@@ -32640,7 +32953,7 @@ function createServer(options) {
         observedBehavior: meta.observed_behavior,
         guiltyFile: meta.guilty_file,
         guiltySymbol: meta.guilty_symbol,
-        recordingAvailable: fs15.existsSync(path14.resolve(repoRoot, `samples/videos/${id}.webm`))
+        recordingAvailable: fs15.existsSync(path13.resolve(repoRoot, `samples/videos/${id}.webm`))
       };
     });
     return c2.json({ samples });
@@ -32719,11 +33032,11 @@ function createServer(options) {
         }
         const runId = (0, import_node_crypto4.randomUUID)();
         const ext = mimeType === "video/mp4" ? "mp4" : "webm";
-        const uploadDir = path14.resolve(DATA_DIR2, "artifacts/uploads");
+        const uploadDir = path13.resolve(DATA_DIR2, "artifacts/uploads");
         if (!fs15.existsSync(uploadDir)) {
           fs15.mkdirSync(uploadDir, { recursive: true });
         }
-        const filePath = path14.resolve(uploadDir, `${runId}.${ext}`);
+        const filePath = path13.resolve(uploadDir, `${runId}.${ext}`);
         const relativeKey = `uploads/${runId}.${ext}`;
         const buffer2 = Buffer.from(await file.arrayBuffer());
         fs15.writeFileSync(filePath, buffer2);

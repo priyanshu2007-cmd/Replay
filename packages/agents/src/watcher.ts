@@ -3,10 +3,11 @@ import * as path from 'node:path';
 import type OpenAI from 'openai';
 import { BugReport, BugReportSchema } from '@replay/shared';
 import { LlmClient, ModelMetrics, moduleDirOf, resolveApiKey, resolveModel } from './llm.js';
+import { DEFAULT_WATCHER_PROMPT } from './prompts.js';
 
 export const WATCHER_PROMPT_VERSION = 'v1';
 
-const moduleDir = moduleDirOf(import.meta.url);
+const moduleDir = typeof import.meta !== 'undefined' && import.meta.url ? moduleDirOf(import.meta.url) : undefined;
 
 const PROMPT_CANDIDATES = [
   ...(moduleDir ? [path.join(moduleDir, '../prompts/watcher.md'), path.join(moduleDir, '../../prompts/watcher.md')] : []),
@@ -16,12 +17,16 @@ const PROMPT_CANDIDATES = [
   path.resolve(process.env.REPLAY_PROMPTS_DIR || '', 'watcher.md'),
 ];
 
-/** Load the versioned Watcher system prompt from packages/agents/prompts/watcher.md. */
+/** Load the versioned Watcher system prompt from packages/agents/prompts/watcher.md with embedded fallback. */
 export function loadWatcherPrompt(): string {
   for (const p of PROMPT_CANDIDATES) {
-    if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8');
+    try {
+      if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8');
+    } catch {
+      // continue to next candidate
+    }
   }
-  throw new Error('watcher.md not found in packages/agents/prompts/');
+  return DEFAULT_WATCHER_PROMPT;
 }
 
 export interface WatcherFrame {

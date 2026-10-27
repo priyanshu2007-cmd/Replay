@@ -11,10 +11,11 @@ import {
 } from '@replay/shared';
 import { LlmClient, LlmError, ModelMetrics, moduleDirOf, resolveApiKey, resolveModel, toLlmError } from './llm.js';
 import { ReproExecutionResult } from './reproducer.js';
+import { DEFAULT_VERIFIER_PROMPT } from './prompts.js';
 
 export const VERIFIER_PROMPT_VERSION = 'v1';
 
-const moduleDir = moduleDirOf(import.meta.url);
+const moduleDir = typeof import.meta !== 'undefined' && import.meta.url ? moduleDirOf(import.meta.url) : undefined;
 
 const PROMPT_CANDIDATES = [
   ...(moduleDir ? [path.join(moduleDir, '../prompts/verifier.md'), path.join(moduleDir, '../../prompts/verifier.md')] : []),
@@ -23,12 +24,16 @@ const PROMPT_CANDIDATES = [
   path.resolve(process.env.REPLAY_PROMPTS_DIR || '', 'verifier.md'),
 ];
 
-/** Load the versioned Verifier system prompt from packages/agents/prompts/verifier.md. */
+/** Load the versioned Verifier system prompt from packages/agents/prompts/verifier.md with embedded fallback. */
 export function loadVerifierPrompt(): string {
   for (const p of PROMPT_CANDIDATES) {
-    if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8');
+    try {
+      if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8');
+    } catch {
+      // continue to next candidate
+    }
   }
-  throw new Error('verifier.md not found in packages/agents/prompts/');
+  return DEFAULT_VERIFIER_PROMPT;
 }
 
 export interface VerifierInput {
