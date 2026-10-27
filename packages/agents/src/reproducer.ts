@@ -136,13 +136,16 @@ export function buildReproducerMessages(input: ReproducerInput): OpenAI.Chat.Cha
   - 'prod-pad': "Desk Mat" ($15)
   - 'prod-headset': "Studio Headset" ($50)
 - Selectors use data-testid:
-  - Catalog cards: 'product-card-<id>', title: 'product-title-<id>' (or '[data-testid^="product-title-"]'), price: 'product-price-<id>', button: 'add-to-cart-<id>' (e.g. 'add-to-cart-prod-keyboard' for $100 item, 'add-to-cart-prod-mouse' for $20 item)
+  -Catalog cards: 'product-card-<id>', title: 'product-title-<id>', price: 'product-price-<id>', button: 'add-to-cart-<id>' (e.g. 'add-to-cart-prod-keyboard' for $100 item, 'add-to-cart-prod-mouse' for $20 item)
+  - IMPORTANT for sorting tests: querying a specific 'product-price-<id>' only checks that item's static price, NOT its position in the sorted list! To assert sort order in the DOM, ALWAYS assert against the multi-element locator in DOM order: \`await expect(page.locator('[data-testid^="product-price-"]')).toHaveText(['$15', '$20', '$50', '$100'])\` (or \`[data-testid^="product-title-"]\`).
   - Navigation: 'nav-shop', 'nav-cart', 'nav-checkout'
   - Sort select: 'sort-select' (values: 'none', 'price-asc', 'price-desc')
   - Cart item qty input: 'cart-item-qty-<id>' (e.g. 'cart-item-qty-prod-mouse')
-  - Coupon input: 'coupon-input', button: 'apply-coupon-btn', status: 'coupon-status'
-  - Cart totals: 'cart-total', 'cart-discount', 'cart-subtotal'
+  - Coupon input: 'coupon-input', button: 'apply-coupon-btn', status: 'coupon-status' (renders "Applied: SAVE10 (10% OFF)")
+  - Cart totals: 'cart-total' (e.g. '$90.00'), 'cart-discount' (renders '$10.00' WITHOUT a leading minus sign because '-' is outside the span), 'cart-subtotal' (e.g. '$100.00')
+  - IMPORTANT for coupon/discount tests: in 'double-discount', clicking 'apply-coupon-btn' only once applies 10% ($90.00) and passes! You MUST click 'apply-coupon-btn' TWICE in a row (\`await page.getByTestId('apply-coupon-btn').click(); await page.getByTestId('apply-coupon-btn').click();\`) before asserting \`cart-total\` is '$90.00' and \`cart-discount\` is '$10.00'.
   - Checkout: 'proceed-to-checkout-btn', 'email-input', 'checkout-btn', 'order-confirmation', 'checkout-error'
+- Combine the Bug Report steps with the Locator's suspect symptom_link and evidence: if the Locator shows the defect is triggered by a repeated interaction (such as clicking 'apply-coupon-btn' twice in 'double-discount'), ensure the test performs all required clicks (e.g., clicking 'apply-coupon-btn' twice) even if the video frame summary missed the second click.
 - Assert the expected CORRECT behavior so the test fails on buggy code with an assertion error.
 `
   );

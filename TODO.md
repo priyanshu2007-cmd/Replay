@@ -326,6 +326,28 @@ Canonical tracker for the 13 audit findings across security, sandbox isolation, 
 
 ---
 
+## Reel Mascot & AI Agent Experience Upgrade (Oct 27–28)
+- [x] **1. Reel Companion State Machine & Interactive Help Dialog (`apps/web/components/mascot/mascot.config.ts`, `apps/web/components/mascot/Mascot.tsx`, `apps/web/app/runs/[id]/page.tsx`)**: `DONE`
+  - Added `STAGE_ORDER`, `STAGE_EXPLANATIONS`, `NEXT_STEP_COPY`, `STAGE_EVIDENCE_TAB`, and `AgentActivityItem` in `mascot.config.ts`.
+  - Enforced stage-order progression and duplicate stage suppression (`STAGE_ORDER`), terminal state lock (`terminalLockedRef` per `runId`), and false-fix celebration protection (`reproAfterFixPassed === false` or `baselineRegressionPassed === false` plays `'confused'`, never `'celebrate'`).
+  - Added accessible `Restore Reel` pill when minimized (`sessionStorage`), keyboard `Escape` support to close the popover/tip, and interactive `Reel companion help` dialog (`Explain this stage`, `Explain this failure`, `What happens next?`, `Open relevant evidence`, `Replay the explanation`, and 6-agent activity summary).
+  - Wired `replay:focus-panel` events on `/runs/[id]` so `Open relevant evidence` switches `CodeTabs` (`suspects`, `test`, `diff`, `terminal`) or scrolls to `#report`, and cleaned up replay `setTimeout` timers on unmount.
+- [x] **2. Six-Agent Pipeline Hardening & `double-discount` / `string-sort` Root-Cause Fixes (`packages/agents/`)**: `DONE`
+  - **Watcher** (`prompts/watcher.md`, `prompts.ts`, `samples/*/expected.json`): Added explicit numeric price-order comparison and post-navigation timestamp rules; reconciled `string-sort` (`3.0s`) and `quantity-reset` (`10.5s`) fixture timestamps with `targets/demo-shop/scripts/record-samples.ts`. Live `pnpm eval:watcher` passes **5/5 (0 fail, 0 blocked)**.
+  - **Locator** (`locator.ts`): Accepted multi-segment `...` evidence quotes when every segment is grounded in the target source window. Live `pnpm eval:locator` passes **5/5 (100% top-1 file & grounded symbol)**.
+  - **Reproducer** (`reproducer.ts`): Added exact catalog product IDs/prices (`prod-keyboard` $100, `prod-mouse` $20, `prod-pad` $15, `prod-headset` $50), multi-element DOM sort-order assertion guidance (`page.locator('[data-testid^="product-price-"]')`), `cart-discount` text format (`'$10.00'` without leading `'-'`), repeated-click coupon guidance for `double-discount`, and `allocateSandboxPort()` to prevent port `5179` collisions.
+  - **Verifier** (`verifier.ts`): Rejected `evaluateAll` selectors returning empty string arrays (`+ ""`) as `SELECTOR_OR_TIMEOUT` (`same_defect: false`) and prevented LLM override when `exitCode !== 0`.
+  - **Fixer** (`fixer.ts`, `pipeline.ts`): Added whitespace-tolerant line matching in `validatePatchSafety` and wired `previousAttemptError` into retry attempts.
+  - **Pipeline & Timeline Telemetry** (`pipeline.ts`, `apps/web/components/timeline.tsx`): Emitted `tokens`, `estimated_cost_usd`, `duration_ms`, and `model` on all 6 stage `*_completed` events and rendered per-stage cost (`$X.XXXX est.`) in `Timeline`.
+  - **Live End-to-End Verification**: `cart-nan`, `double-discount`, and `string-sort` all verified **`FIXED` in 1 attempt** with live Vision Watcher + Locator + Reproducer + Verifier + Fixer + Reporter (**5/5 Demo Shop samples `FIXED`**).
+- [x] **3. Frontend Interaction & E2E Matrix Verification (`apps/web/`)**: `DONE`
+  - Preserved `steps` array in `BugReportSchema` (`apps/web/lib/api.ts`) so video timeline markers render.
+  - Normalized snake_case/camelCase run payloads in `getReplayRun` (`apps/web/lib/replay.ts`).
+  - Added `Copy patch` button with `"Copied"` feedback in `CodeTabs` `Diff` tab (`apps/web/components/code-tabs.tsx`), disabled note `<Input>` while busy (`apps/web/components/upload-dropzone.tsx`), and fixed `Source repository` link on `/how` (`apps/web/app/how/page.tsx`).
+  - Expanded Playwright E2E suite (`apps/web/tests/e2e.spec.ts`) to **16/16 passing tests** across Chromium and viewports (`1440`, `1280`, `768`, `390`, `320`).
+
+---
+
 # TODO: Skill Additions Log
 
 **Policy:** every time skills are added, removed or updated from any skills folder / repo, add one row below. This file is the record the agent updates first.

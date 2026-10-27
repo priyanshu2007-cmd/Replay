@@ -104,6 +104,13 @@ async function main(): Promise<void> {
     }
   }
 
+  if (sampleId && !videoPath) {
+    const candidateVideo = path.join(REPO_ROOT, 'samples', 'videos', `${sampleId}.webm`);
+    if (fs.existsSync(candidateVideo)) {
+      videoPath = candidateVideo;
+    }
+  }
+
   if (!jsonMode) {
     console.log('╔══════════════════════════════════════════════════════════════════╗');
     console.log('║       Replay — Autonomous Bug Reproduction & Verification       ║');

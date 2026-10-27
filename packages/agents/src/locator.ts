@@ -151,7 +151,13 @@ export function buildGroundedLocatorSchema(bundle: RepoBundle): z.ZodType<Locato
       }
 
       const normEvidence = normalizeSnippet(suspect.evidence);
-      if (!normEvidence || !normSlice.includes(normEvidence)) {
+      const evidenceSegments = normEvidence
+        .split(/\.\.\.|…/)
+        .map(s => s.trim())
+        .filter(Boolean);
+      const allSegmentsMatch =
+        evidenceSegments.length > 0 && evidenceSegments.every(seg => normSlice.includes(seg));
+      if (!normEvidence || !allSegmentsMatch) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['suspects', index, 'evidence'],
