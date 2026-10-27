@@ -447,7 +447,6 @@ export class MemoryRunRepository implements RunRepository {
           }
         }
       }, 100);
-      if (typeof timer.unref === 'function') timer.unref();
       this.pollTimers.set(runId, timer);
     }
 
@@ -807,7 +806,6 @@ export class PostgresRunRepository implements RunRepository {
           polling = false;
         }
       }, 150);
-      if (typeof timer.unref === 'function') timer.unref();
       this.pollTimers.set(runId, timer);
     }
 

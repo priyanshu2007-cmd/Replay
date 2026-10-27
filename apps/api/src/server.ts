@@ -862,8 +862,7 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
             } catch {
               finishStream?.();
             }
-          }, 150);
-          if (typeof pollInterval.unref === 'function') pollInterval.unref();
+          }, 100);
 
           const pingInterval = setInterval(async () => {
             if (closed) return;

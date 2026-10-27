@@ -537,9 +537,9 @@ describe('Replay API Server', () => {
           await workerRepo.addEvent(claimed.id, { stage: 'report', agent: 'Worker', event_type: 'pipeline_completed', payload: { status: 'fixed' } });
         })();
 
-        const [res] = await Promise.all([sseResponsePromise, workerTask]);
+        const res = await sseResponsePromise;
         assert.equal(res.status, 200);
-        const bodyText = await res.text();
+        const [bodyText] = await Promise.all([res.text(), workerTask]);
 
         assert.ok(bodyText.includes('event: run_created'));
         assert.ok(bodyText.includes('event: pipeline_started'));
