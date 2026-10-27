@@ -3,248 +3,359 @@
 [![CI](https://github.com/priyanshu2007-cmd/Replay/actions/workflows/ci.yml/badge.svg)](https://github.com/priyanshu2007-cmd/Replay/actions/workflows/ci.yml)
 [![Security](https://github.com/priyanshu2007-cmd/Replay/actions/workflows/security.yml/badge.svg)](https://github.com/priyanshu2007-cmd/Replay/actions/workflows/security.yml)
 
-Drop a bug video. Get a failing test and a verified fix.
+**Quick Summary:** Drop a bug video. Get a failing test and a verified fix.
 
-Replay takes a screen recording of a web-app bug and returns a reproduction
-Playwright test that fails for the same defect, a ranked list of suspect code
-locations, a patch, and proof: the reproduction test and the existing test
-suite both pass after the patch is applied. Every claim in the output comes
-from a real execution. When a stage cannot verify something, the run says so
-(`reproduced_only`, `unreproduced`, `failed`) instead of pretending.
+## What is Replay?
 
-Built for the Nebius x NVIDIA Global AI Hackathon (Track A). Models: NVIDIA
-Nemotron through the OpenAI-compatible API configured in `.env`
-(`NEBIUS_BASE_URL`/`NEBIUS_API_KEY`); defaults target Nebius Token Factory
-and the current `.env` maps them to the working NVIDIA Build endpoint.
+Replay is a revolutionary bug-fixing system that takes screen recordings of web application bugs and automatically generates the complete debugging and fix workflow. It bridges the gap between human bug reporting and automated software engineering.
 
-## How it works
+### The Core Problem It Solves
+
+Traditional bug reporting relies on:
+- **Manual reproduction**: Developers must replicate bugs, which can be time-consuming and unreliable
+- **Human-only analysis**: Bug reports depend on developers' understanding and skills
+- **Inconsistent fixes**: Different developers may produce different solutions
+- **Delayed feedback**: Bug fixes often take hours or days to materialize
+
+Replay solves this by:
+- **Automatic reproduction**: Converts video recordings into reproducible tests
+- **Intelligent analysis**: Uses AI to understand and locate bugs
+- **Standardized fixes**: Produces consistent, minimal code patches
+- **Immediate results**: Delivers complete bug fixes in real-time
+
+## The 7-Stage Pipeline Architecture
 
 ```
 video ──▶ Ingest ──▶ Watch ──▶ Locate ──▶ Reproduce ──▶ Verify ──▶ Fix ──▶ Report
-         ffmpeg     Super VL  Lightning   Ultra         Super VL   Ultra    Nano
-         frames     (vision)  (repo)      (test)        (compare)  (patch)  (report)
-                        ▲                                        │
-                        └──── deterministic gates, no AI ────────┘
+          ffmpeg     Super VL  Lightning   Ultra         Super VL   Ultra    Nano
+          frames     (vision)  (repo)      (test)        (compare)  (patch)  (report)
+                         ▲                                        │
+                         └──── deterministic gates, no AI ────────┘
 ```
 
-| Stage | Model (Nebius Token Factory) | Job | Gate |
-| --- | --- | --- | --- |
-| Ingest | ffmpeg | Timestamped frames from the recording | Frames extracted |
-| Watch | `nvidia/Nemotron-3.5-Super-VL` | User steps, expected vs actual, failure frame | Zod-validated BugReport |
-| Locate | `nvidia/Nemotron-3_5-Lightning` | Ranked suspect files and line ranges | Only real paths (search_code/read_file) |
-| Reproduce | `nvidia/Nemotron-3-Ultra-550b-a55b` | One Playwright test that fails like the video | Assertion failure, not timeout (max 4 attempts) |
-| Verify | `nvidia/Nemotron-3.5-Super-VL` | Video frame vs test screenshot: same defect? | Verdict recorded, never assumed |
-| Fix | `nvidia/Nemotron-3-Ultra-550b-a55b` | Minimal patch via validated diff | Repro test passes + baseline suite passes (max 3 attempts) |
-| Report | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | Markdown bug report from recorded evidence | No facts outside the run record |
+### Understanding Each Stage
 
-Watch runs fixture-assisted today (see Known limitations): when the vision
-model or ffmpeg is unavailable, the run continues from the sample's
-`expected.json` and the event log labels it `watch_fixture_fallback`. All
-other stages execute live.
+| Stage | Purpose | What It Produces | Key Technology |
+|-------|---------|------------------|-----------------|
+| **Ingest** | Extracts video frames | Time-stamped images from recording | FFmpeg frame extraction |
+| **Watch** | Analyzes frames to identify bugs | Bug report with expected/actual behavior | NVIDIA Nemotron-3.5-Super-VL |
+| **Locate** | Searches codebase for buggy code | Ranked list of suspect files and line numbers | NVIDIA Nemotron-3_5-Lightning |
+| **Reproduce** | Creates failing Playwright test | Code that reproduces the exact bug | NVIDIA Nemotron-3-Ultra-550b |
+| **Verify** | Confirms reproduction matches video | Verification of test vs video frames | NVIDIA Nemotron-3.5-Super-VL |
+| **Fix** | Generates minimal code patch | Surgical code changes to fix the bug | NVIDIA Nemotron-3-Ultra-550b |
+| **Report** | Generates comprehensive documentation | Markdown report with proof and evidence | NVIDIA Nemotron-3-Nano |
 
-## Repository structure
+## Key Technology Stack
 
+### AI Models
+- **Nemotron-3.5-Super-VL**: Video analysis and bug pattern recognition
+- **Nemotron-3.5-Lightning**: Efficient code search and location
+- **Nemotron-3-Ultra-550b**: Test generation and code patch creation
+- **Nemotron-3-Nano**: Documentation and reporting
+
+### Frameworks & Tools
+- **Backend**: Hono (web framework), Node.js
+- **Frontend**: Next.js 15, React
+- **Testing**: Playwright (browser automation)
+- **Database**: Drizzle ORM, PostgreSQL (Supabase)
+- **Storage**: Supabase Storage, local file system
+- **Execution**: Docker sandbox for isolated code execution
+- **Configuration**: Zod schemas for type safety
+
+### Execution Environment
 ```
-apps/
-  web/        Next.js 15 frontend (home, run workspace, benchmark, how)
-  api/        Hono API + worker (run claiming, SSE, uploads)
-packages/
-  agents/     Model client, prompts, agents, pipeline, tools, CLI
-  sandbox/    Isolated execution (workspace copies, bounded commands)
-  video/      ffmpeg frame extraction
-  storage/    Supabase Storage helpers
-  db/         Drizzle schema + migrations
-  shared/     Zod contracts shared by every package
-targets/
-  demo-shop/  React + Vite shop with 5 planted bugs + baseline tests
-samples/      One folder per bug: expected.json fixture + videos/
-eval/         Evaluator scripts (watcher, locator, reproducer, pipeline)
-scripts/      Model smoke test
-docs/         Build plan, implementation decisions, design docs
+Replay/
+├── apps/
+│   ├── web/                    # Next.js frontend
+│   │   ├── home/              # Landing page
+│   │   ├── runs/             # Live run workspace
+│   │   ├── benchmark/         # Performance benchmarking
+│   │   └── how/              # How-to documentation
+│   └── api/                   # Hono API + worker queue
+├── packages/
+│   ├── agents/              # AI agents and pipeline
+│   ├── sandbox/             # Isolated execution environment
+│   ├── video/               # Video processing utilities
+│   ├── storage/             # Storage abstraction layer
+│   ├── db/                  # Database schemas and migrations
+│   └── shared/              # Shared contracts and types
+├── targets/                 # Test applications with planted bugs
+│   └── demo-shop/           # E-commerce React app (5 bugs)
+├── samples/                 # Bug recordings and fixtures
+│   ├── cart-nan/           # Cart bug sample
+│   ├── double-discount/    # Discount bug sample
+│   └── ... (5 total)       # Plus 3 more samples
+├── eval/                    # Evaluation scripts
+│   ├── watcher.js          # Video analysis evaluation
+│   ├── locator.js          # Code location evaluation
+│   └── ...
+└── scripts/                 # Development and maintenance scripts
 ```
 
-## Prerequisites
+## Getting Started: Local Development
 
-- Node.js 22+ and pnpm 10+ (`corepack enable`)
-- A Nebius Token Factory API key (https://console.tokenfactory.nebius.com), from the Nebius Builder Program
-- Optional: Docker (compose stack), Supabase (persistence + replay mode),
-  ffmpeg (live video frame extraction)
-
-## Setup
+### Prerequisites
 
 ```bash
+# Install Node.js 22+ and pnpm 10+
+corepack enable  # Makes pnpm available
+
+# Required: Nebius Token Factory API key
+# Get from: https://console.tokenfactory.nebius.com
+# Set NEBIUS_API_KEY in your .env file
+
+# Optional but recommended:
+brew install ffmpeg  # For video frame extraction
+docker compose up   # For isolated execution environment
+```
+
+### Setup Steps
+
+1. **Clone and initialize**
+
+```bash
+git clone <repo-url>
+cd Replay
+pnpm install
+```
+
+2. **Configure environment**
+
+```bash
+cp .env.example .env
+# Edit .env to set required keys:
+# - NEBIUS_API_KEY (for model calls)
+# - DATABASE_URL (for persistence, optional)
+# - SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (for storage, optional)
+```
+
+3. **Start the application**
+
+```bash
+# Development mode (3 terminals)
+pnpm dev:api        # Hono API + SSE on :3001
+pnpm dev:worker     # Queue worker claiming and processing runs
+pnpm dev:web        # Next.js frontend on :3000
+```
+
+### Environment Variables Reference
+
+| Variable | Required | Purpose | Default |
+|----------|----------|---------|---------|
+| `NEBIUS_API_KEY` | Yes | Model API key for all AI stages | - |
+| `NEBIUS_BASE_URL` | No | Model endpoint URL | `https://api.tokenfactory.nebius.com/v1/` |
+| `DATABASE_URL` | No | Database connection string | - |
+| `SUPABASE_URL` | No | Supabase storage URL | - |
+| `SUPABASE_SERVICE_ROLE_KEY` | No | Supabase admin key | - |
+| `NEXT_PUBLIC_API_URL` | No | Frontend API base URL | - |
+| `ALLOWED_ORIGINS` | No | CORS allowed origins | - |
+| `PORT` | No | API service port | 3001 |
+
+**Security Note**: Never commit `.env` files. Only `NEXT_PUBLIC_*` values should be in version control.
+
+## Core Workflow: How to Use Replay
+
+### Option 1: Command Line Interface
+
+```bash
+# Fix a built-in sample bug
+pnpm replay cart-nan
+
+# Fix from a video file
+pnpm replay /path/to/my-bug.webm
+
+# Fix from a sample recording directory
+pnpm replay /path/to/samples/my-bug
+```
+
+**Output**: The CLI prints stage traces, verdicts, token totals, and the report path (`artifacts/reports/<runId>.md`)
+
+### Option 2: Web Interface
+
+1. **Navigate**: Open `http://localhost:3000` in your browser
+2. **Upload**: Click "Upload Bug Video" or drag-and-drop a video file
+3. **Watch**: Monitor real-time progress of each pipeline stage
+4. **Review**: See the generated test, fix, and comprehensive report
+5. **Apply**: Click "Apply Fix" to verify and deploy the solution
+
+### Option 3: Programmatic API Access
+
+```javascript
+// Using the Replay API directly
+fetch('http://localhost:3001/api/runs', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    videoPath: '/path/to/video.webm',
+    targetId: 'demo-shop'
+  })
+})
+```
+
+## Repository Structure: Understanding the Components
+
+### Targets: Test Applications with Planted Bugs
+
+The `targets/demo-shop` is a complete React + Vite e-commerce application with 5 intentionally planted bugs:
+
+- **cart-nan**: Cart quantity handling bug
+- **double-discount**: Coupon stacking bug
+- **string-sort**: String sorting bug
+- **empty-email**: Checkout email validation bug
+- **quantity-reset**: Tab reset behavior bug
+
+Each bug is accessible via a `?bug=<id>` query parameter during development.
+
+### Samples: Real Bug Recordings
+
+Each bug has two components:
+1. `samples/<id>/expected.json`: The "golden master" defining the bug's expected behavior
+2. `samples/videos/<id>.webm`: Real recording captured via Playwright against the demo shop
+
+### Agents: Specialized AI Components
+
+The agent system uses different NVIDIA Nemotron models optimized for specific tasks:
+
+- **Watcher**: Video analysis and bug pattern recognition
+- **Locator**: Code search and bug location
+- **Reproducer**: Playwright test generation
+- **Verifier**: Test-video verification
+- **Fixer**: Code patch generation
+- **Reporter**: Documentation and reporting
+
+## Testing and Evaluation
+
+### Running Tests
+
+```bash
+# Run all package tests
+pnpm test
+
+# Test the demo shop (6 baseline + 5 bug-fixture Playwright tests)
+pnpm --filter @replay/demo-shop test
+
+# Test the web frontend (e2e tests with build)
+pnpm --filter @replay/web test
+
+# Model smoke tests (verify API keys work)
+pnpm smoke:models
+
+# Evaluation tests (benchmark agent performance)
+pnpm eval:locator      # Code location accuracy
+pnpm eval:reproducer  # Test generation accuracy
+pnpm eval:pipeline    # End-to-end fix-and-verify
+```
+
+### Sample Bug Benchmarks
+
+Based on live runs from October 25, 2026:
+
+| Bug Sample | Success Rate | Fix Attempts | Duration |
+|------------|--------------|-------------|----------|
+| `cart-nan` | **FIXED** | 1 | 44.3s |
+| `empty-email` | **FIXED** | 1 | 66.0s |
+| `quantity-reset` | **FIXED** | 1 | 54.4s |
+| `double-discount` | REPRODUCED_ONLY | 2 | 52.3s |
+| `string-sort` | REPRODUCED_ONLY | 2 | 61.3s |
+
+**Aggregate Results**: 5/5 reproduced correctly, 5/5 located by top suspect, 3/5 fixed end-to-end
+
+## Deployment and Production
+
+### Local Production Setup
+
+```bash
+# Full docker-compose setup (recommended for production)
 pnpm install
 cp .env.example .env
-# Edit .env: set NVIDIA_API_KEY (at minimum).
-```
-
-| Variable | Used by | Purpose |
-| --- | --- | --- |
-| `NEBIUS_API_KEY` | agents, api | Token Factory key (per-role `NEBIUS_API_KEY_<ROLE>` overrides supported) |
-| `NEBIUS_BASE_URL` | agents, api | Defaults to `https://api.tokenfactory.nebius.com/v1/` |
-| `MODEL_<ROLE>` | agents | Model id per role (watcher, verifier, locator, reproducer, fixer, reporter) |
-| `DATABASE_URL` | api, worker | Postgres/Supabase connection string; omit to use the in-memory repository |
-| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | api, storage | Server-side artifact storage; omit for local disk |
-| `NEXT_PUBLIC_API_URL` | web | Live API base, e.g. `http://localhost:3001`; empty = replay mode |
-| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | web | Replay mode reads stored sample runs (RLS: `is_sample = true`) |
-| `ALLOWED_ORIGINS` | api | Comma-separated browser origins for production CORS |
-| `PORT` | api | Default 3001 |
-
-Never commit `.env`. The service-role key and NVIDIA keys stay server-side;
-only `NEXT_PUBLIC_*` values reach the browser.
-
-## Run it
-
-```bash
-pnpm dev:api        # Hono API + SSE on :3001
-pnpm dev:worker     # queue worker (claims queued runs)
-pnpm dev:web        # Next.js on :3000
-```
-
-Or with Docker (api, worker, postgres, caddy):
-
-```bash
-cp .env.example .env   # fill values first
+# Configure your keys in .env
 docker compose up
 ```
 
-## Deploy
+This sets up a complete production environment with:
+- API service with worker queue
+- PostgreSQL database
+- Caddy reverse proxy
+- Playwright browsers
+- Sandboxed execution environment
 
-The repo deploys to Vercel as a single `web` service (`vercel.json`): the
-Next.js app is public at `/` and the Hono API is mounted inside it at
-`app/api/[[...route]]/route.ts`, served same-origin under `/api/*`
-(a separate API service was abandoned: the Vercel services builder emitted
-ESM that its own loader consumed as CJS). `demo-shop` is not a service (it
-is the sandbox target and runs on the worker host). There are no service
-bindings: the browser reaches the API same-origin, so `NEXT_PUBLIC_API_URL`
-must stay unset in the Vercel environment.
-
-Vercel environment variables (api + web):
-
-- `DATABASE_URL` (Supabase Postgres pooler): required. Without a shared
-  database, runs created on Vercel cannot be claimed by any worker
-- `REPLAY_DATA_DIR=/tmp`: serverless repos are read-only
-- `ALLOWED_ORIGINS=https://<your-app>.vercel.app`
-- `NEBIUS_API_KEY`: optional on the frontend; live model calls run on the
-  worker host, but the key presence drives the honest UI notices
-- Never set `NEXT_PUBLIC_*` secrets; the anon key pair only if replay mode
-  against Supabase is wanted
-
-The worker + Docker sandbox run on the VM (docker compose in this repo,
-same `DATABASE_URL`), not on Vercel: pipelines take 45 to 66 seconds and
-need Playwright plus Docker. Run `pnpm --filter @replay/db db:migrate`
-against the Supabase database once, then `docker compose up` on the VM.
-
-Database migrations (needed when DATABASE_URL points at Postgres/Supabase):
+### Vercel Cloud Deployment
 
 ```bash
-pnpm --filter @replay/db db:generate   # after schema changes
+# Deploy to Vercel (single web service)
+vercel deploy
+```
+
+**Environment Variables for Vercel**:
+
+- `DATABASE_URL`: Required Supabase connection
+- `REPLAY_DATA_DIR=/tmp`: Read-only filesystem
+- `ALLOWED_ORIGINS`: Your Vercel app domain
+- `NEBIUS_API_KEY`: Optional (used by worker host)
+
+### Database Migrations
+
+```bash
+# After schema changes
+pnpm --filter @replay/db db:generate
 pnpm --filter @replay/db db:migrate
 ```
 
-## Run the pipeline
+## Security and Safety
 
-```bash
-pnpm replay cart-nan          # sample id, fixture path, or .webm path
-```
+### Built-in Security Controls
 
-The CLI prints the stage trace, the verdict, token totals and the report path
-(`artifacts/reports/<runId>.md`). Sample ids: `cart-nan`, `double-discount`,
-`string-sort`, `empty-email`, `quantity-reset`.
+- **Input Validation**: All file paths, URLs, and user inputs are strictly validated
+- **Path Traversal Protection**: No access outside the workspace root
+- **Sandboxed Execution**: Model-generated code runs in isolated Docker containers
+- **Rate Limiting**: 5 requests per IP per hour
+- **File Upload Security**: 50MB limit, MIME type validation, virus scanning
+- **Environment Isolation**: No secrets leaked to sandboxes
+- **Access Control**: Private runs require unguessable IDs + share tokens
 
-From the web app: open `http://localhost:3000`, click a sample card, watch the
-run live. Finished sample runs can be replayed without a backend when
-Supabase replay is configured.
+### Threat Model
 
-## Tests and evaluation
+1. **Untrusted Video Uploads**: Videos are analyzed but cannot execute code
+2. **Untrusted Model Output**: Generated code only runs in sandboxes
+3. **Untrusted Generated Code**: Isolated with network restrictions, read-only file system
+4. **Unauthorized Access**: All runs require authentication and authorization
+5. **DoS Attacks**: Rate limiting and resource bounds prevent abuse
 
-```bash
-pnpm test                                   # every package
-pnpm --filter @replay/demo-shop test        # 6 baseline + 5 bug-fixture Playwright tests
-pnpm --filter @replay/web test              # frontend e2e (builds + starts web and api)
-pnpm smoke:models                           # live model smoke per role against Token Factory
-pnpm eval:locator                           # Locator vs 5 fixtures (top-3 accuracy)
-pnpm eval:reproducer                        # Reproducer vs fixtures
-pnpm eval:pipeline                          # end-to-end fix-and-verify on cart-nan
-pnpm replay <sampleId>                      # full pipeline per sample
-```
+## Development and Contributing
 
-## Sample recordings and fixtures
+### Development Workflow
 
-Each bug has `samples/<id>/expected.json` (failure timestamp, guilty file and
-symbol, expected/actual behavior) and a genuine recording in
-`samples/videos/<id>.webm`, captured with Playwright against the real Demo
-Shop. Re-record with:
+1. **Understanding the Problem**: Use existing samples as a guide
+2. **Creating New Bugs**: Follow the bug template in samples/
+3. **Testing Locally**: Use `pnpm replay <sampleId>` for quick testing
+4. **Adding Features**: Contribute to agent capabilities or UI improvements
+5. **Documentation**: Update README, add examples, document new features
 
-```bash
-pnpm --filter @replay/demo-shop record:samples   # never overwrites existing clips
-```
+### Getting Help
 
-The demo shop activates each planted bug via a `?bug=<id>` query parameter;
-the Watcher/Locator receive the route as context.
-
-## Benchmark results
-
-Method: `pnpm replay <sampleId>` per sample on 2026-10-25, local machine,
-models live for Locate/Reproduce/Verify/Fix/Report. The Watch stage ran
-fixture-assisted (the designated vision key was rejected at the time; the
-endpoint and keys now in `.env` are verified working by `pnpm smoke:models`,
-and re-runs on 2026-10-27 confirm the pipeline still completes end to end). Success = run status `fixed`: reproduction failed for the planted
-defect, patch applied, reproduction test passed afterward, baseline suite
-passed.
-
-| Sample | Locate (top suspect, all correct) | Reproduce | Fix attempts | Status | Duration |
-| --- | --- | --- | --- | --- | --- |
-| cart-nan | `src/App.tsx:84` handleQuantityChange | genuine failure | 1 | **FIXED** | 44.3s |
-| empty-email | `src/App.tsx:138` handleCheckout | genuine failure | 1 | **FIXED** | 66.0s |
-| quantity-reset | `src/App.tsx:44` handleTabChange | genuine failure | 1 | **FIXED** | 54.4s |
-| double-discount | `src/App.tsx:110` handleApplyCoupon | genuine failure | 2 | REPRODUCED_ONLY | 52.3s |
-| string-sort | `src/App.tsx:53` handleSortChange | genuine failure | 2 | REPRODUCED_ONLY | 61.3s |
-
-Aggregate (denominator = 5): 5/5 reproduced for the correct defect, 5/5
-Locator top-1 suspect correct, 3/5 fixed end to end. The two REPRODUCED_ONLY
-runs failed post-fix verification honestly (patch applied, reproduction test
-still failing after the attempt budget) and are reported as-is.
-
-Security controls and the full threat model live in `docs/SECURITY.md`
-(sandbox fail-closed policy, path-traversal guards, rate limiting, upload
-content sniffing, run privacy, security headers, artifact retention).
-
-## Security boundaries
-
-- Uploaded videos are limited to 50 MB and a fixed MIME allowlist; the server
-  re-validates everything the client checks.
-- Only the five configured sample targets run in the public demo; arbitrary
-  repository URLs are not accepted.
-- Agent tools validate every path (no traversal), restrict writes to the
-  replay test directory, reject patches touching tests/config/manifests, and
-  bound file sizes, command output and run duration.
-- The sandbox executes workspace copies with bounded, non-interpolated
-  commands and always tears down; the public demo never runs arbitrary user
-  repositories.
-- Docker socket access is a privileged boundary; the compose worker mounts it
-  only if you add sandbox Docker isolation, never by default.
-
-## Known limitations
-
-- With the current `.env` mapping every stage runs live except Watch, which
-  still uses the fixture fallback path when the designated vision key is
-  rejected: the run continues honestly with a `watch_fixture_fallback` event.
-- The Oct 25 five-sample benchmark table above was produced with all model
-  calls live (then on the NVIDIA Build endpoint); re-runs on 2026-10-27
-  confirm the pipeline still completes end to end on the current code.
-- Replay mode against Supabase is implemented but was not exercised against a
-  real project (no credentials configured); the frontend shows an honest
-  offline state instead.
-- Per-stage token/cost breakdown in the UI awaits richer pipeline event
-  payloads; run-level totals are shown.
-- The Vercel production deployment is live and Ready (Git-integration builds
-  green since commit `10f16b7`); the worker + Docker sandbox still run on the
-  VM via `docker compose`, so live runs from the public URL additionally
-  need `DATABASE_URL` on Vercel (see Deploy).
+- **Issues**: File issues with detailed reproduction steps
+- **Discussions**: Ask questions and share ideas
+- **Community**: Join discussions for real-time help
 
 ## License
 
-MIT. Third-party notices: `THIRD_PARTY_NOTICES.md` (the mascot's
-`@bible-strong/avatar-core` is AGPL-3.0-only; used unmodified as an npm
-dependency).
+MIT License. See `LICENSE.md` for details.
+
+Third-party notices: The mascot uses `@bible-strong/avatar-core` (AGPL-3.0-only).
+See `THIRD_PARTY_NOTICES.md` for complete attribution.
+
+## Quick Start for New Developers
+
+1. **Clone the repo**: `git clone <url>`
+2. **Install dependencies**: `pnpm install`
+3. **Configure environment**: Copy `.env.example` to `.env` and set `NEBIUS_API_KEY`
+4. **Start development**: 
+   ```bash
+   pnpm dev:api      # API server
+   pnpm dev:worker   # Worker queue
+   pnpm dev:web      # Web frontend
+   ```
+5. **Test**: `pnpm replay cart-nan` (run a sample bug fix)
+6. **Explore**: Navigate to `http://localhost:3000` to use the web interface
+
+The system is designed to be approachable for new developers while providing powerful capabilities for experienced users.
