@@ -40,6 +40,12 @@ export function estimateCostUsd(usage: Array<{ role: AgentRole; tokens: number }
   return dollars.toFixed(4);
 }
 
+export function estimateStageCostUsd(role: AgentRole, tokens: number): string | null {
+  if (!tokens || tokens <= 0) return null;
+  const dollars = (tokens / 1_000_000) * COST_PER_1M[role];
+  return dollars > 0 ? dollars.toFixed(4) : null;
+}
+
 /** Last N lines of process output for error events; secrets redacted. */
 function outputTail(res: { stdout?: string; stderr?: string }, lines = 40): string {
   const text = `${res.stderr ?? ''}\n${res.stdout ?? ''}`.trim();
@@ -380,6 +386,10 @@ export async function runPipeline(
     summary: bugReport.summary,
     expected_behavior: bugReport.expected_behavior,
     actual_behavior: bugReport.actual_behavior,
+    tokens: watcherMetrics?.totalTokens ?? 0,
+    estimated_cost_usd: estimateStageCostUsd('watcher', watcherMetrics?.totalTokens ?? 0),
+    duration_ms: watcherMetrics?.durationMs ?? 0,
+    model: videoAnalysis === 'live' ? (watcherMetrics?.model ?? resolveModel('watcher')) : 'fixture-assisted',
   });
 
   // --- STAGE 3: LOCATE ---
@@ -395,6 +405,7 @@ export async function runPipeline(
     suspects_count: locatorOutput.suspects.length,
     top_suspect: locatorOutput.suspects[0] ?? null,
     tokens: locatorRes.metrics.totalTokens,
+    estimated_cost_usd: estimateStageCostUsd('locator', locatorRes.metrics.totalTokens),
     duration_ms: locatorRes.metrics.durationMs,
     model: locatorRes.model,
   });
@@ -446,6 +457,7 @@ export async function runPipeline(
     test_name: reproducerOutput.test_name,
     assertion: reproducerOutput.assertion,
     tokens: reproRes.metrics.totalTokens,
+    estimated_cost_usd: estimateStageCostUsd('reproducer', reproRes.metrics.totalTokens),
     duration_ms: reproRes.metrics.durationMs,
     model: reproRes.model,
   });
@@ -557,6 +569,7 @@ export async function runPipeline(
     same_defect: verifierOutput.same_defect,
     reason: verifierOutput.reason,
     tokens: verifierRes.metrics.totalTokens,
+    estimated_cost_usd: estimateStageCostUsd('verifier', verifierRes.metrics.totalTokens),
     duration_ms: verifierRes.metrics.durationMs,
     model: verifierRes.modelError ? 'deterministic-fallback' : verifierRes.model,
   });
@@ -595,9 +608,13 @@ export async function runPipeline(
     await collector.emit('report', 'report_completed', 'reporter', {
       status: 'unreproduced',
       summary: reporterRes.output.executive_summary,
+      tokens: reporterRes.metrics?.totalTokens ?? 0,
+      estimated_cost_usd: estimateStageCostUsd('reporter', reporterRes.metrics?.totalTokens ?? 0),
+      duration_ms: reporterRes.metrics?.durationMs ?? 0,
+      model: reporterRes.modelError ? 'deterministic-fallback' : (reporterRes.model ?? resolveModel('reporter')),
     });
 
-    const totalTokens = [watcherMetrics, locatorRes?.metrics, reproRes?.metrics, verifierRes?.metrics]
+    const totalTokens = [watcherMetrics, locatorRes?.metrics, reproRes?.metrics, verifierRes?.metrics, reporterRes?.metrics]
       .map((m) => m?.totalTokens ?? 0)
       .reduce((a, b) => a + b, 0);
     return {
@@ -609,6 +626,7 @@ export async function runPipeline(
         { role: 'locator', tokens: locatorRes.metrics.totalTokens },
         { role: 'reproducer', tokens: reproRes.metrics.totalTokens },
         { role: 'verifier', tokens: verifierRes.metrics.totalTokens },
+        { role: 'reporter', tokens: reporterRes.metrics?.totalTokens ?? 0 },
       ]),
       sampleId,
       videoAnalysis,
@@ -632,7 +650,10 @@ export async function runPipeline(
   await collector.emit('fix', 'fix_started', 'fixer');
 
   let lastFixerOutput: FixerOutput | undefined;
-  let fixerMetrics: { totalTokens: number } | undefined;
+  let fixerTotalTokens = 0;
+  let fixerDurationMs = 0;
+  let lastFixerModel: string | undefined;
+  let lastAttemptError: string | undefined;
   let reproAfterFixPassed = false;
   let baselineRegressionPassed = false;
   let attempt = 0;
@@ -641,20 +662,38 @@ export async function runPipeline(
     attempt++;
     await collector.emit('fix', 'fix_attempt_started', 'fixer', { attempt });
 
-    const fixRes = await proposeFix(
-      {
-        bugReport,
-        locatorOutput,
-        reproducerOutput,
-        bundle,
-        attempts: attempt,
-      },
-      deps.fixerDeps
-    );
+    let fixRes: Awaited<ReturnType<typeof proposeFix>>;
+    try {
+      fixRes = await proposeFix(
+        {
+          bugReport,
+          locatorOutput,
+          reproducerOutput,
+          bundle,
+          attempts: attempt,
+          previousAttemptError: lastAttemptError,
+        },
+        deps.fixerDeps
+      );
+    } catch (err: any) {
+      const safeErr = redactSecretText(err?.message || String(err));
+      if (typeof safeErr === 'string' && safeErr.includes('Proposed patch failed safety validation')) {
+        lastAttemptError = safeErr;
+        await collector.emit('fix', 'fix_attempt_failed', 'fixer', {
+          attempt,
+          reason: safeErr,
+        });
+        continue;
+      }
+      throw err;
+    }
     lastFixerOutput = fixRes.output;
-    fixerMetrics = fixRes.metrics;
+    fixerTotalTokens += fixRes.metrics.totalTokens;
+    fixerDurationMs += fixRes.metrics.durationMs;
+    lastFixerModel = fixRes.model;
 
     if (!lastFixerOutput.fixed) {
+      lastAttemptError = 'Fixer model indicated no patch was proposed (fixed: false)';
       await collector.emit('fix', 'fix_attempt_failed', 'fixer', {
         attempt,
         reason: 'Fixer model indicated no patch was proposed',
@@ -669,10 +708,12 @@ export async function runPipeline(
 
       const buildRes = await sandbox.exec('npx', ['vite', 'build']);
       if (buildRes.exitCode !== 0) {
+        const tail = outputTail(buildRes);
+        lastAttemptError = `Vite build failed after patch:\n${tail}`;
         await collector.emit('fix', 'fix_attempt_failed', 'fixer', {
           attempt,
           reason: 'Vite build failed after patch',
-          output_tail: outputTail(buildRes),
+          output_tail: tail,
         });
         continue;
       }
@@ -699,10 +740,12 @@ export async function runPipeline(
       );
 
       if (postFixRepro.exitCode !== 0) {
+        const tail = outputTail(postFixRepro);
+        lastAttemptError = `Reproduction test still failed after patch:\n${tail}`;
         await collector.emit('fix', 'fix_attempt_failed', 'fixer', {
           attempt,
           reason: 'Reproduction test still failed after patch',
-          output_tail: outputTail(postFixRepro),
+          output_tail: tail,
         });
         continue;
       }
@@ -722,10 +765,12 @@ export async function runPipeline(
 
       if (baselineRes.exitCode !== 0) {
         reproAfterFixPassed = false;
+        const tail = outputTail(baselineRes);
+        lastAttemptError = `Baseline regression suite broke after patch:\n${tail}`;
         await collector.emit('fix', 'fix_attempt_failed', 'fixer', {
           attempt,
           reason: 'Baseline regression suite broke after patch',
-          output_tail: outputTail(baselineRes),
+          output_tail: tail,
         });
         continue;
       }
@@ -740,6 +785,7 @@ export async function runPipeline(
       reproAfterFixPassed = false;
       baselineRegressionPassed = false;
       const safeError = redactSecretText(err?.message || String(err));
+      lastAttemptError = safeError;
       await collector.emit('fix', 'fix_attempt_error', 'fixer', {
         attempt,
         code: err instanceof SandboxUnavailableError ? err.code : (err?.code ?? 'fix_error'),
@@ -761,7 +807,10 @@ export async function runPipeline(
     status: finalStatus,
     attempts: attempt,
     is_fixed: isFixed,
-    tokens: fixerMetrics?.totalTokens ?? 0,
+    tokens: fixerTotalTokens,
+    estimated_cost_usd: estimateStageCostUsd('fixer', fixerTotalTokens),
+    duration_ms: fixerDurationMs,
+    model: lastFixerModel ?? resolveModel('fixer'),
   });
 
   // --- STAGE 7: REPORT ---
@@ -800,14 +849,19 @@ export async function runPipeline(
     status: finalStatus,
     title: reporterRes.output.title,
     summary: reporterRes.output.executive_summary,
+    tokens: reporterRes.metrics?.totalTokens ?? 0,
+    estimated_cost_usd: estimateStageCostUsd('reporter', reporterRes.metrics?.totalTokens ?? 0),
+    duration_ms: reporterRes.metrics?.durationMs ?? 0,
+    model: reporterRes.modelError ? 'deterministic-fallback' : (reporterRes.model ?? resolveModel('reporter')),
   });
 
   const totalTokens =
     (locatorRes?.metrics?.totalTokens ?? 0) +
     (reproRes?.metrics?.totalTokens ?? 0) +
     (verifierRes?.metrics?.totalTokens ?? 0) +
-    (fixerMetrics?.totalTokens ?? 0) +
-    (watcherMetrics?.totalTokens ?? 0);
+    fixerTotalTokens +
+    (watcherMetrics?.totalTokens ?? 0) +
+    (reporterRes?.metrics?.totalTokens ?? 0);
   return {
     runId,
     status: finalStatus,
@@ -817,7 +871,8 @@ export async function runPipeline(
       { role: 'locator', tokens: locatorRes?.metrics?.totalTokens ?? 0 },
       { role: 'reproducer', tokens: reproRes?.metrics?.totalTokens ?? 0 },
       { role: 'verifier', tokens: verifierRes?.metrics?.totalTokens ?? 0 },
-      { role: 'fixer', tokens: fixerMetrics?.totalTokens ?? 0 },
+      { role: 'fixer', tokens: fixerTotalTokens },
+      { role: 'reporter', tokens: reporterRes?.metrics?.totalTokens ?? 0 },
     ]),
     sampleId,
     videoAnalysis,

@@ -160,16 +160,109 @@ test.describe('Replay web', () => {
     await expect(page.getByRole('tabpanel')).toBeVisible();
   });
 
-  test('mascot playful reaction on click and minimize button hide', async ({ page }) => {
+  test('mascot playful reaction on click, interactive help popover, and minimize/restore pill', async ({ page }) => {
     await page.goto('/');
     const mascot = page.getByRole('button', { name: /Reel, the Replay mascot/ });
     await expect(mascot).toBeVisible({ timeout: 15000 });
     await mascot.click();
 
+    // Clicking Reel opens the accessible help dialog
+    const helpDialog = page.getByRole('dialog', { name: 'Reel companion help' });
+    await expect(helpDialog).toBeVisible();
+    await expect(helpDialog.getByRole('button', { name: 'Explain this stage' })).toBeVisible();
+    await expect(helpDialog.getByRole('button', { name: 'Explain this failure' })).toBeVisible();
+    await expect(helpDialog.getByRole('button', { name: 'What happens next?' })).toBeVisible();
+    await expect(helpDialog.getByRole('button', { name: 'Open relevant evidence' })).toBeVisible();
+    await expect(helpDialog.getByRole('button', { name: 'Replay the explanation' })).toBeVisible();
+
+    await helpDialog.getByRole('button', { name: 'What happens next?' }).click();
+    await expect(helpDialog.getByRole('region')).toContainText(/Select one of the five sample bugs|Next gate/i);
+
+    await helpDialog.getByRole('button', { name: 'Replay the explanation' }).click();
+    await expect(helpDialog.getByRole('region')).toContainText(/Pick a sample|red test/i);
+
+    // Pressing Escape closes the help dialog
+    await page.keyboard.press('Escape');
+    await expect(helpDialog).toHaveCount(0);
+
+    // Dedicated '?' help button also toggles help
+    const openHelpBtn = page.getByRole('button', { name: 'Open Reel help' });
+    await expect(openHelpBtn).toBeVisible();
+    await openHelpBtn.click();
+    await expect(helpDialog).toBeVisible();
+
+    // Hide Reel minimizes into the persistent Restore Reel pill
     const hideButton = page.getByRole('button', { name: 'Hide Reel' });
     await expect(hideButton).toBeVisible();
     await hideButton.click();
     await expect(mascot).toHaveCount(0);
+
+    const restoreButton = page.getByRole('button', { name: 'Restore Reel' });
+    await expect(restoreButton).toBeVisible();
+    await restoreButton.click();
+    await expect(mascot).toBeVisible();
+  });
+
+  test('mascot enforces stage order, terminal state priority, and refuses false fix celebration', async ({ request, page }) => {
+    const listRes = await request.get(`${API}/api/runs?limit=1`);
+    const listData = (await listRes.json()) as { runs: Array<{ id: string }> };
+    let runId = listData.runs[0]?.id;
+    if (!runId) {
+      const created = await request.post(`${API}/api/runs`, {
+        data: { sampleId: 'cart-nan' },
+        headers: { 'Content-Type': 'application/json' },
+      });
+      runId = ((await created.json()) as { id: string }).id;
+    }
+
+    await page.goto(`/runs/${runId}`);
+    const mascot = page.getByRole('button', { name: /Reel, the Replay mascot/ });
+    await expect(mascot).toBeVisible({ timeout: 15000 });
+
+    // Dispatch out-of-order stage events and false-fix state event
+    await page.evaluate(() => {
+      window.dispatchEvent(
+        new CustomEvent('replay:mascot', {
+          detail: { kind: 'stage', stage: 'verify', runId: 'test-order-run' },
+        }),
+      );
+    });
+    await expect(mascot).toHaveAttribute('data-animation', 'curious');
+
+    // Out-of-order earlier stage ('locate' < 'verify') must be ignored
+    await page.evaluate(() => {
+      window.dispatchEvent(
+        new CustomEvent('replay:mascot', {
+          detail: { kind: 'stage', stage: 'locate', runId: 'test-order-run' },
+        }),
+      );
+    });
+    await expect(mascot).toHaveAttribute('data-animation', 'curious');
+
+    // False fix claim (state='fixed' with reproAfterFixPassed=false) must downgrade to 'confused', NEVER 'celebrate'
+    await page.evaluate(() => {
+      window.dispatchEvent(
+        new CustomEvent('replay:mascot', {
+          detail: {
+            kind: 'state',
+            state: 'fixed',
+            runId: 'test-order-run',
+            reproAfterFixPassed: false,
+            baselineRegressionPassed: true,
+          },
+        }),
+      );
+    });
+    await expect(mascot).toHaveAttribute('data-animation', 'confused');
+
+    // Open Reel help on a run workspace and check Agent activity summary + Open relevant evidence
+    await page.getByRole('button', { name: 'Open Reel help' }).click();
+    const helpDialog = page.getByRole('dialog', { name: 'Reel companion help' });
+    await expect(helpDialog).toContainText('Agent activity summary');
+    await expect(helpDialog).toContainText('Watcher');
+    await expect(helpDialog).toContainText('Fixer');
+    await helpDialog.getByRole('button', { name: 'Open relevant evidence' }).click();
+    await expect(page.getByRole('tab', { name: 'Diff' })).toHaveAttribute('data-state', 'active');
   });
 
   test('responsive layout verification across 1440, 1280, 768, 390, and 320 viewports', async ({ page }) => {

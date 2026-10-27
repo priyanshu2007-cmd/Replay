@@ -14,6 +14,7 @@ import { ReplayBanner } from '@/components/replay-banner';
 import { getRun, rerunRun, type RunDetail, type RunStage, type RunEvent } from '@/lib/api';
 import { useRunEvents } from '@/hooks/use-run-events';
 import { getReplayEvents, getReplayRun } from '@/lib/replay';
+import type { AgentActivityItem } from '@/components/mascot/mascot.config';
 
 const TERMINAL = new Set(['fixed', 'reproduced_only', 'unreproduced', 'failed']);
 
@@ -53,9 +54,24 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
   const [seekTo, setSeekTo] = useState<number | null>(null);
   const [rerunning, setRerunning] = useState(false);
   const [rawOpen, setRawOpen] = useState(false);
+  const [activeCodeTab, setActiveCodeTab] = useState('suspects');
   const soughtFailure = useRef(false);
   const fetchedWatch = useRef(false);
   const fetchedDone = useRef(false);
+
+  useEffect(() => {
+    function onFocusPanel(e: Event) {
+      const tab = (e as CustomEvent<{ tab?: string }>).detail?.tab;
+      if (!tab) return;
+      if (tab === 'report') {
+        document.getElementById('report')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else if (['suspects', 'test', 'diff', 'terminal'].includes(tab)) {
+        setActiveCodeTab(tab);
+      }
+    }
+    window.addEventListener('replay:focus-panel', onFocusPanel);
+    return () => window.removeEventListener('replay:focus-panel', onFocusPanel);
+  }, []);
 
   useEffect(() => {
     void params.then((p) => setRunId(p.id));
@@ -87,26 +103,34 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
   // Replay mode: load stored events once, play them at recorded speed (capped gaps).
   useEffect(() => {
     if (!replay || !runId) return;
+    let cancelled = false;
+    const timers: Array<ReturnType<typeof setTimeout>> = [];
     void getReplayEvents(runId).then((stored) => {
-      if (stored && stored.length > 0) {
-        // Play back at recorded pace, capping long gaps at 2s.
-        let acc = 0;
-        let prev = 0;
-        const timed = stored.map((ev) => {
-          const t = new Date(ev.timestamp).getTime();
-          const delta = prev === 0 ? 0 : Math.min((t - prev) / 4, 2000);
-          prev = t;
-          acc += delta;
-          return { ev, at: acc };
-        });
-        setReplayEvents([]);
-        for (const { ev, at } of timed) {
-          setTimeout(() => {
-            setReplayEvents((prev) => [...prev, ev]);
-          }, at);
-        }
+      if (cancelled || !stored || stored.length === 0) return;
+      // Play back at recorded pace, capping long gaps at 2s.
+      let acc = 0;
+      let prev = 0;
+      const timed = stored.map((ev) => {
+        const t = new Date(ev.timestamp).getTime();
+        const delta = prev === 0 ? 0 : Math.min((t - prev) / 4, 2000);
+        prev = t;
+        acc += delta;
+        return { ev, at: acc };
+      });
+      setReplayEvents([]);
+      for (const { ev, at } of timed) {
+        const tid = setTimeout(() => {
+          if (!cancelled) {
+            setReplayEvents((prevEvents) => [...prevEvents, ev]);
+          }
+        }, at);
+        timers.push(tid);
       }
     });
+    return () => {
+      cancelled = true;
+      for (const tid of timers) clearTimeout(tid);
+    };
   }, [replay, runId]);
 
   const allEvents = replay ? replayEvents : events;
@@ -141,18 +165,6 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
     }
   }, [failureTs]);
 
-  // Mascot reactions.
-  const stageKey = currentStage;
-  useEffect(() => {
-    if (!stageKey) return;
-    window.dispatchEvent(new CustomEvent('replay:mascot', { detail: { kind: 'stage', stage: stageKey } }));
-  }, [stageKey]);
-  const stateKey = run?.state ?? null;
-  useEffect(() => {
-    if (!stateKey || !TERMINAL.has(stateKey)) return;
-    window.dispatchEvent(new CustomEvent('replay:mascot', { detail: { kind: 'state', state: stateKey } }));
-  }, [stateKey]);
-
   // Aggregate the first model/stage error for the panel.
   const errorInfo: ErrorInfo | null = useMemo(() => {
     const modelErr = allEvents.find((e) => e.event_type.endsWith('_model_error'));
@@ -177,6 +189,90 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
     }
     return null;
   }, [allEvents]);
+
+  const hadFallback = allEvents.some((e) => e.event_type.endsWith('_fixture_fallback'));
+
+  // Mascot reactions and live context synchronization.
+  const stageKey = currentStage;
+  useEffect(() => {
+    if (!stageKey) return;
+    window.dispatchEvent(
+      new CustomEvent('replay:mascot', {
+        detail: { kind: 'stage', stage: stageKey, runId: runId ?? undefined, fallback: hadFallback },
+      }),
+    );
+  }, [stageKey, runId, hadFallback]);
+
+  const stateKey = run?.state ?? null;
+  useEffect(() => {
+    if (!stateKey || !TERMINAL.has(stateKey)) return;
+    const afterResult = run?.outputs.afterTestResult as { passed?: boolean } | null;
+    const suiteResult = run?.outputs.suiteResult as { passed?: boolean } | null;
+    const reproAfterFixPassed =
+      typeof afterResult?.passed === 'boolean' ? afterResult.passed : stateKey === 'fixed';
+    const baselineRegressionPassed =
+      typeof suiteResult?.passed === 'boolean' ? suiteResult.passed : stateKey === 'fixed';
+    window.dispatchEvent(
+      new CustomEvent('replay:mascot', {
+        detail: {
+          kind: 'state',
+          state: stateKey,
+          runId: runId ?? undefined,
+          reproAfterFixPassed,
+          baselineRegressionPassed,
+          errorMessage: errorInfo?.message ?? null,
+          fallback: hadFallback,
+        },
+      }),
+    );
+  }, [stateKey, runId, run, errorInfo, hadFallback]);
+
+  useEffect(() => {
+    if (!runId) return;
+    const agentRoles: Array<{ name: AgentActivityItem['name']; stage: AgentActivityItem['stage'] }> = [
+      { name: 'Watcher', stage: 'watch' },
+      { name: 'Locator', stage: 'locate' },
+      { name: 'Reproducer', stage: 'reproduce' },
+      { name: 'Verifier', stage: 'verify' },
+      { name: 'Fixer', stage: 'fix' },
+      { name: 'Reporter', stage: 'report' },
+    ];
+    const pipelineFailed = allEvents.some((e) => e.event_type === 'pipeline_failed');
+    const agentItems: AgentActivityItem[] = agentRoles.map(({ name, stage }) => {
+      const stageEvs = allEvents.filter((e) => e.stage === stage);
+      const started = stageEvs.some((e) => e.event_type.endsWith('_started'));
+      const completed = stageEvs.some((e) => e.event_type.endsWith('_completed'));
+      const fallback = stageEvs.some((e) => e.event_type.endsWith('_fixture_fallback'));
+      const errored = stageEvs.some(
+        (e) => e.event_type.endsWith('_model_error') || e.event_type === 'fix_attempt_error',
+      );
+      let status: AgentActivityItem['status'] = 'pending';
+      if (errored || (pipelineFailed && currentStage === stage && !completed)) status = 'failed';
+      else if (completed && fallback) status = 'fallback';
+      else if (completed) status = 'done';
+      else if (started) status = 'running';
+      return { name, stage, status };
+    });
+
+    const afterResult = run?.outputs.afterTestResult as { passed?: boolean } | null;
+    const suiteResult = run?.outputs.suiteResult as { passed?: boolean } | null;
+
+    window.dispatchEvent(
+      new CustomEvent('replay:mascot', {
+        detail: {
+          kind: 'context',
+          runId,
+          stage: currentStage,
+          state: run?.state && TERMINAL.has(run.state) ? run.state : null,
+          fallback: hadFallback,
+          reproAfterFixPassed: typeof afterResult?.passed === 'boolean' ? afterResult.passed : run?.state === 'fixed',
+          baselineRegressionPassed: typeof suiteResult?.passed === 'boolean' ? suiteResult.passed : run?.state === 'fixed',
+          errorMessage: errorInfo?.message ?? null,
+          agents: agentItems,
+        },
+      }),
+    );
+  }, [runId, allEvents, currentStage, run, hadFallback, errorInfo]);
 
   async function retry() {
     if (!runId || rerunning) return;
@@ -218,7 +314,6 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
     );
   }
 
-  const hadFallback = allEvents.some((e) => e.event_type.endsWith('_fixture_fallback'));
   const bug = run.outputs.bugReport;
   const steps: VideoStep[] =
     Array.isArray((bug as { steps?: Array<{ timestamp_s: number; description: string }> })?.steps)
@@ -308,7 +403,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
       <div className="grid gap-4 lg:grid-cols-[4fr_4fr_5fr]">
         <VideoPanel src={videoSrc} steps={steps} failureTimestampS={failureTs} seekTo={seekTo} />
         <Timeline events={allEvents} currentStage={currentStage} />
-        <CodeTabs run={run} />
+        <CodeTabs run={run} activeTab={activeCodeTab} onTabChange={setActiveCodeTab} />
       </div>
 
       <div className="mt-4 grid gap-4">

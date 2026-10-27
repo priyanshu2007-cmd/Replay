@@ -45,7 +45,38 @@ export async function getReplayRun(runId: string): Promise<RunDetail | null> {
   const { data, error } = await client().from('runs').select('*').eq('id', runId).maybeSingle();
   if (error || !data) return null;
   const parsed = RunDetailSchema.safeParse(data);
-  return parsed.success ? parsed.data : null;
+  if (parsed.success) return parsed.data;
+  const row = data as Record<string, unknown>;
+  const normalized = {
+    id: row.id,
+    targetId: row.targetId ?? row.target_id ?? 'demo-shop',
+    state: row.state,
+    stage: row.stage,
+    isSample: Boolean(row.isSample ?? row.is_sample),
+    videoKey: String(row.videoKey ?? row.video_key ?? ''),
+    note: (row.note as string | null) ?? null,
+    outputs: (row.outputs as Record<string, unknown>) ?? {
+      bugReport: row.bug_report ?? null,
+      suspects: row.suspects ?? null,
+      generatedTest: row.generated_test ?? null,
+      beforeTestResult: row.before_test_result ?? null,
+      sameSymptomVerdict: row.same_symptom_verdict ?? null,
+      diff: row.diff ?? null,
+      afterTestResult: row.after_test_result ?? null,
+      suiteResult: row.suite_result ?? null,
+      reportMarkdown: row.report_markdown ?? null,
+    },
+    metrics: (row.metrics as Record<string, unknown>) ?? {
+      totalTokens: typeof row.total_tokens === 'number' ? row.total_tokens : null,
+      estimatedCostUsd: typeof row.estimated_cost_usd === 'string' ? row.estimated_cost_usd : null,
+      durationMs: typeof row.duration_ms === 'number' ? row.duration_ms : null,
+    },
+    createdAt: String(row.createdAt ?? row.created_at ?? new Date().toISOString()),
+    updatedAt: String(row.updatedAt ?? row.updated_at ?? new Date().toISOString()),
+    completedAt: (row.completedAt ?? row.completed_at ?? null) as string | null,
+  };
+  const retry = RunDetailSchema.safeParse(normalized);
+  return retry.success ? retry.data : null;
 }
 
 export async function getReplayEvents(runId: string): Promise<RunEvent[] | null> {

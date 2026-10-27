@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc && npx esbuild src/server.ts --bundle --platform=node --format=cjs --define:import.meta=undefined --outfile=api-dist/server.cjs && npx esbuild src/worker.ts --bundle --platform=node --format=cjs --define:import.meta=undefined --outfile=api-dist/worker.cjs && npx esbuild ../../packages/db/src/migrate.ts --bundle --platform=node --format=cjs --define:import.meta=undefined --outfile=api-dist/migrate.cjs && printf '{\"type\":\"commonjs\",\"main\":\"server.cjs\"}' > api-dist/package.json",
+    "build": "mkdir -p api-dist && tsc && npx esbuild src/server.ts --bundle --platform=node --format=cjs --define:import.meta=undefined --outfile=api-dist/server.cjs && npx esbuild src/worker.ts --bundle --platform=node --format=cjs --define:import.meta=undefined --outfile=api-dist/worker.cjs && npx esbuild ../../packages/db/src/migrate.ts --bundle --platform=node --format=cjs --define:import.meta=undefined --outfile=api-dist/migrate.cjs && printf '{\"type\":\"commonjs\",\"main\":\"server.cjs\"}' > api-dist/package.json",
     "typecheck": "tsc --noEmit",
     "dev": "tsx watch src/server.ts",
     "worker": "tsx watch src/worker.ts",

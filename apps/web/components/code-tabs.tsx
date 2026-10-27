@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Copy, Download } from 'lucide-react';
+import { Check, Copy, Download } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -52,12 +53,30 @@ function testSummary(result: unknown, label: string): string[] {
   return lines;
 }
 
-export function CodeTabs({ run }: { run: RunDetail }) {
+export function CodeTabs({
+  run,
+  activeTab,
+  onTabChange,
+}: {
+  run: RunDetail;
+  activeTab?: string;
+  onTabChange?: (tab: string) => void;
+}) {
   const { outputs } = run;
   const suspects: Suspect[] = outputs.suspects ?? [];
+  const [internalTab, setInternalTab] = useState('suspects');
+  const [copiedPatch, setCopiedPatch] = useState(false);
+
+  const currentTab = activeTab ?? internalTab;
+  const handleTabChange = (next: string) => {
+    setInternalTab(next);
+    onTabChange?.(next);
+  };
 
   function copyText(text: string) {
     void navigator.clipboard.writeText(text).catch(() => {});
+    setCopiedPatch(true);
+    setTimeout(() => setCopiedPatch(false), 2000);
   }
 
   function downloadTest() {
@@ -78,7 +97,11 @@ export function CodeTabs({ run }: { run: RunDetail }) {
   ];
 
   return (
-    <Tabs defaultValue="suspects" className="flex h-full flex-col overflow-hidden rounded-m border border-border-subtle bg-panel">
+    <Tabs
+      value={currentTab}
+      onValueChange={handleTabChange}
+      className="flex h-full flex-col overflow-hidden rounded-m border border-border-subtle bg-panel"
+    >
       <TabsList>
         <TabsTrigger value="suspects">Suspects</TabsTrigger>
         <TabsTrigger value="test">Test</TabsTrigger>
@@ -136,8 +159,16 @@ export function CodeTabs({ run }: { run: RunDetail }) {
 
       <TabsContent value="diff" className="min-h-[240px] flex-1">
         {outputs.diff ? (
-          <div className="min-h-[240px] flex-1">
-            <MonacoEditor language="diff" value={outputs.diff} options={EDITOR_OPTIONS} theme="vs-dark" />
+          <div className="flex h-full flex-col">
+            <div className="flex justify-end p-2">
+              <Button variant="ghost" onClick={() => copyText(outputs.diff ?? '')}>
+                {copiedPatch ? <Check size={14} aria-hidden /> : <Copy size={14} aria-hidden />}{' '}
+                {copiedPatch ? 'Copied' : 'Copy patch'}
+              </Button>
+            </div>
+            <div className="min-h-[240px] flex-1">
+              <MonacoEditor language="diff" value={outputs.diff} options={EDITOR_OPTIONS} theme="vs-dark" />
+            </div>
           </div>
         ) : (
           <Empty>The patch appears here once the Fixer finishes.</Empty>
@@ -151,7 +182,8 @@ export function CodeTabs({ run }: { run: RunDetail }) {
         {outputs.diff && (
           <div className="flex justify-end p-2">
             <Button variant="ghost" onClick={() => copyText(outputs.diff ?? '')}>
-              <Copy size={14} aria-hidden /> Copy patch
+              {copiedPatch ? <Check size={14} aria-hidden /> : <Copy size={14} aria-hidden />}{' '}
+              {copiedPatch ? 'Copied' : 'Copy patch'}
             </Button>
           </div>
         )}

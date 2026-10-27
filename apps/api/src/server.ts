@@ -11,6 +11,7 @@ import { streamSSE } from 'hono/streaming';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { RunEvent } from '@replay/shared';
+import { redactSecretText } from '@replay/agents';
 import {
   getRunRepository,
   isKnownSampleId,

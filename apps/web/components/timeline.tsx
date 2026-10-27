@@ -99,6 +99,14 @@ export function Timeline({ events, currentStage }: { events: RunEvent[]; current
     return typeof tokens === 'number' && tokens > 0 ? tokens : null;
   }
 
+  function costOf(stage: RunStage): string | null {
+    const end = (byStage.get(stage) ?? []).find((e) => e.event_type.endsWith('_completed'));
+    const cost = end?.payload?.estimated_cost_usd;
+    if (typeof cost === 'string' && cost.trim().length > 0 && cost !== '0.0000') return cost;
+    if (typeof cost === 'number' && cost > 0) return cost.toFixed(4);
+    return null;
+  }
+
   return (
     <section aria-label="Agent timeline" className="rounded-m border border-border-subtle bg-panel">
       <ol className="divide-y divide-border-subtle">
@@ -107,6 +115,7 @@ export function Timeline({ events, currentStage }: { events: RunEvent[]; current
           const stageEvents = byStage.get(stage) ?? [];
           const elapsed = elapsedOf(stage);
           const tokens = tokensOf(stage);
+          const cost = costOf(stage);
           const open = openStage === stage;
           return (
             <li key={stage} className={status === 'pending' ? 'opacity-50' : ''}>
@@ -126,6 +135,7 @@ export function Timeline({ events, currentStage }: { events: RunEvent[]; current
                 {STAGE_MODEL[stage] && <ModelBadge model={STAGE_MODEL[stage]!} />}
                 <span className="ml-auto flex items-center gap-3 font-mono text-[12px] text-secondary">
                   {tokens !== null && <span className="text-muted">{tokens.toLocaleString()} tok</span>}
+                  {cost !== null && <span className="text-muted" title="Estimated cost">${cost} est.</span>}
                   {elapsed && <span>{elapsed}</span>}
                   <span className={status === 'failed' ? 'text-fail-text' : ''}>
                   {status === 'blocked' ? 'fallback' : status}

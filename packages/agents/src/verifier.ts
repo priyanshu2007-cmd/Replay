@@ -124,8 +124,23 @@ export function verifyExecutionDeterministically(input: VerifierInput): Verifier
   }
 
   // At this point, execution failed with an assertion failure.
+  // Reject broken evaluateAll / text extraction selectors that returned only empty strings when non-empty strings were expected.
+  const rawCombined = `${executionResult.stdout}\n${executionResult.stderr}`;
+  if (
+    /\+\s+""/.test(rawCombined) &&
+    /-\s+"[^"]+"/.test(rawCombined) &&
+    !/\+\s+"[^"]+"/.test(rawCombined)
+  ) {
+    return VerifierOutputSchema.parse({
+      same_defect: false,
+      classification: 'SELECTOR_OR_TIMEOUT',
+      reason: 'Test selector extracted only empty strings instead of element text (broken child selector).',
+      confidence: 0.95,
+    });
+  }
+
   // Verify that the assertion failure actually matches the reported bug symptoms.
-  const combinedLog = `${executionResult.stdout}\n${executionResult.stderr}`.toLowerCase();
+  const combinedLog = rawCombined.toLowerCase();
   const actualSymptom = bugReport.actual_behavior.toLowerCase();
   const summary = bugReport.summary.toLowerCase();
 
@@ -198,8 +213,12 @@ export async function verifyReproduction(
         temperature: 0.1,
       });
 
-      // Strict safety: Never allow model to claim same_defect = true if deterministic was false
-      if (res.data.same_defect && !deterministic.same_defect) {
+      // Strict safety: Never allow model to claim same_defect = true if deterministic was false,
+      // and never allow model to claim UNEXPECTED_PASS when exitCode !== 0.
+      if (
+        (res.data.same_defect && !deterministic.same_defect) ||
+        (input.executionResult.exitCode !== 0 && res.data.classification === 'UNEXPECTED_PASS')
+      ) {
         return {
           output: deterministic,
           metrics: res.metrics,

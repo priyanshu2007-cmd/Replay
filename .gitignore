@@ -9,7 +9,7 @@ build/
 out/
 api-dist/
 public/monaco/
-*.bak
+*.bak*
 
 # Environment files
 .env

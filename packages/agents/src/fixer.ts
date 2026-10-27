@@ -44,6 +44,7 @@ export interface FixerInput {
   reproducerOutput: ReproducerOutput;
   bundle: RepoBundle;
   attempts?: number;
+  previousAttemptError?: string;
 }
 
 export interface FixerDeps {
@@ -178,7 +179,25 @@ export function validatePatchSafety(
     const normSource = packedFile ? packedFile.content.replace(/\r\n/g, '\n') : '';
     const normSnippet = output.original_snippet.replace(/\r\n/g, '\n').trim();
     if (normSource && !normSource.includes(normSnippet)) {
-      errors.push(`Original snippet does not match content in ${targetFile}`);
+      const origLines = normSource.split('\n');
+      const snipLines = normSnippet.split('\n');
+      let lineMatch = false;
+      for (let i = 0; i <= origLines.length - snipLines.length; i++) {
+        let ok = true;
+        for (let j = 0; j < snipLines.length; j++) {
+          if ((origLines[i + j]?.trim() ?? '') !== (snipLines[j]?.trim() ?? '')) {
+            ok = false;
+            break;
+          }
+        }
+        if (ok) {
+          lineMatch = true;
+          break;
+        }
+      }
+      if (!lineMatch) {
+        errors.push(`Original snippet does not match content in ${targetFile}`);
+      }
     }
   } else if (!output.patch || output.patch.trim().length === 0) {
     errors.push('Patch must provide either original_snippet or unified diff patch');
@@ -202,6 +221,11 @@ export function buildFixerMessages(input: FixerInput): OpenAI.Chat.ChatCompletio
     `=== FAILING REPRODUCTION TEST ===\nTest Name: ${repro.test_name}\nTarget Assertion: ${repro.assertion}\nFailure Message: ${repro.failure_message}\nTest Code:\n${repro.test_code}`,
     `=== PACKED REPOSITORY (${input.bundle.metadata.includedFileCount} files) ===\n${input.bundle.bundleText || '(empty)'}`,
   ];
+  if (input.previousAttemptError) {
+    parts.push(
+      `=== PREVIOUS FIX ATTEMPT FAILED (Attempt ${Math.max(1, (input.attempts ?? 2) - 1)}) ===\n${input.previousAttemptError}\nProduce a corrected, minimal patch that resolves this failure while keeping all baseline tests green.`
+    );
+  }
 
   return [
     { role: 'system', content: loadFixerPrompt() },

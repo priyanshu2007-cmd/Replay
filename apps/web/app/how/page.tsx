@@ -82,7 +82,7 @@ export default function HowPage() {
           <li>FFmpeg extracts the frames, ripgrep searches the code, Zod validates every model output.</li>
         </ul>
         <p className="mt-6 text-[14px] text-secondary">
-          <Link href="https://github.com" className="text-accent underline">
+          <Link href="https://github.com/priyanshu2007-cmd/Replay" className="text-accent underline">
             Source repository
           </Link>
           . The demo video is recorded when the benchmark run finishes.

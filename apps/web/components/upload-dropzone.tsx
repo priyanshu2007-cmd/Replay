@@ -133,6 +133,7 @@ export function UploadDropzone({ disabled, disabledReason }: { disabled: boolean
         value={note}
         onChange={(e) => setNote(e.target.value)}
         maxLength={1000}
+        disabled={disabled || busy}
       />
       <Button variant="primary" disabled={!file || busy || disabled} onClick={submit}>
         {busy ? 'Uploading' : 'Run on this video'}

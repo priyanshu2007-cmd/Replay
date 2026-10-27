@@ -10,7 +10,20 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const src = path.join(root, 'node_modules', 'monaco-editor', 'min', 'vs');
 const dest = path.join(root, 'public', 'monaco', 'vs');
 
-await fs.rm(path.join(root, 'public', 'monaco'), { recursive: true, force: true });
-await fs.cp(src, dest, { recursive: true });
+try {
+  await fs.rm(path.join(root, 'public', 'monaco'), { recursive: true, force: true });
+} catch {
+  // Ignore permissions error if directory cannot be removed
+}
+
+try {
+  await fs.cp(src, dest, { recursive: true });
+} catch (err) {
+  const existing = await fs.readdir(dest).catch(() => []);
+  if (existing.length === 0) {
+    throw err;
+  }
+}
+
 const count = (await fs.readdir(dest)).length;
 console.log(`[copy-monaco] ${count} entries -> public/monaco/vs`);

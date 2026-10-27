@@ -64,6 +64,16 @@ export const BugReportSchema = z
   .object({
     defect_found: z.boolean().optional(),
     summary: z.string().optional(),
+    steps: z
+      .array(
+        z.object({
+          timestamp_s: z.number(),
+          description: z.string(),
+          visible_text: z.string().optional(),
+        }),
+      )
+      .optional()
+      .default([]),
     first_failure_timestamp_s: z.number().optional(),
     expected_behavior: z.string().optional(),
     actual_behavior: z.string().optional(),

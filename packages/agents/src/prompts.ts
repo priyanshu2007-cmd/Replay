@@ -23,6 +23,8 @@ Determine what the user did, what the application visibly displayed, and the ear
 - List user actions in chronological order, each stamped with the \`t=\` of the frame where it happens.
 - Quote on-screen text exactly as shown (button labels, prices, error messages, values).
 - Identify the single earliest frame where the defect is visible; use its \`t=\` value as \`first_failure_timestamp_s\`.
+- When the user selects a sort order (such as "Price: Low to High"), carefully compare the numeric values of all displayed prices left-to-right/top-to-bottom (e.g., \`$100\` appearing before \`$20\` or \`$50\` is a lexicographical sorting defect, so set \`defect_found\` to \`true\`).
+- When a defect only manifests after navigating away and returning to a view (such as Cart -> Catalog -> Cart), set \`first_failure_timestamp_s\` to the frame where the user has returned to the destination view and the incorrect reset value is visibly displayed on screen.
 - State expected behavior (what the app should have shown) and actual behavior (what it showed), based on the frames alone.
 - If frames are too sparse or ambiguous to establish a defect, set \`defect_found\` to false and lower \`confidence\` — do not guess.
 

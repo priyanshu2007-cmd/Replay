@@ -130,12 +130,17 @@ export function buildReproducerMessages(input: ReproducerInput): OpenAI.Chat.Cha
     `=== DEMO SHOP TEST CONVENTIONS ===
 - Application runs at ${input.targetAppUrl || 'http://localhost:5173'}
 - Use route '${targetRoute}' in page.goto(...)
+- Catalog products (in initial order):
+  - 'prod-keyboard': "Mechanical Keyboard" ($100)
+  - 'prod-mouse': "Ergonomic Mouse" ($20)
+  - 'prod-pad': "Desk Mat" ($15)
+  - 'prod-headset': "Studio Headset" ($50)
 - Selectors use data-testid:
-  - Catalog: 'add-to-cart-<id>' (e.g. 'add-to-cart-prod-mouse', 'add-to-cart-prod-keyboard')
-  - Navigation: 'nav-shop', 'nav-cart'
-  - Sort select: 'sort-select'
+  - Catalog cards: 'product-card-<id>', title: 'product-title-<id>' (or '[data-testid^="product-title-"]'), price: 'product-price-<id>', button: 'add-to-cart-<id>' (e.g. 'add-to-cart-prod-keyboard' for $100 item, 'add-to-cart-prod-mouse' for $20 item)
+  - Navigation: 'nav-shop', 'nav-cart', 'nav-checkout'
+  - Sort select: 'sort-select' (values: 'none', 'price-asc', 'price-desc')
   - Cart item qty input: 'cart-item-qty-<id>' (e.g. 'cart-item-qty-prod-mouse')
-  - Coupon input: 'coupon-input', button: 'apply-coupon-btn'
+  - Coupon input: 'coupon-input', button: 'apply-coupon-btn', status: 'coupon-status'
   - Cart totals: 'cart-total', 'cart-discount', 'cart-subtotal'
   - Checkout: 'proceed-to-checkout-btn', 'email-input', 'checkout-btn', 'order-confirmation', 'checkout-error'
 - Assert the expected CORRECT behavior so the test fails on buggy code with an assertion error.
