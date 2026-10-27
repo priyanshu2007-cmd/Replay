@@ -212,6 +212,11 @@ Track deployment readiness, benchmark execution, hallway testing, README, demo v
 - [x] Production deployment protection remains ON (user action required to disable for public access).
 - Note: the earlier 5-sample benchmark table (README) is from the Oct 25 live run; today's re-verification confirms the pipeline still completes end to end on the current code.
 
+### Oct 27 project status audit (docs/PROJECT_STATUS_AUDIT.md)
+- Full evidence-based audit written: architecture, phase-by-phase status, feature inventory, 12-item issue register (REP-001..012), prioritized action plan, readiness assessment.
+- Key confirmed findings reconciled here: REP-001 Git-integration Vercel build fails (web buildCommand builds @replay/api without workspace deps; CLI deploys still work, production healthy) — Critical, fix is one line, deliberately NOT applied during the audit; REP-002..012 recorded in the report register (provider keys, deployment protection, DockerSandbox wiring, Supabase verification, LISTEN/NOTIFY, hygiene).
+- Statuses below and in the audit report agree as of commit f5c84d7.
+
 ### Submission readiness checklist (evidence-based)
 - [x] Working product: web UI + API + worker + CLI pipeline, real red-to-green verified
 - [x] Benchmark results with methodology and honest failures
