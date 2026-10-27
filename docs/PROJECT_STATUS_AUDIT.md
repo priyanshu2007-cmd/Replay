@@ -28,9 +28,9 @@ baseline suite must stay green before a run is marked `fixed`; this gate has
 both passed and honestly failed live.
 Is the frontend usable? Yes, verified in a real browser across routes,
 themes, viewports and journeys.
-Is deployment healthy? The Vercel production deployment is Ready and its
-routes verified; however the **Git-integration build path is broken**
-(REP-001) while CLI deploys work.
+Is deployment healthy? Yes. The Vercel production deployment is Ready and its
+routes verified; the Git-integration build path is fixed and verified
+(REP-001 closed on commit `10f16b7`: deploy Ready, CI 7/7).
 What prevents full completion? Public access (Vercel Authentication toggle),
 a Token Factory / NVIDIA key in the Vercel environment for live runs from the
 public URL, the demo video, and the Devpost submission.
@@ -81,7 +81,7 @@ docs/IMPLEMENTATION_DECISIONS.md).
 | D Action agents | 14–20 | DONE/PARTIAL | pipeline verified end to end live (CLI + compose + CI); sandbox fail-closed; DockerSandbox runtime wiring on VM open (REP-004) |
 | E Worker/API | 21–23 | DONE/PARTIAL | compose-verified: claims, events, health, ready, samples; Postgres migrations + seed applied; SSE verified (localhost + unit); Supabase-backed run storage unverified (REP-010) |
 | F Frontend | 24–30 | DONE/PARTIAL | all pages implemented and browser-verified; replay mode implemented but Supabase path unverified (REP-010); mascot verified |
-| G Delivery | 31–36 | PARTIAL/PENDING | README + CI + security green; Vercel deployed (CLI); Git-integration build broken (REP-001); demo video (35) and submission (36) PENDING |
+| G Delivery | 31–36 | PARTIAL/PENDING | README + CI + security green; Vercel deployed and Git-integration build fixed/verified (REP-001 closed); demo video (35) and submission (36) PENDING |
 
 ## D. Feature inventory (high-value features)
 
@@ -101,7 +101,7 @@ docs/IMPLEMENTATION_DECISIONS.md).
 
 | ID | Title | Severity | Category | Status | Evidence | Root cause | Impact | Recommended fix | Priority |
 |---|---|---|---|---|---|---|---|---|---|
-| REP-001 | Git-integration Vercel build fails | Critical | Deployment | Confirmed | vercel inspect of replay-2wjg4ijgk: `pnpm --filter @replay/api build` → TS2307 cannot find @replay/shared/@replay/db/@replay/agents | web service buildCommand builds @replay/api without its workspace deps (`--filter @replay/api build` lacks the `...` suffix); fresh CI-style checkout has no dist/ | Every Git push produces a failed production deployment; CLI deploys still work | vercel.json: `pnpm --filter "@replay/api..." build && pnpm run build` | 1 |
+| REP-001 | Git-integration Vercel build fails | Critical | Deployment | **Fixed & verified** | vercel inspect of replay-2wjg4ijgk: `pnpm --filter @replay/api build` → TS2307 cannot find @replay/shared/@replay/db/@replay/agents | web service buildCommand built @replay/api without its workspace deps (`--filter @replay/api build` lacks the `...` suffix); fresh CI-style checkout has no dist/ | Every Git push produced a failed production deployment; CLI deploys still worked | Fixed in commit `10f16b7`: vercel.json now `pnpm --filter "@replay/api..." build && pnpm run build`; Git deploy of that commit is Ready, CI 7/7 | 1 |
 | REP-002 | Model credentials are NVIDIA Build keys under NEBIUS_* names | High | Deployment/Provider | Confirmed | .env (gitignored): NEBIUS_BASE_URL=https://integrate.api.nvidia.com/v1 | Token Factory key was never provisioned; working keys are NVIDIA Build keys | Hackathon rules ask for Token Factory; judges may check the endpoint | Provision a Token Factory key and change only .env (code is endpoint-agnostic) | 2 |
 | REP-003 | Vercel Authentication blocks public access | High | Deployment | Confirmed | curl of the production alias returns 302 "Protected by Vercel Authentication" | account-level Deployment Protection enabled | Judges cannot open the demo URL | Dashboard: Settings → Deployment Protection → disable Vercel Authentication | 3 |
 | REP-004 | Sandbox runs on host in dev; DockerSandbox not wired in containers | High | Security | Confirmed | packages/sandbox fail-closed policy; compose worker sets REPLAY_ALLOW_HOST_SANDBOX=1 | DockerSandbox was never connected to the pipeline stages; worker container has no Docker socket | Model code runs in a workspace copy with env allowlist but without container isolation on the VM | Mount docker socket + CLI in worker image and wire DockerSandbox into verify/fix stages, or run worker on the VM host with Docker | 4 |
@@ -123,10 +123,9 @@ bundles.
 
 ## F. Possible fixes (priority order)
 
-1. **REP-001 (minimal safe fix):** one-line change in vercel.json —
+1. **REP-001 (DONE, commit `10f16b7`):** one-line change in vercel.json —
    `"buildCommand": "pnpm --filter \"@replay/api...\" build && pnpm run build"`.
-   Regression check: trigger a Git deploy and confirm Ready; keep CLI deploy as
-   fallback. Risk: none (same command CI already runs).
+   Regression check DONE: Git deploy of that commit is Ready, CI 7/7.
 2. **REP-003 (no code):** toggle Deployment Protection off in the dashboard.
    Verify: curl the production alias returns 200 and the home page renders.
 3. **REP-002 (decision + .env):** provision a Token Factory key (Builder
@@ -192,12 +191,12 @@ keys pasted in chat were flagged for rotation.
 
 ## J. GitHub and Vercel status
 
-GitHub: `main` = `f5c84d7`, working tree clean, origin in sync. Checks on
-`f5c84d7`: 7/7 success (Typecheck/lint/unit, API smoke, Docker builds, Web
-e2e, CodeQL, Gitleaks, audit). Dependabot PR for upload-artifact passing CI.
-Vercel: production Ready (CLI deploy of the ac0e1aa tree; routes verified).
-The Git-integration deployment for `f5c84d7` failed — REP-001, fix identified,
-not applied during this audit.
+GitHub: `main` = `10f16b7` (audit doc `3630859`, REP-001 fix `10f16b7`),
+origin in sync. Checks on `10f16b7`: 7/7 success (Typecheck/lint/unit, API
+smoke, Docker builds, Web e2e, CodeQL, Gitleaks, audit). Dependabot PR for
+upload-artifact passing CI. Vercel: the Git-integration production deploy of
+`10f16b7` (the first after the REP-001 fix) is **Ready** with the standard
+aliases attached.
 
 ## K. Blockers
 
@@ -211,8 +210,8 @@ not applied during this audit.
 
 ## L. Prioritized action plan
 
-1. **Immediate (demo-critical, <1h):** fix REP-001 (one line in vercel.json);
-   disable Deployment Protection (dashboard).
+1. **Immediate (DONE):** REP-001 fixed in commit `10f16b7` (Git deploy Ready,
+   CI 7/7). Remaining: disable Deployment Protection (dashboard).
 2. **High (live-demo quality, ~1-2h):** provision Token Factory key (REP-002);
    set DATABASE_URL on Vercel + Supabase migrate + VM worker (REP-007).
 3. **High security (pre-public, ~2-4h):** DockerSandbox wiring (REP-004).
@@ -237,5 +236,5 @@ Tasks 1–2 are independent and parallelizable; 3 requires a VM; 5 requires
 | Frontend usability | **Ready** | browser-verified across journeys and viewports |
 | Security | **Good for demo; 1 open item for public** | sandbox fail-closed; DockerSandbox wiring open |
 | CI | **Ready** | 7/7 green, runs on every push |
-| Deployment | **Partial** | production Ready via CLI; Git-integration build broken (REP-001); public access blocked (REP-003) |
+| Deployment | **Ready** (public access still gated) | Git-integration build fixed and verified (commit `10f16b7`, deploy Ready); public access blocked only by Deployment Protection (REP-003) |
 | Hackathon demo readiness | **Ready for local + CLI-demo; public URL pending 3 user actions** | see K |

@@ -217,6 +217,13 @@ Track deployment readiness, benchmark execution, hallway testing, README, demo v
 - Key confirmed findings reconciled here: REP-001 Git-integration Vercel build fails (web buildCommand builds @replay/api without workspace deps; CLI deploys still work, production healthy) — Critical, fix is one line, deliberately NOT applied during the audit; REP-002..012 recorded in the report register (provider keys, deployment protection, DockerSandbox wiring, Supabase verification, LISTEN/NOTIFY, hygiene).
 - Statuses below and in the audit report agree as of commit f5c84d7.
 
+### Oct 27 follow-up: REP-001 fixed and verified (commit 10f16b7)
+- [x] Audit deliverables committed and pushed (`3630859`: TODO reconciliation + docs/PROJECT_STATUS_AUDIT.md).
+- [x] REP-001 fix applied: vercel.json web buildCommand → `pnpm --filter "@replay/api..." build && pnpm run build` (builds workspace deps of @replay/api before the Next build).
+- [x] Verified on Vercel: Git-integration production deploy of `10f16b7` is **Ready** (dpl_7wf1tMe3WgG6UfMiUzw8hmmVU3rS); production alias resolves (still 302 = Deployment Protection, REP-003, user action).
+- [x] Verified on GitHub: CI for `10f16b7` is 7/7 green (typecheck/lint/unit, api smoke, docker builds, web e2e, CodeQL, gitleaks, audit).
+- Docs refreshed to match: README Deploy section (single `web` service, API mounted in Next), README known-limitations deployment bullet, audit report REP-001 entry/plan/readiness marked fixed.
+
 ### Submission readiness checklist (evidence-based)
 - [x] Working product: web UI + API + worker + CLI pipeline, real red-to-green verified
 - [x] Benchmark results with methodology and honest failures

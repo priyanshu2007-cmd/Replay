@@ -58,6 +58,10 @@ This document tracks requirements, architectural decisions, and resolutions to d
 - The Vercel `hono` services builder emits ESM and loads it as CJS regardless of entry format: FUNCTION_INVOCATION_FAILED on every /api call. The API is therefore mounted **inside the Next service** at `apps/web/app/api/[[...route]]/route.ts` (standard Hono-on-Next pattern); `vercel.json` has a single `web` service.
 - Docker: pnpm's symlinked node_modules does not survive Docker COPY, so the containers run self-contained esbuild CJS bundles (`apps/api/api-dist/server.cjs`/`worker.cjs`). `import.meta.url` is undefined in CJS bundles: prompt loading and repo-root resolution use `moduleDirOf()` with cwd/`REPLAY_PROMPTS_DIR` fallbacks.
 
+### Decision 008: Vercel web build must build workspace deps (2026-10-27, REP-001)
+- **Failure:** Git-integration deploys failed with TS2307 (`Cannot find module '@replay/shared'`/`'@replay/db'`/`'@replay/agents'`) in `apps/api` compilation, while local and CI builds passed: the fresh Vercel checkout has no `dist/` output, and the web service `buildCommand` ran `pnpm --filter @replay/api build`, which builds only `@replay/api` itself — not its workspace dependencies (`@replay/shared`, `@replay/db`, `@replay/storage`, `@replay/agents`).
+- **Resolution:** `"buildCommand": "pnpm --filter \"@replay/api...\" build && pnpm run build"` in `vercel.json`; the `...` suffix makes pnpm build the dependency graph first (same ordering CI uses via `pnpm -r build`). Verified: Git deploy of the fixing commit is Ready on Vercel, CI 7/7 green.
+
 ## 3. Dependency Graph & Phase Sequencing
 
 ```mermaid

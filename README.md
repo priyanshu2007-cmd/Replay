@@ -110,12 +110,14 @@ docker compose up
 
 ## Deploy
 
-The repo is a Vercel services project (`vercel.json`): `web` (Next.js,
-public at `/`) and `api` (Hono, public at `/api/*`) deploy from one repo;
-`demo-shop` is not a service (it is the sandbox target and runs on the
-worker host). There are no service bindings: the browser reaches the API
-through the public `/api/*` rewrite, so `NEXT_PUBLIC_API_URL` must stay
-unset in the Vercel environment.
+The repo deploys to Vercel as a single `web` service (`vercel.json`): the
+Next.js app is public at `/` and the Hono API is mounted inside it at
+`app/api/[[...route]]/route.ts`, served same-origin under `/api/*`
+(a separate API service was abandoned: the Vercel services builder emitted
+ESM that its own loader consumed as CJS). `demo-shop` is not a service (it
+is the sandbox target and runs on the worker host). There are no service
+bindings: the browser reaches the API same-origin, so `NEXT_PUBLIC_API_URL`
+must stay unset in the Vercel environment.
 
 Vercel environment variables (api + web):
 
@@ -228,16 +230,18 @@ content sniffing, run privacy, security headers, artifact retention).
 - With the current `.env` mapping every stage runs live except Watch, which
   still uses the fixture fallback path when the designated vision key is
   rejected: the run continues honestly with a `watch_fixture_fallback` event.
-- The Oct 25 five-sample benchmark table below was produced with all model
-  calls live (then on the NVIDIA Build endpoint); today's re-runs confirm the
-  pipeline still completes end to end on the current code.
+- The Oct 25 five-sample benchmark table above was produced with all model
+  calls live (then on the NVIDIA Build endpoint); re-runs on 2026-10-27
+  confirm the pipeline still completes end to end on the current code.
 - Replay mode against Supabase is implemented but was not exercised against a
   real project (no credentials configured); the frontend shows an honest
   offline state instead.
 - Per-stage token/cost breakdown in the UI awaits richer pipeline event
   payloads; run-level totals are shown.
-- The public deployment (Vercel + VM) is prepared (Dockerfile, compose,
-  Caddyfile) but not deployed; no hosting credentials were authorized.
+- The Vercel production deployment is live and Ready (Git-integration builds
+  green since commit `10f16b7`); the worker + Docker sandbox still run on the
+  VM via `docker compose`, so live runs from the public URL additionally
+  need `DATABASE_URL` on Vercel (see Deploy).
 
 ## License
 
