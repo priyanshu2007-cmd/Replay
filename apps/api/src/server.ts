@@ -139,25 +139,12 @@ export function clientIp(c: { env: unknown; req: { header: (n: string) => string
     const fwd = c.req.header('x-forwarded-for');
     if (fwd) {
       const hops = fwd.split(',').map((h) => h.trim()).filter(Boolean);
-      const rightMostRaw = hops[hops.length - 1];
-      const rightMostIp = normalizeIpCandidate(rightMostRaw);
-      if (rightMostIp) {
-        // If explicit multi-hop TRUSTED_PROXY_IPS are configured, walk right-to-left
-        // skipping known intermediate proxies to find the first untrusted client hop.
-        const explicitProxies = (process.env.TRUSTED_PROXY_IPS ?? '')
-          .split(',')
-          .map((s) => normalizeIpCandidate(s))
-          .filter(Boolean);
-        if (explicitProxies.length > 0 && hops.length > 1) {
-          for (let i = hops.length - 1; i >= 0; i--) {
-            const candidate = normalizeIpCandidate(hops[i]);
-            if (!candidate) break;
-            if (!explicitProxies.includes(candidate) || i === 0) {
-              return candidate;
-            }
-          }
+      for (let i = hops.length - 1; i >= 0; i--) {
+        const candidate = normalizeIpCandidate(hops[i]);
+        if (!candidate) continue;
+        if (!isTrustedProxyAddr(candidate) || i === 0) {
+          return candidate;
         }
-        return rightMostIp;
       }
     }
     const realIp = normalizeIpCandidate(c.req.header('x-real-ip'));

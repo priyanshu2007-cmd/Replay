@@ -400,7 +400,7 @@ describe('Replay API Server', () => {
           env: { incoming: { socket: { remoteAddress: '127.0.0.1' } } },
           req: {
             header: (n: string) => {
-              if (n.toLowerCase() === 'x-forwarded-for') return '203.0.113.5, garbage-not-an-ip';
+              if (n.toLowerCase() === 'x-forwarded-for') return 'garbage-not-an-ip, also-invalid';
               if (n.toLowerCase() === 'x-real-ip') return '203.0.113.88';
               return undefined;
             },
