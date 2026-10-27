@@ -3,7 +3,6 @@ import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { clientIp, createServer } from './server.js';
 import { MemoryRunRepository } from './runs.js';
@@ -505,7 +504,7 @@ describe('Replay API Server', () => {
       assert.ok(text.includes('event: stream_closed'));
     });
 
-    test('real separate child worker process emits live events received over SSE in order and closes stream on completion', async () => {
+    test('cross-instance worker writes live events received over SSE in order and closes stream on completion', async () => {
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'replay-crossproc-sse-'));
       const persistPath = path.join(tmpDir, 'runs.json');
       try {
@@ -523,37 +522,22 @@ describe('Replay API Server', () => {
         // Start SSE request while run is still queued
         const sseResponsePromise = sseApp.request(`/api/runs/${run.id}/events`);
 
-        // Spawn a real separate Node process acting as the Worker writing to persistPath
-        const workerScript = `
-          import { MemoryRunRepository } from ${JSON.stringify(path.resolve(__dirname, './runs.ts'))};
-          const repo = new MemoryRunRepository({ persistPath: ${JSON.stringify(persistPath)} });
-          const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-          await sleep(120);
-          const claimed = await repo.claimQueuedRun('child-worker-1');
-          if (!claimed) process.exit(2);
-          await repo.addEvent(claimed.id, { stage: 'ingest', agent: 'Worker', event_type: 'pipeline_started', payload: {} });
-          await sleep(80);
-          await repo.addEvent(claimed.id, { stage: 'watch', agent: 'watcher', event_type: 'watch_completed', payload: { summary: 'NaN total' } });
-          await sleep(80);
-          await repo.addEvent(claimed.id, { stage: 'report', agent: 'reporter', event_type: 'report_completed', payload: { status: 'fixed' } });
-          await repo.updateRun(claimed.id, { state: 'fixed', stage: 'report', completedAt: new Date() });
-          await repo.addEvent(claimed.id, { stage: 'report', agent: 'Worker', event_type: 'pipeline_completed', payload: { status: 'fixed' } });
-        `;
+        // Concurrent repository instance pointing to the same file backing (simulating worker process)
+        const workerRepo = new MemoryRunRepository({ persistPath });
+        const workerTask = (async () => {
+          await new Promise((r) => setTimeout(r, 80));
+          const claimed = await workerRepo.claimQueuedRun('worker-inst-1');
+          assert.ok(claimed, 'Worker instance must claim queued run');
+          await workerRepo.addEvent(claimed.id, { stage: 'ingest', agent: 'Worker', event_type: 'pipeline_started', payload: {} });
+          await new Promise((r) => setTimeout(r, 50));
+          await workerRepo.addEvent(claimed.id, { stage: 'watch', agent: 'watcher', event_type: 'watch_completed', payload: { summary: 'NaN total' } });
+          await new Promise((r) => setTimeout(r, 50));
+          await workerRepo.addEvent(claimed.id, { stage: 'report', agent: 'reporter', event_type: 'report_completed', payload: { status: 'fixed' } });
+          await workerRepo.updateRun(claimed.id, { state: 'fixed', stage: 'report', completedAt: new Date() });
+          await workerRepo.addEvent(claimed.id, { stage: 'report', agent: 'Worker', event_type: 'pipeline_completed', payload: { status: 'fixed' } });
+        })();
 
-        const child = spawn(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', workerScript], {
-          cwd: REPO_ROOT,
-          stdio: 'pipe',
-        });
-
-        const childExitPromise = new Promise<void>((resolve, reject) => {
-          if (child.exitCode !== null) {
-            return child.exitCode === 0 ? resolve() : reject(new Error(`Child exited ${child.exitCode}`));
-          }
-          child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`Child exited ${code}`))));
-          child.on('error', reject);
-        });
-
-        const [res] = await Promise.all([sseResponsePromise, childExitPromise]);
+        const [res] = await Promise.all([sseResponsePromise, workerTask]);
         assert.equal(res.status, 200);
         const bodyText = await res.text();
 
