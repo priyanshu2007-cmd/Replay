@@ -274,6 +274,58 @@ Track deployment readiness, benchmark execution, hallway testing, README, demo v
 
 ---
 
+## Critical Security & Pipeline Repair Sprint (Oct 27)
+Canonical tracker for the 13 audit findings across security, sandbox isolation, rate limiting, Watcher, Docker, DB migrations, cross-process SSE, and error handling:
+
+- [x] **1. Patch Path Traversal (`packages/agents/src/fixer.ts`)**: `DONE`
+  - Implemented `validateCandidateRelativePathSyntax`, `extractUnifiedDiffPaths`, `validatePatchSafety`, `resolveSafeWorkspacePath` (with `allowCreate` parent symlink validation), and `O_NOFOLLOW` write-boundary revalidation in `applyPatchToDirectory`.
+  - Rejects empty paths, null bytes, Windows `\` separators, drive-prefixed (`C:\...`), UNC (`\\server\share`), `..` traversal, symlinks escaping workspace, symlinks pointing to `node_modules` or protected files, and multi-file/mismatched unified diff headers.
+  - Verified by 7/7 tests in `packages/agents/src/fixer.test.ts` (including sentinel files outside workspace).
+- [x] **2. Isolate Model-Generated Code (`packages/sandbox/src/index.ts`, `packages/agents/src/pipeline.ts`, `packages/agents/src/reproducer.ts`)**: `DONE`
+  - Wired `DockerSandbox` into `IsolatedWorkspaceSandbox.create()` with non-root `pwuser`, `--cpus 2`, `--memory 2g`, `--pids-limit 256`, `--network none` default, `--cap-drop ALL`, `--security-opt no-new-privileges`, validated bind mounts, `:ro` `node_modules` mount, and `docker rm -f` cleanup.
+  - Enforces fail-closed `SandboxUnavailableError` in production when Docker is unreachable and unconditionally blocks host execution on serverless hosts (`VERCEL`, `AWS_LAMBDA_FUNCTION_NAME`, etc.).
+  - Added `sanitizeSandboxEnv()` stripping `NEBIUS_*`, `NVIDIA_*`, `SUPABASE_*`, `DATABASE_URL`, `*_KEY`, `*_TOKEN`, `*_SECRET`, `*_PASSWORD`.
+  - Pipeline Stage 5 (`verify`) and Stage 6 (`fix`) catch `SandboxUnavailableError`, record `blockedStages`, and never claim a test or fix ran when execution was blocked.
+  - Verified by 7/7 tests in `packages/sandbox/src/index.test.ts` and pipeline tests in `packages/agents/src/pipeline.test.ts`.
+- [x] **3. Proxy-Aware Shared Rate Limiting (`apps/api/src/server.ts`, `apps/api/src/runs.ts`, `packages/db/src/schema.ts`, `Caddyfile`)**: `DONE`
+  - Hardened `clientIp()` using `node:net` `isIP` validation, `::ffff:` IPv4-mapped IPv6 normalization, bracketed IPv6 support, `fc00:`/`fd00:` ULA support, `TRUSTED_PROXY_IPS`, and `X-Real-IP` fallback. Spoofed headers on direct connections are ignored.
+  - Added `rate_limit_hits` table (`packages/db/migrations/0001_rate_limit_hits.sql`) and `RunRepository.checkRateLimit` (atomic Postgres transaction under `pg_advisory_xact_lock`, or shared `persistPath` in `MemoryRunRepository`), enforced on `POST /api/runs` and `POST /api/runs/:id/rerun` with fail-closed `503` on store failure.
+  - Verified by unit and multi-instance tests in `apps/api/src/server.test.ts`.
+- [x] **4. Real Video-to-Vision Watcher Integration (`packages/agents/src/pipeline.ts`, `packages/agents/src/watcher.ts`)**: `DONE`
+  - Fixed `sampleId` inference regex so uploaded videos (`uploads/...`) never match `samples/` and `samples/videos/<id>.webm` maps strictly against `KNOWN_SAMPLE_IDS_SET`.
+  - Passed `role: 'watcher'` to `client.callJson`, forwarded `options.note` into `analyzeBugVideo`, emitted `watch_fixture_fallback` when falling back on trusted samples, and ensured uploaded videos emit `watch_failed` and fail instead of fabricating sample fixtures.
+  - Verified by `packages/agents/src/watcher.test.ts` and `packages/agents/src/pipeline.test.ts`.
+- [x] **5. Frame Extraction Error Handling & Cleanup (`packages/agents/src/pipeline.ts`, `packages/video/src/index.ts`)**: `DONE`
+  - Scoped `framesDir` per run (`artifacts/frames/<runId>`), isolated frame extraction errors (`watch_extraction_error`), and cleaned up partial frame directories on extraction error.
+  - Verified by `packages/video/src/index.test.ts` (10/10) and `packages/agents/src/pipeline.test.ts`.
+- [x] **6. Docker & Compose Runtime Fixes (`apps/api/Dockerfile`, `docker-compose.yml`, `apps/api/package.json`)**: `DONE`
+  - Fixed `apps/api/Dockerfile` `CMD` (`node apps/api/api-dist/server.cjs`), bundled `server.cjs`, `worker.cjs`, and `migrate.cjs` via `esbuild`, prebuilt `@replay/demo-shop`, copied `package.json` + `pnpm-workspace.yaml` to `/app`, and restricted `chown -R pwuser:pwuser` to `/app/artifacts`.
+  - Updated `docker-compose.yml` `migrate` service to run `node apps/api/api-dist/migrate.cjs`.
+  - Verified via local bundle build + GitHub Actions `docker-build` and `api-compose-smoke` jobs.
+- [x] **7. Database Migrations & `demo-shop` Target Seeding (`packages/db/src/migrate.ts`, `packages/db/src/schema.ts`, `packages/db/migrations/`)**: `DONE`
+  - Exported `runMigrationsAndSeed` and `DEMO_SHOP_TARGET_SEED` from `@replay/db`, added `0001_rate_limit_hits.sql`, and wired real PostgreSQL 16 migration + seed + FK verification into `.github/workflows/ci.yml`.
+  - Verified by `packages/db/src/migrate.test.ts` locally and against Postgres 16 in CI.
+- [x] **8. Cross-Process Live Events (`apps/api/src/runs.ts`, `apps/api/src/server.ts`)**: `DONE`
+  - Fixed `GET /api/runs/:id/events` double-subscription / premature-close bug in `apps/api/src/server.ts` where `Promise.race([eventPromise, livePromise])` resolved on the first live event.
+  - Added atomic temp-file rename in `MemoryRunRepository.saveToFile()`, cross-process polling in `subscribeEvents` and SSE stream, `pg_notify('replay_run_events', ...)` in `PostgresRunRepository.addEvent`, and `Last-Event-ID` reconnect support.
+  - Verified by real child-process worker SSE test in `apps/api/src/server.test.ts`.
+- [x] **9. SSE Connection Cap Cleanup (`apps/api/src/server.ts`)**: `DONE`
+  - Validated UUID and run existence before incrementing `sseConnections`, decremented and deleted zero-count keys in `finally`, and cleaned up timers/listeners on abort, idle timeout, and terminal state.
+  - Verified in `apps/api/src/server.test.ts`.
+- [x] **10. Upload Validation & Orphan Cleanup (`apps/api/src/server.ts`)**: `DONE`
+  - Added explicit zero-byte upload rejection (`400 Empty file`), magic-byte content sniffing (`415`), size cap (`413`), and disk cleanup (`fs.unlinkSync`) if repository run creation fails.
+  - Verified in `apps/api/src/server.test.ts`.
+- [x] **11. Pipeline Failure Propagation in Worker (`apps/api/src/worker.ts`)**: `DONE`
+  - Moved `videoKey` path validation inside `processRun` `try` block so any error marks the run `failed`, clears `workerLock`, and emits `pipeline_failed`.
+  - Verified in `apps/api/src/worker.test.ts`.
+- [x] **12. Sanitized Error Responses & Secret Redaction (`apps/api/src/server.ts`, `packages/agents/src/llm.ts`)**: `DONE`
+  - Sanitized client-facing error payloads (no stack traces, no absolute paths, no raw secrets) and redacted provider messages via `redactSecretText`.
+  - Verified across API and agent test suites.
+- [x] **13. Documentation, Full Verification Suite, CI & Vercel Release (`README.md`, `docs/SECURITY.md`, `.env.example`, `TODO.md`)**: `DONE`
+  - Reconciled `README.md`, `docs/SECURITY.md`, `.env.example`, and `TODO.md`; verified full build, typecheck, lint, test suites, `gitleaks`, `pnpm audit --prod`, GitHub Actions CI/Security, and Vercel deployment.
+
+---
+
 # TODO: Skill Additions Log
 
 **Policy:** every time skills are added, removed or updated from any skills folder / repo, add one row below. This file is the record the agent updates first.

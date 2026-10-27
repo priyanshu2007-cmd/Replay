@@ -490,10 +490,54 @@ export class MemoryRunRepository implements RunRepository {
 export class PostgresRunRepository implements RunRepository {
   private db: DbClient;
   private emitter = new EventEmitter();
+  private lastEmittedSeq = new Map<string, number>();
+  private pollTimers = new Map<string, ReturnType<typeof setInterval>>();
+  private rateLimitTableReady = false;
 
   constructor(db: DbClient) {
     this.db = db;
     this.emitter.setMaxListeners(100);
+  }
+
+  async checkRateLimit(key: string, limit: number, windowMs: number): Promise<RateLimitResult> {
+    const client = (this.db as unknown as {
+      $client: { begin: (fn: (tx: any) => Promise<any>) => Promise<any> };
+    }).$client;
+
+    return client.begin(async (tx: any) => {
+      if (!this.rateLimitTableReady) {
+        await tx`
+          CREATE TABLE IF NOT EXISTS "rate_limit_hits" (
+            "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+            "bucket_key" text NOT NULL,
+            "created_at" timestamp with time zone DEFAULT now() NOT NULL
+          )
+        `;
+        await tx`
+          CREATE INDEX IF NOT EXISTS "rate_limit_hits_bucket_created_idx"
+          ON "rate_limit_hits" USING btree ("bucket_key", "created_at")
+        `;
+        this.rateLimitTableReady = true;
+      }
+
+      const lockKey = `ratelimit:${key}`;
+      await tx`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+      const cutoffIso = new Date(Date.now() - windowMs).toISOString();
+      await tx`DELETE FROM rate_limit_hits WHERE created_at <= ${cutoffIso}::timestamptz`;
+
+      const countRows = await tx`
+        SELECT COUNT(*)::int AS cnt
+        FROM rate_limit_hits
+        WHERE bucket_key = ${key}
+      `;
+      const count = Number(countRows[0]?.cnt ?? 0);
+      if (count >= limit) {
+        return { allowed: false, remaining: 0 };
+      }
+
+      await tx`INSERT INTO rate_limit_hits (bucket_key) VALUES (${key})`;
+      return { allowed: true, remaining: Math.max(0, limit - (count + 1)) };
+    });
   }
 
   private mapRowToRun(row: any): RunRecord {
@@ -686,6 +730,7 @@ export class PostgresRunRepository implements RunRepository {
     // and computes max(seq)+1 via a scalar subquery (always yields a row, so
     // the first event of a run is inserted too). No SELECT-then-INSERT race.
     const timestamp = event.timestamp ?? new Date().toISOString();
+    const sanitizedPayload = sanitizeEventPayload(event.payload);
     const inserted = await (this.db as unknown as {
       $client: { begin: (fn: (tx: any) => Promise<any>) => Promise<any> };
     }).$client.begin(async (tx: any) => {
@@ -695,9 +740,11 @@ export class PostgresRunRepository implements RunRepository {
         VALUES (${runId},
                 COALESCE((SELECT MAX(seq) + 1 FROM run_events WHERE run_id = ${runId}), 1),
                 ${event.stage}, ${event.agent}, ${event.event_type},
-                ${JSON.stringify(sanitizeEventPayload(event.payload))}::jsonb,
+                ${JSON.stringify(sanitizedPayload)}::jsonb,
                 ${timestamp}::timestamptz)
         RETURNING seq`;
+      const seqVal = Number(rows[0]?.seq ?? 1);
+      await tx`SELECT pg_notify('replay_run_events', ${JSON.stringify({ runId, seq: seqVal })})`;
       return rows[0];
     });
 
@@ -709,10 +756,11 @@ export class PostgresRunRepository implements RunRepository {
       stage: event.stage,
       agent: event.agent,
       event_type: event.event_type,
-      payload: event.payload,
+      payload: sanitizedPayload,
       timestamp,
     };
 
+    this.lastEmittedSeq.set(runId, Math.max(this.lastEmittedSeq.get(runId) ?? 0, nextSeq));
     this.emitter.emit(`events:${runId}`, fullEvent);
     return fullEvent;
   }
@@ -738,8 +786,40 @@ export class PostgresRunRepository implements RunRepository {
   subscribeEvents(runId: string, listener: (event: RunEvent) => void): () => void {
     const eventName = `events:${runId}`;
     this.emitter.on(eventName, listener);
+
+    if (!this.pollTimers.has(runId)) {
+      let polling = false;
+      const timer = setInterval(async () => {
+        if (polling) return;
+        polling = true;
+        try {
+          const allEvents = await this.getEvents(runId);
+          const lastSeq = this.lastEmittedSeq.get(runId) ?? 0;
+          for (const ev of allEvents) {
+            if (ev.seq > lastSeq) {
+              this.lastEmittedSeq.set(runId, ev.seq);
+              this.emitter.emit(eventName, ev);
+            }
+          }
+        } catch {
+          // Ignore transient polling errors
+        } finally {
+          polling = false;
+        }
+      }, 150);
+      if (typeof timer.unref === 'function') timer.unref();
+      this.pollTimers.set(runId, timer);
+    }
+
     return () => {
       this.emitter.off(eventName, listener);
+      if (this.emitter.listenerCount(eventName) === 0) {
+        const timer = this.pollTimers.get(runId);
+        if (timer) {
+          clearInterval(timer);
+          this.pollTimers.delete(runId);
+        }
+      }
     };
   }
 }

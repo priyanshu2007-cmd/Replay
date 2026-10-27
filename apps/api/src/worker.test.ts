@@ -152,5 +152,29 @@ describe('Replay Background Worker', () => {
       assert.equal(runAfterStop.state, 'queued');
       assert.equal(runAfterStop.workerLock, null);
     });
+
+    test('processRun transitions run to failed, clears workerLock, and emits pipeline_failed on unsafe videoKey or pipeline error', async () => {
+      const run = await repo.createRun({ videoKey: '../../etc/passwd', isSample: false });
+      const claimed = await repo.claimQueuedRun('error-worker');
+      assert.ok(claimed);
+
+      const worker = new Worker({
+        workerId: 'error-worker',
+        repository: repo,
+      });
+
+      await worker.processRun(claimed);
+
+      const after = await repo.getRun(run.id);
+      assert.ok(after);
+      assert.equal(after.state, 'failed');
+      assert.equal(after.workerLock, null);
+      assert.ok(after.completedAt);
+
+      const events = await repo.getEvents(run.id);
+      const failEvent = events.find((e) => e.event_type === 'pipeline_failed');
+      assert.ok(failEvent);
+      assert.ok(String(failEvent.payload.error).includes('Rejected unsafe video key'));
+    });
   });
 });

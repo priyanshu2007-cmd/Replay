@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { isIP } from 'node:net';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
@@ -92,24 +93,81 @@ const CreateJsonRunSchema = z.object({
 
 /**
  * Client IP for rate limiting and caps. Never trust X-Forwarded-For from an
- * untrusted peer: only when TRUST_PROXY=1 AND the socket peer is a private
- * (proxy) address do we use the LAST X-Forwarded-For hop, which is the value
- * our own reverse proxy (Caddy) appended.
+ * untrusted peer: only when TRUST_PROXY=1 AND the socket peer is a trusted
+ * private/configured proxy address do we inspect X-Forwarded-For / X-Real-IP.
  */
-const PRIVATE_RANGES = /^(10\.|127\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|::1$|fc00:|fe80:)/;
+const PRIVATE_RANGES = /^(10\.|127\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|::1$|f[cd][0-9a-f]{2}:|fe80:)/i;
+
+function normalizeIpCandidate(raw: string | undefined): string {
+  if (!raw) return '';
+  let trimmed = raw.trim();
+  if (!trimmed) return '';
+  // Strip bracketed IPv6 with port: [2001:db8::1]:8080 -> 2001:db8::1
+  const bracketMatch = trimmed.match(/^\[([^\]]+)\](?::\d+)?$/);
+  if (bracketMatch && bracketMatch[1]) {
+    trimmed = bracketMatch[1];
+  } else if (/^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(trimmed)) {
+    // Strip IPv4 port: 203.0.113.9:54321 -> 203.0.113.9
+    trimmed = trimmed.replace(/:\d+$/, '');
+  }
+  trimmed = trimmed.replace(/^::ffff:/i, '');
+  // Strip IPv6 zone index (%eth0) before validation
+  const zoneIdx = trimmed.indexOf('%');
+  const withoutZone = zoneIdx !== -1 ? trimmed.slice(0, zoneIdx) : trimmed;
+  if (isIP(withoutZone) === 0) return '';
+  return withoutZone.toLowerCase();
+}
+
+function isTrustedProxyAddr(ip: string): boolean {
+  if (!ip) return false;
+  const configured = (process.env.TRUSTED_PROXY_IPS ?? '')
+    .split(',')
+    .map((s) => normalizeIpCandidate(s))
+    .filter(Boolean);
+  if (configured.length > 0) {
+    return configured.includes(ip);
+  }
+  return PRIVATE_RANGES.test(ip);
+}
 
 export function clientIp(c: { env: unknown; req: { header: (n: string) => string | undefined } }): string {
   const incoming = c.env as unknown as { incoming?: { socket?: { remoteAddress?: string } } } | undefined;
-  const socketAddr = incoming?.incoming?.socket?.remoteAddress?.replace(/^::ffff:/, '') || '';
-  if (process.env.TRUST_PROXY === '1' && PRIVATE_RANGES.test(socketAddr)) {
+  const rawSocketAddr = incoming?.incoming?.socket?.remoteAddress || '';
+  const socketAddr = normalizeIpCandidate(rawSocketAddr);
+
+  if (process.env.TRUST_PROXY === '1' && isTrustedProxyAddr(socketAddr)) {
     const fwd = c.req.header('x-forwarded-for');
-    if (fwd) return fwd.split(',').pop()!.trim();
+    if (fwd) {
+      const hops = fwd.split(',').map((h) => h.trim()).filter(Boolean);
+      const rightMostRaw = hops[hops.length - 1];
+      const rightMostIp = normalizeIpCandidate(rightMostRaw);
+      if (rightMostIp) {
+        // If explicit multi-hop TRUSTED_PROXY_IPS are configured, walk right-to-left
+        // skipping known intermediate proxies to find the first untrusted client hop.
+        const explicitProxies = (process.env.TRUSTED_PROXY_IPS ?? '')
+          .split(',')
+          .map((s) => normalizeIpCandidate(s))
+          .filter(Boolean);
+        if (explicitProxies.length > 0 && hops.length > 1) {
+          for (let i = hops.length - 1; i >= 0; i--) {
+            const candidate = normalizeIpCandidate(hops[i]);
+            if (!candidate) break;
+            if (!explicitProxies.includes(candidate) || i === 0) {
+              return candidate;
+            }
+          }
+        }
+        return rightMostIp;
+      }
+    }
+    const realIp = normalizeIpCandidate(c.req.header('x-real-ip'));
+    if (realIp) return realIp;
   }
   return socketAddr || 'local';
 }
 
-// Abuse protection (plan: ~5 run submissions per IP per hour). Instance-scoped
-// with an override for tests; in-memory, so restarts reset it.
+// Abuse protection (plan: ~5 run submissions per IP per hour). Shared via
+// RunRepository when available, with bounded in-memory fallback.
 const RUN_RATE_WINDOW_MS = 60 * 60 * 1000;
 
 export function createServer(options?: { repository?: RunRepository; repoRoot?: string; runRateLimit?: number }) {
@@ -118,16 +176,32 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
   const runRateLimit = options?.runRateLimit ?? 5;
   const runAttempts = new Map<string, number[]>();
 
-  function runRateLimited(ip: string): boolean {
+  async function checkRunRateLimit(ip: string): Promise<'allowed' | 'exceeded' | 'unavailable'> {
+    if (typeof repo.checkRateLimit === 'function') {
+      try {
+        const res = await repo.checkRateLimit(`runs:${ip}`, runRateLimit, RUN_RATE_WINDOW_MS);
+        return res.allowed ? 'allowed' : 'exceeded';
+      } catch (err) {
+        console.error('[Replay API] Shared rate limit store error (failing closed):', (err as Error)?.message);
+        return 'unavailable';
+      }
+    }
     const now = Date.now();
+    if (runAttempts.size > 5_000) {
+      for (const [k, ts] of runAttempts.entries()) {
+        const valid = ts.filter((t) => now - t < RUN_RATE_WINDOW_MS);
+        if (valid.length === 0) runAttempts.delete(k);
+        else runAttempts.set(k, valid);
+      }
+    }
     const recent = (runAttempts.get(ip) ?? []).filter((t) => now - t < RUN_RATE_WINDOW_MS);
     if (recent.length >= runRateLimit) {
       runAttempts.set(ip, recent);
-      return true;
+      return 'exceeded';
     }
     recent.push(now);
     runAttempts.set(ip, recent);
-    return false;
+    return 'allowed';
   }
 
   const app = new Hono();
@@ -169,14 +243,14 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
   // Production safety gate: refuse untrusted cross-origin requests.
   // Same-origin requests, health checks, and configured allowed origins are always permitted.
   app.use('/api/*', async (c, next) => {
-    const path = c.req.path;
-    if (path === '/api/health' || path === '/health') {
+    const reqPath = c.req.path;
+    if (reqPath === '/api/health' || reqPath === '/health') {
       await next();
       return;
     }
     if (isProd && !isSameOriginOrAllowed(c)) {
       if (allowedOrigins.length === 0) {
-        return c.json({ error: 'Server misconfigured', message: 'ALLOWED_ORIGINS is not set on this deployment.' }, 503);
+        return c.json({ error: 'Service unavailable', message: 'Cross-origin access is not enabled for this deployment.' }, 503);
       }
       return c.json({ error: 'Forbidden', message: 'Cross-origin request not allowed.' }, 403);
     }
@@ -259,11 +333,18 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
   // Create a Run (JSON or Multipart Form)
   app.post('/api/runs', async (c) => {
     try {
-      if (runRateLimited(clientIp(c))) {
+      const rateCheck = await checkRunRateLimit(clientIp(c));
+      if (rateCheck === 'exceeded') {
         return c.json({
           error: 'Rate limit exceeded',
           message: `Too many runs from this address. The limit is ${runRateLimit} runs per hour.`,
         }, 429);
+      }
+      if (rateCheck === 'unavailable') {
+        return c.json({
+          error: 'Service unavailable',
+          message: 'Rate limit store is temporarily unavailable. Please try again shortly.',
+        }, 503);
       }
 
       const contentType = c.req.header('content-type') || '';
@@ -320,15 +401,11 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
         const size = (file as any).size;
         const mimeType = (file as any).type || 'application/octet-stream';
 
-        // Content sniffing: the client MIME type is not trusted.
-        const head = Buffer.from(await (file as any).slice(0, 16).arrayBuffer());
-        const isWebm = head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3;
-        const isMp4MovMkv = head.subarray(4, 8).toString('latin1') === 'ftyp';
-        if (!isWebm && !isMp4MovMkv) {
+        if (typeof size !== 'number' || size <= 0) {
           return c.json({
-            error: 'Unsupported media type',
-            message: 'File content does not look like a supported video (WebM/MP4/MOV/MKV).',
-          }, 415);
+            error: 'Empty file',
+            message: 'Uploaded video file cannot be empty (0 bytes).',
+          }, 400);
         }
 
         if (size > MAX_UPLOAD_BYTES) {
@@ -336,6 +413,17 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
             error: 'Payload too large',
             message: `Video exceeds maximum upload size of ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB`,
           }, 413);
+        }
+
+        // Content sniffing: the client MIME type is not trusted.
+        const head = Buffer.from(await (file as any).slice(0, 16).arrayBuffer());
+        const isWebm = head.length >= 4 && head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3;
+        const isMp4MovMkv = head.length >= 8 && head.subarray(4, 8).toString('latin1') === 'ftyp';
+        if (!isWebm && !isMp4MovMkv) {
+          return c.json({
+            error: 'Unsupported media type',
+            message: 'File content does not look like a supported video (WebM/MP4/MOV/MKV).',
+          }, 415);
         }
 
         if (!ALLOWED_MIME_TYPES.has(mimeType)) {
@@ -357,27 +445,44 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
         // so the worker finds the file without seeing an absolute path.
         const relativeKey = `uploads/${runId}.${ext}`;
         const buffer = Buffer.from(await (file as any).arrayBuffer());
+        if (buffer.length === 0) {
+          return c.json({
+            error: 'Empty file',
+            message: 'Uploaded video file cannot be empty (0 bytes).',
+          }, 400);
+        }
+
         fs.writeFileSync(filePath, buffer);
 
-        const run = await repo.createRun({
-          targetId: 'demo-shop',
-          videoKey: relativeKey,
-          note,
-          isSample: false,
-        });
-
-        await repo.addEvent(run.id, {
-          stage: 'ingest',
-          agent: 'API',
-          event_type: 'run_created',
-          payload: {
+        let run;
+        try {
+          run = await repo.createRun({
+            targetId: 'demo-shop',
+            videoKey: relativeKey,
+            note,
             isSample: false,
-            videoSize: size,
-            mimeType,
-            savedPath: filePath,
-            note: note ?? null,
-          },
-        });
+          });
+
+          await repo.addEvent(run.id, {
+            stage: 'ingest',
+            agent: 'API',
+            event_type: 'run_created',
+            payload: {
+              isSample: false,
+              videoSize: size,
+              mimeType,
+              savedPath: filePath,
+              note: note ?? null,
+            },
+          });
+        } catch (dbErr) {
+          try {
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+          } catch {
+            // Best-effort cleanup of orphaned upload
+          }
+          throw dbErr;
+        }
 
         // Opaque key: absolute server paths never leave the API.
         return c.json({
@@ -449,7 +554,7 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
         createdAt: run.createdAt.toISOString(),
       }, 201);
     } catch (err: any) {
-      console.error('[Replay API] Error creating run:', err);
+      console.error('[Replay API] Error creating run:', (err as Error)?.message ?? err);
       return c.json({
         error: 'Internal server error',
         message: 'Failed to create run',
@@ -568,6 +673,19 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
       return c.json({ error: 'Invalid run id', message: 'Run id must be a UUID' }, 400);
     }
+    const rateCheck = await checkRunRateLimit(clientIp(c));
+    if (rateCheck === 'exceeded') {
+      return c.json({
+        error: 'Rate limit exceeded',
+        message: `Too many runs from this address. The limit is ${runRateLimit} runs per hour.`,
+      }, 429);
+    }
+    if (rateCheck === 'unavailable') {
+      return c.json({
+        error: 'Service unavailable',
+        message: 'Rate limit store is temporarily unavailable. Please try again shortly.',
+      }, 503);
+    }
     const run = await repo.getRun(id);
     if (!run) {
       return c.json({ error: 'Run not found', message: `No run found with ID ${id}` }, 404);
@@ -617,111 +735,178 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
 
     try {
       return await streamSSE(c, async (stream) => {
-        let lastSentSeq = 0;
+        const lastEventHeader = Number(c.req.header('last-event-id') || c.req.query('afterSeq') || 0);
+        let lastSentSeq = Number.isFinite(lastEventHeader) && lastEventHeader > 0 ? Math.floor(lastEventHeader) : 0;
 
-        // Subscribe FIRST and buffer live events, THEN read history: anything
-        // emitted between the history read and the subscribe would be lost.
-        const buffer: RunEvent[] = [];
-        let unsubscribeHandler: (() => void) | undefined;
+        const terminalStates = new Set(['fixed', 'reproduced_only', 'unreproduced', 'failed']);
+        const pending: RunEvent[] = [];
+        let flushing = false;
+        let closed = false;
         let finishStream: (() => void) | undefined;
 
-        const eventPromise = new Promise<void>((resolve) => {
-          finishStream = resolve;
-          unsubscribeHandler = repo.subscribeEvents(id, async (liveEvent) => {
-            if (liveEvent.seq <= lastSentSeq) return;
-            buffer.push(liveEvent);
-            finishStream?.();
-          });
+        const donePromise = new Promise<void>((resolve) => {
+          finishStream = () => {
+            if (!closed) {
+              closed = true;
+              resolve();
+            }
+          };
         });
 
-        const writeEvent = async (ev: RunEvent) => {
-          await stream.writeSSE({
-            event: ev.event_type,
-            data: JSON.stringify(ev),
-            id: String(ev.seq),
-          });
-          lastSentSeq = ev.seq;
-        };
+        const flushQueue = async () => {
+          if (flushing || closed) return;
+          flushing = true;
+          try {
+            while (pending.length > 0 && !closed) {
+              pending.sort((a, b) => a.seq - b.seq);
+              const ev = pending.shift()!;
+              if (ev.seq <= lastSentSeq) continue;
+              lastSentSeq = ev.seq;
 
-        // 1. History in seq order
-        for (const ev of await repo.getEvents(id)) {
-          if (ev.seq > lastSentSeq) await writeEvent(ev);
-        }
+              await stream.writeSSE({
+                event: ev.event_type,
+                data: JSON.stringify(ev),
+                id: String(ev.seq),
+              });
 
-        // 2. Terminal runs end the stream after history
-        const terminalStates = new Set(['fixed', 'reproduced_only', 'unreproduced', 'failed']);
-        const currentRun = await repo.getRun(id);
-        if (currentRun && terminalStates.has(currentRun.state)) {
-          await stream.writeSSE({
-            event: 'stream_closed',
-            data: JSON.stringify({ reason: 'run_terminal', state: currentRun.state }),
-          });
-          return;
-        }
-
-        // 3. Flush buffered live events, then keep streaming until completion
-        for (const ev of buffer) {
-          if (ev.seq > lastSentSeq) await writeEvent(ev);
-        }
-
-        const livePromise = new Promise<void>((resolve) => {
-          unsubscribeHandler = repo.subscribeEvents(id, async (liveEvent) => {
-            try {
-              if (liveEvent.seq <= lastSentSeq) return;
-              await writeEvent(liveEvent);
-
-              // Close only when the pipeline actually finished. report_started
-              // also has stage 'report'; closing on it would cut final events.
               if (
-                liveEvent.event_type === 'pipeline_completed' ||
-                liveEvent.event_type === 'pipeline_failed'
+                ev.event_type === 'pipeline_completed' ||
+                ev.event_type === 'pipeline_failed'
               ) {
                 await stream.writeSSE({
                   event: 'stream_closed',
                   data: JSON.stringify({ reason: 'pipeline_finished' }),
                 });
-                resolve();
+                finishStream?.();
+                return;
+              }
+            }
+          } catch {
+            finishStream?.();
+          } finally {
+            flushing = false;
+          }
+        };
+
+        const enqueueEvent = (ev: RunEvent) => {
+          if (closed || ev.seq <= lastSentSeq) return;
+          if (!pending.some((p) => p.seq === ev.seq)) {
+            pending.push(ev);
+          }
+          void flushQueue();
+        };
+
+        // Subscribe FIRST, then load history so no in-flight event is missed.
+        const unsubscribe = repo.subscribeEvents(id, (liveEvent) => {
+          enqueueEvent(liveEvent);
+        });
+
+        try {
+          for (const ev of await repo.getEvents(id)) {
+            if (ev.seq > lastSentSeq && !pending.some((p) => p.seq === ev.seq)) {
+              pending.push(ev);
+            }
+          }
+          await flushQueue();
+          if (closed) return;
+
+          const currentRun = await repo.getRun(id);
+          if (currentRun && terminalStates.has(currentRun.state)) {
+            // Flush any final events emitted right before run state flipped
+            for (const ev of await repo.getEvents(id)) {
+              if (ev.seq > lastSentSeq && !pending.some((p) => p.seq === ev.seq)) {
+                pending.push(ev);
+              }
+            }
+            await flushQueue();
+            if (!closed) {
+              await stream.writeSSE({
+                event: 'stream_closed',
+                data: JSON.stringify({ reason: 'run_terminal', state: currentRun.state }),
+              });
+              finishStream?.();
+            }
+            return;
+          }
+
+          await stream.writeSSE({ retry: 3000, data: '' });
+
+          // Cross-process safety poll: catches events and terminal state changes
+          // persisted by an external worker process even if EventEmitter is local.
+          const pollInterval = setInterval(async () => {
+            if (closed) return;
+            try {
+              const allEvents = await repo.getEvents(id);
+              for (const ev of allEvents) {
+                if (ev.seq > lastSentSeq && !pending.some((p) => p.seq === ev.seq)) {
+                  pending.push(ev);
+                }
+              }
+              await flushQueue();
+              if (closed) return;
+
+              const latestRun = await repo.getRun(id);
+              if (latestRun && terminalStates.has(latestRun.state)) {
+                const finalEvents = await repo.getEvents(id);
+                for (const ev of finalEvents) {
+                  if (ev.seq > lastSentSeq && !pending.some((p) => p.seq === ev.seq)) {
+                    pending.push(ev);
+                  }
+                }
+                await flushQueue();
+                if (!closed) {
+                  await stream.writeSSE({
+                    event: 'stream_closed',
+                    data: JSON.stringify({ reason: 'run_terminal', state: latestRun.state }),
+                  });
+                  finishStream?.();
+                }
               }
             } catch {
-              resolve();
+              finishStream?.();
             }
+          }, 150);
+          if (typeof pollInterval.unref === 'function') pollInterval.unref();
+
+          const pingInterval = setInterval(async () => {
+            if (closed) return;
+            try {
+              await stream.writeSSE({ event: 'ping', data: JSON.stringify({ t: Date.now() }) });
+            } catch {
+              finishStream?.();
+            }
+          }, 15000);
+          if (typeof pingInterval.unref === 'function') pingInterval.unref();
+
+          stream.onAbort(() => {
+            finishStream?.();
           });
-        });
 
-        // Keep the stream alive; let the client auto-reconnect on drops.
-        await stream.writeSSE({ retry: 3000, data: '' });
+          const idleTimer = setTimeout(() => {
+            try {
+              void stream.writeSSE({ event: 'stream_closed', data: JSON.stringify({ reason: 'idle_timeout' }) });
+            } catch {
+              // stream already gone
+            }
+            finishStream?.();
+          }, SSE_IDLE_TIMEOUT_MS);
+          if (typeof idleTimer.unref === 'function') idleTimer.unref();
 
-        const pingInterval = setInterval(async () => {
-          try {
-            await stream.writeSSE({ event: 'ping', data: JSON.stringify({ t: Date.now() }) });
-          } catch {
-            clearInterval(pingInterval);
-            unsubscribeHandler?.();
-          }
-        }, 15000);
-
-        stream.onAbort(() => {
+          await donePromise;
+          clearInterval(pollInterval);
           clearInterval(pingInterval);
-          unsubscribeHandler?.();
-          finishStream?.();
-        });
-
-        const idleTimer = setTimeout(() => {
-          try {
-            void stream.writeSSE({ event: 'stream_closed', data: JSON.stringify({ reason: 'idle_timeout' }) });
-          } catch {
-            // stream already gone
-          }
-          finishStream?.();
-        }, SSE_IDLE_TIMEOUT_MS);
-
-        await Promise.race([eventPromise, livePromise]).catch(() => {});
-        clearTimeout(idleTimer);
-        clearInterval(pingInterval);
-        unsubscribeHandler?.();
+          clearTimeout(idleTimer);
+        } finally {
+          unsubscribe();
+        }
       });
     } finally {
-      sseConnections.set(streamIp, Math.max(0, (sseConnections.get(streamIp) ?? 1) - 1));
+      const remaining = Math.max(0, (sseConnections.get(streamIp) ?? 1) - 1);
+      if (remaining === 0) {
+        sseConnections.delete(streamIp);
+      } else {
+        sseConnections.set(streamIp, remaining);
+      }
     }
   });
 

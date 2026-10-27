@@ -17,7 +17,7 @@ import {
 import { IsolatedWorkspaceSandbox, SandboxUnavailableError } from '@replay/sandbox';
 import { packRepository, RepoBundle } from './packer.js';
 import { fixtureToBugReport, locateSuspects, LocatorDeps, SampleFixtureSchema } from './locator.js';
-import { executeReproductionTest, generateReproduction, ReproducerDeps } from './reproducer.js';
+import { allocateSandboxPort, executeReproductionTest, generateReproduction, ReproducerDeps } from './reproducer.js';
 import { verifyReproduction, VerifierDeps } from './verifier.js';
 import { redactSecretText, resolveApiKey, resolveModel, ModelMetrics, AgentRole } from './llm.js';
 import { analyzeBugVideo } from './watcher.js';
@@ -677,7 +677,7 @@ export async function runPipeline(
         continue;
       }
 
-      const sandboxPort = '5179';
+      const sandboxPort = allocateSandboxPort();
       let sandboxTestCode = reproducerOutput.test_code.replace(
         /https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/g,
         `http://127.0.0.1:${sandboxPort}`
@@ -709,11 +709,12 @@ export async function runPipeline(
       reproAfterFixPassed = true;
 
       // Run baseline regression suite in sandbox (MUST REMAIN GREEN)
+      const baselinePort = allocateSandboxPort();
       const baselineRes = await sandbox.exec(
         'npx',
         ['playwright', 'test', 'tests/baseline.spec.ts', '--output=.playwright-results-sandbox-baseline'],
         {
-          DEMO_SHOP_PORT: sandboxPort,
+          DEMO_SHOP_PORT: baselinePort,
           SANDBOX_TEST: '1',
           PLAYWRIGHT_TEST_MATCH: '**/tests/baseline.spec.ts',
         }

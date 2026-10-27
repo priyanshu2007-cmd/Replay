@@ -7,6 +7,9 @@ dist/
 build/
 .next/
 out/
+api-dist/
+public/monaco/
+*.bak
 
 # Environment files
 .env

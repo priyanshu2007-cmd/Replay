@@ -142,14 +142,17 @@ pnpm dev:web        # Next.js frontend on :3000
 
 | Variable | Required | Purpose | Default |
 |----------|----------|---------|---------|
-| `NEBIUS_API_KEY` | Yes | Model API key for all AI stages | - |
-| `NEBIUS_BASE_URL` | No | Model endpoint URL | `https://api.tokenfactory.nebius.com/v1/` |
-| `DATABASE_URL` | No | Database connection string | - |
-| `SUPABASE_URL` | No | Supabase storage URL | - |
-| `SUPABASE_SERVICE_ROLE_KEY` | No | Supabase admin key | - |
-| `NEXT_PUBLIC_API_URL` | No | Frontend API base URL | - |
-| `ALLOWED_ORIGINS` | No | CORS allowed origins | - |
-| `PORT` | No | API service port | 3001 |
+| `NEBIUS_API_KEY` | Yes (live mode) | Nebius Token Factory API key for all AI roles | - |
+| `NEBIUS_BASE_URL` | No | OpenAI-compatible Token Factory endpoint URL | `https://api.tokenfactory.nebius.com/v1/` |
+| `DATABASE_URL` | No | PostgreSQL connection string (runs migrations + `demo-shop` seed via `pnpm --filter @replay/db migrate`) | In-memory / `artifacts/runs.json` |
+| `SUPABASE_URL` | No | Supabase project URL for object storage | Local disk |
+| `SUPABASE_SERVICE_ROLE_KEY` | No | Supabase server-only service role key | - |
+| `NEXT_PUBLIC_API_URL` | No | Frontend API base URL (empty = offline Replay Mode) | - |
+| `ALLOWED_ORIGINS` | Yes (prod CORS) | Comma-separated allowed cross-origin origins | `http://localhost:3000` |
+| `TRUST_PROXY` | No | Set `1` behind Caddy/reverse proxy to resolve client IP from `X-Forwarded-For` / `X-Real-IP` | `0` |
+| `REPLAY_SANDBOX_MODE` | No | Sandbox backend (`docker` in production, `host` in local dev) | `auto` |
+| `REPLAY_ALLOW_HOST_SANDBOX` | No | Local dev escape hatch (`1`) when Docker is unavailable (never allowed on serverless) | `0` |
+| `PORT` | No | API service port | `3001` |
 
 **Security Note**: Never commit `.env` files. Only `NEXT_PUBLIC_*` values should be in version control.
 

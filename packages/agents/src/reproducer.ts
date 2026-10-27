@@ -221,6 +221,8 @@ export function classifyExecutionResult(exitCode: number, stdout: string, stderr
   if (
     combined.includes('ECONNREFUSED') ||
     combined.includes('ENOTFOUND') ||
+    combined.includes('EADDRINUSE') ||
+    combined.includes('is already used') ||
     combined.includes('net::ERR_CONNECTION_REFUSED') ||
     combined.includes('Process from config.webServer was not able to start')
   ) {
@@ -295,6 +297,12 @@ export interface ExecuteReproOptions {
   createSandbox?: (targetRepoRoot: string) => Promise<IsolatedWorkspace>;
 }
 
+let sandboxPortCounter = Math.floor(Math.random() * 400);
+export function allocateSandboxPort(): string {
+  sandboxPortCounter = (sandboxPortCounter + 1) % 700;
+  return String(5200 + sandboxPortCounter);
+}
+
 /**
  * Execute a reproduction test inside an isolated workspace COPY, never in the
  * real targets/demo-shop and never with host secrets. Model-written test code
@@ -316,7 +324,7 @@ export async function executeReproductionTest(
   let exitCode = 0;
 
   try {
-    const sandboxPort = '5179';
+    const sandboxPort = allocateSandboxPort();
     // Generated tests navigate to absolute localhost URLs; point them at the
     // sandbox's own preview server (playwright.config boots vite preview on
     // DEMO_SHOP_PORT).

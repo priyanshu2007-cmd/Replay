@@ -20,7 +20,7 @@ services:
 
   migrate:
     build: { context: ., dockerfile: apps/api/Dockerfile }
-    command: node packages/db/dist/migrate.js
+    command: node apps/api/api-dist/migrate.cjs
     env_file: .env
     environment:
       DATABASE_URL: postgresql://replay:${PG_PASSWORD:-replay}@postgres:5432/replay

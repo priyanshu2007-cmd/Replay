@@ -10,46 +10,66 @@ marked.
 
 - Model-generated tests and patches run in an isolated workspace, never
   against the primary tree. **Host execution is fail-closed**: enabled only
-  outside production, or with an explicit `REPLAY_ALLOW_HOST_SANDBOX=1`
-  (`packages/sandbox/src/index.ts`). Production without Docker fails the fix
-  stage with `sandbox_unavailable` instead of falling back to the host.
-- Sandbox processes receive an **explicit environment allowlist** only (PATH,
-  HOME, LANG, TMPDIR, CI). Tests prove `NEBIUS_API_KEY`,
-  `SUPABASE_SERVICE_ROLE_KEY` and `DATABASE_URL` are absent inside the sandbox
-  (`packages/sandbox/src/index.test.ts`). VERIFIED.
-- The full container sandbox (Docker, non-root, network-restricted, tmpfs,
-  pids/memory/cpu caps) is defined in `DockerSandbox` and the compose stack;
-  wiring the fix stage onto it end to end is OPEN (requires a Docker daemon
-  with the sandbox image; documented as the main remaining hardening step).
-- node_modules inside the workspace is a symlink to the real dependency tree
-  during local runs; the container path must replace this. OPEN (same item).
+  outside production, or with an explicit `REPLAY_ALLOW_HOST_SANDBOX=1` on a
+  non-serverless host (`packages/sandbox/src/index.ts`). Serverless hosts
+  (`VERCEL`, `AWS_LAMBDA_FUNCTION_NAME`, etc.) unconditionally block host
+  execution even if `REPLAY_ALLOW_HOST_SANDBOX=1` is set. Production without
+  Docker fails closed with `SandboxUnavailableError` (`SANDBOX_UNAVAILABLE`)
+  and never claims a reproduction or post-fix test ran. VERIFIED by tests.
+- Sandbox processes receive an **explicit environment allowlist** (`PATH`,
+  `HOME`, `LANG`, `TMPDIR`, `CI`) plus `sanitizeSandboxEnv()` secret stripping
+  that removes any `NEBIUS_*`, `NVIDIA_*`, `SUPABASE_*`, `DATABASE_URL`,
+  `*_KEY`, `*_TOKEN`, `*_SECRET`, or `*_PASSWORD` variables even if passed via
+  per-command overrides (`packages/sandbox/src/index.test.ts`). VERIFIED.
+- `DockerSandbox` is wired into `IsolatedWorkspaceSandbox.create()` with
+  non-root execution (`--user pwuser`), resource caps (`--cpus 2`,
+  `--memory 2g`, `--pids-limit 256`), `--network none` by default, `--cap-drop ALL`,
+  `--security-opt no-new-privileges`, validated bind mounts (rejecting `/`,
+  `/etc`, `docker.sock`, `.env`, `.ssh`, `.git`), `:ro` mount for shared
+  `node_modules`, and guaranteed `docker rm -f` container cleanup. VERIFIED by
+  mocked Docker tests and CI Docker build.
 
 ## Path safety
 
-- Every agent-supplied file path for patch application is resolved against the
-  workspace root with realpath checks; traversal, absolute paths, symlink
-  escapes, `node_modules`, `.git`, `tests/`, env files, manifests, lockfiles
-  and configs are rejected (`resolveSafeWorkspacePath`). VERIFIED by tests
-  (traversal, absolute, protected files).
+- Every agent-supplied file path (`target_file` and all `---`/`+++` headers in
+  unified diffs) is validated by `validateCandidateRelativePathSyntax`,
+  `validatePatchSafety`, and `resolveSafeWorkspacePath` (`packages/agents/src/fixer.ts`):
+  rejects empty paths, null bytes, Windows backslashes, drive-prefixed paths,
+  UNC paths, `..` traversal, symlink targets or parent directories escaping the
+  workspace, symlinks pointing to `node_modules` or protected files, and
+  multi-file diff mismatches. Revalidates canonical containment and uses
+  `O_NOFOLLOW` at the final write boundary. VERIFIED by regression tests with
+  external sentinels (`packages/agents/src/fixer.test.ts`).
 
 ## API
 
-- Per-IP rate limit: 5 run submissions per hour (429 with a clear message).
-  Client IP comes from the socket address; the client-controlled first
-  X-Forwarded-For hop is ignored. VERIFIED by test.
+- Per-IP rate limit: 5 run submissions per hour (`POST /api/runs` and
+  `POST /api/runs/:id/rerun`), enforced across instances via `RunRepository.checkRateLimit`
+  (PostgreSQL `rate_limit_hits` table under `pg_advisory_xact_lock`, or shared
+  `persistPath` in local mode) and failing closed (`503`) if the rate-limit
+  store errors.
+- Trusted-proxy IP resolution (`clientIp`): validates IPv4/IPv6 with `node:net`
+  `isIP`, normalizes `::ffff:` IPv4-mapped IPv6 and bracketed IPv6, honors
+  `X-Forwarded-For` / `X-Real-IP` only when `TRUST_PROXY=1` and the peer socket
+  is a trusted private/ULA or `TRUSTED_PROXY_IPS` address, and ignores spoofed
+  headers on direct connections. VERIFIED by unit tests.
 - Request bodies are capped by a body-limit middleware before parsing, so an
   oversized upload cannot buffer the server to death. VERIFIED by middleware.
-- Uploads are content-sniffed (WebM EBML header, MP4/MOV ftyp box) in addition
-  to the MIME allowlist; a renamed text file is rejected with 415. VERIFIED.
+- Uploads reject zero-byte files (`400`), content-sniff magic bytes (WebM EBML
+  header, MP4/MOV/MKV `ftyp` box) in addition to the MIME allowlist (`415`),
+  store under a server-generated UUID filename, and unlink any orphaned file if
+  database creation fails. VERIFIED by tests.
 - `GET /api/runs` lists only sample runs, with no reporter notes and opaque
   video keys; uploaded absolute paths never leave the server. VERIFIED by test.
-- Run ids are UUIDs and validated as such; unknown ids return 400/404.
-- SSE connections are capped at 5 per client with a 10-minute idle timeout.
+- Run ids are UUIDs and validated as such; unknown ids return 400/404 before
+  consuming SSE connection slots.
+- SSE connections (`/api/runs/:id/events`) are capped at 5 per client with a
+  10-minute idle timeout, support `Last-Event-ID` reconnects, and stream live
+  events across separate API and Worker processes in strict `seq` order.
+  VERIFIED by multi-process child-worker SSE test.
 - Error responses never include stack traces; provider messages pass through
   one redaction helper (`redactSecretText`) that masks `sk-`/`nvapi`/Bearer/JWT
   patterns before storage or display.
-- Known limitation: rate limiting and caps are in-memory per process; a
-  multi-replica deployment needs a shared store. OPEN.
 
 ## Web
 

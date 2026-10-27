@@ -9,5 +9,6 @@
 	reverse_proxy api:3001 {
 		# SSE: stream events as they arrive, never buffered.
 		flush_interval -1
+		header_up X-Real-IP {remote_host}
 	}
 }

@@ -185,42 +185,42 @@ export class Worker {
 
     let sampleId: string | undefined;
     let videoPath: string;
-
-    if (run.isSample && isKnownSampleId(run.videoKey)) {
-      sampleId = run.videoKey;
-      videoPath = path.resolve(this.repoRoot, `samples/videos/${sampleId}.webm`);
-    } else if (path.isAbsolute(run.videoKey)) {
-      // Legacy rows created before relative keys existed.
-      videoPath = run.videoKey;
-    } else {
-      // Relative key (A4): resolve against the shared data dir. Reject traversal.
-      const relative = run.videoKey.replace(/^uploads\//, 'artifacts/uploads/');
-      const resolved = path.resolve(DATA_DIR, relative);
-      if (!resolved.startsWith(path.resolve(DATA_DIR) + path.sep)) {
-        throw new Error(`Rejected unsafe video key: ${run.videoKey}`);
-      }
-      videoPath = resolved;
-    }
-
-    await this.repo.addEvent(run.id, {
-      stage: 'ingest',
-      agent: 'Worker',
-      event_type: 'pipeline_started',
-      payload: {
-        workerId: this.workerId,
-        targetRepo,
-        videoPath,
-        sampleId: sampleId ?? null,
-      },
-    });
-
     let lastEventStage: RunStage = run.stage;
 
     try {
+      if (run.isSample && isKnownSampleId(run.videoKey)) {
+        sampleId = run.videoKey;
+        videoPath = path.resolve(this.repoRoot, `samples/videos/${sampleId}.webm`);
+      } else if (path.isAbsolute(run.videoKey)) {
+        // Legacy rows created before relative keys existed.
+        videoPath = run.videoKey;
+      } else {
+        // Relative key (A4): resolve against the shared data dir. Reject traversal.
+        const relative = run.videoKey.replace(/^uploads\//, 'artifacts/uploads/');
+        const resolved = path.resolve(DATA_DIR, relative);
+        if (!resolved.startsWith(path.resolve(DATA_DIR) + path.sep)) {
+          throw new Error(`Rejected unsafe video key: ${run.videoKey}`);
+        }
+        videoPath = resolved;
+      }
+
+      await this.repo.addEvent(run.id, {
+        stage: 'ingest',
+        agent: 'Worker',
+        event_type: 'pipeline_started',
+        payload: {
+          workerId: this.workerId,
+          targetRepo,
+          videoPath,
+          sampleId: sampleId ?? null,
+        },
+      });
+
       const pipelineOptions: PipelineOptions = {
         targetRepoRoot: targetRepo,
         sampleId,
         videoPath,
+        note: run.note ?? undefined,
         maxFixAttempts: this.maxFixAttempts,
         runId: run.id,
         artifactsDir: path.resolve(DATA_DIR, `artifacts/runs/${run.id}`),
