@@ -237,42 +237,138 @@ export async function proposeFix(input: FixerInput, deps: FixerDeps = {}): Promi
 
 
 /** Paths an agent-provided patch may never touch, relative to the workspace root. */
-const PROTECTED_PATH_PARTS = ['node_modules', '.git', 'tests'];
+const PROTECTED_PATH_PARTS = ['node_modules', '.git', 'tests', '__tests__', '.ssh', '.aws', '.vercel', '.github'];
 const PROTECTED_PATH_PATTERNS: RegExp[] = [
-  /(^|\/)(package(-lock)?\.json|pnpm-lock\.yaml|yarn\.lock|package-lock\.json)$/,
-  /(^|\/)\.env/,
-  /(^|\/)playwright\.config\.[cm]?ts$/,
-  /(^|\/)vite\.config\.[cm]?ts$/,
-  /(^|\/)tsconfig(\.\w+)?\.json$/,
+  /(^|\/)(package(-lock)?\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|yarn\.lock|bun\.lockb?)$/i,
+  /(^|\/)\.env(\..+)?$/i,
+  /(^|\/)(playwright|vite|vitest|jest|next|postcss|tailwind|eslint)\.config\.[cm]?[jt]sx?$/i,
+  /(^|\/)tsconfig(\..+)?\.json$/i,
+  /\.(spec|test)\.[cm]?[jt]sx?$/i,
+  /\.(pem|key|p12|pfx|crt|cer|der)$/i,
+  /(^|\/)(id_rsa|id_ed25519|id_ecdsa|id_dsa|authorized_keys|known_hosts)$/i,
+  /(^|\/)Dockerfile(\..+)?$/i,
+  /(^|\/)docker-compose(\..+)?\.ya?ml$/i,
 ];
+
+function checkProtectedRelativePath(relFromRoot: string, rawInput: string): void {
+  const parts = relFromRoot.split(path.sep);
+  if (parts.some((p) => PROTECTED_PATH_PARTS.includes(p))) {
+    throw new Error(`Rejected protected path: ${rawInput}`);
+  }
+  const normalizedPosix = '/' + parts.join('/');
+  if (PROTECTED_PATH_PATTERNS.some((re) => re.test(normalizedPosix))) {
+    throw new Error(`Rejected protected file: ${rawInput}`);
+  }
+}
+
+function isStrictlyInsideRoot(rootReal: string, targetPath: string): boolean {
+  if (targetPath === rootReal) return false;
+  const rel = path.relative(rootReal, targetPath);
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return false;
+  return targetPath.startsWith(rootReal + path.sep);
+}
 
 /**
  * Resolve an agent-supplied file path inside the workspace and refuse anything
- * that escapes it (traversal, absolute paths, symlinks, protected files).
+ * that escapes it (traversal, absolute paths, Windows/UNC/drive paths, null bytes,
+ * symlinks escaping the workspace or pointing into node_modules/protected paths,
+ * and protected files). Also validates the nearest existing parent directory for
+ * paths that do not exist yet.
  */
 export async function resolveSafeWorkspacePath(workDir: string, relativePath: string): Promise<string> {
-  const rootReal = await fs.promises.realpath(workDir);
-  if (path.isAbsolute(relativePath)) {
-    throw new Error(`Rejected absolute path outside the workspace: ${relativePath}`);
+  if (typeof workDir !== 'string' || workDir.trim().length === 0 || workDir.includes('\0')) {
+    throw new Error('Rejected invalid workspace root');
   }
+  const syntaxError = validateCandidateRelativePathSyntax(relativePath);
+  if (syntaxError) {
+    throw new Error(syntaxError);
+  }
+
+  const rootReal = await fs.promises.realpath(workDir);
   const candidate = path.resolve(rootReal, relativePath);
-  if (candidate !== rootReal && !candidate.startsWith(rootReal + path.sep)) {
+  if (!isStrictlyInsideRoot(rootReal, candidate)) {
     throw new Error(`Rejected path outside the workspace: ${relativePath}`);
   }
+
   const relFromRoot = path.relative(rootReal, candidate);
+  checkProtectedRelativePath(relFromRoot, relativePath);
+
   const parts = relFromRoot.split(path.sep);
-  if (parts.some((p) => PROTECTED_PATH_PARTS.includes(p))) {
-    throw new Error(`Rejected protected path: ${relativePath}`);
+  let existingAncestor = rootReal;
+  let existingDepth = 0;
+
+  // Walk each segment from rootReal to candidate to detect symlinks at any level
+  for (let i = 0; i < parts.length; i++) {
+    const curr = path.join(rootReal, ...parts.slice(0, i + 1));
+    let lst: fs.Stats | null = null;
+    try {
+      lst = await fs.promises.lstat(curr);
+    } catch (err: any) {
+      if (err?.code === 'ENOENT') {
+        break;
+      }
+      throw err;
+    }
+
+    if (lst.isSymbolicLink()) {
+      const linkReal = await fs.promises.realpath(curr).catch(() => null);
+      if (!linkReal || !isStrictlyInsideRoot(rootReal, linkReal)) {
+        throw new Error(`Rejected symlink escape outside the workspace: ${relativePath}`);
+      }
+      const linkRel = path.relative(rootReal, linkReal);
+      try {
+        checkProtectedRelativePath(linkRel, relativePath);
+      } catch {
+        throw new Error(`Rejected symlink to protected path: ${relativePath}`);
+      }
+    }
+
+    if (i === parts.length - 1) {
+      const targetStat = await fs.promises.stat(curr).catch(() => null);
+      if (!targetStat || !targetStat.isFile()) {
+        throw new Error(`Rejected non-file target: ${relativePath}`);
+      }
+    } else {
+      const dirStat = await fs.promises.stat(curr).catch(() => null);
+      if (!dirStat || !dirStat.isDirectory()) {
+        throw new Error(`Rejected non-directory parent component: ${relativePath}`);
+      }
+    }
+
+    existingAncestor = curr;
+    existingDepth = i + 1;
   }
-  if (PROTECTED_PATH_PATTERNS.some((re) => re.test('/' + relFromRoot.split(path.sep).join('/')))) {
-    throw new Error(`Rejected protected file: ${relativePath}`);
+
+  // Validate canonical nearest existing ancestor directory
+  const ancestorReal = await fs.promises.realpath(existingAncestor);
+  if (ancestorReal !== rootReal && !isStrictlyInsideRoot(rootReal, ancestorReal)) {
+    throw new Error(`Rejected parent directory symlink escape outside the workspace: ${relativePath}`);
   }
-  // Symlink escape check: the real path must still live inside the workspace.
-  const real = await fs.promises.realpath(candidate).catch(() => null);
-  if (real && real !== candidate && !real.startsWith(rootReal + path.sep)) {
-    throw new Error(`Rejected symlink escape: ${relativePath}`);
+  if (ancestorReal !== rootReal) {
+    checkProtectedRelativePath(path.relative(rootReal, ancestorReal), relativePath);
   }
-  return candidate;
+
+  // If the full path exists, resolve its canonical path and re-verify containment + protection
+  if (existingDepth === parts.length) {
+    const real = await fs.promises.realpath(candidate).catch(() => null);
+    if (!real || !isStrictlyInsideRoot(rootReal, real)) {
+      throw new Error(`Rejected symlink escape outside the workspace: ${relativePath}`);
+    }
+    checkProtectedRelativePath(path.relative(rootReal, real), relativePath);
+    return real;
+  }
+
+  const remainingParts = parts.slice(existingDepth);
+  const resolvedNewPath = path.join(ancestorReal, ...remainingParts);
+  if (!isStrictlyInsideRoot(rootReal, resolvedNewPath)) {
+    throw new Error(`Rejected path outside the workspace: ${relativePath}`);
+  }
+  checkProtectedRelativePath(path.relative(rootReal, resolvedNewPath), relativePath);
+  return resolvedNewPath;
+}
+
+export interface ApplyPatchOptions {
+  allowCreate?: boolean;
 }
 
 /**
@@ -280,20 +376,57 @@ export async function resolveSafeWorkspacePath(workDir: string, relativePath: st
  */
 export async function applyPatchToDirectory(
   workDir: string,
-  output: FixerOutput
+  output: FixerOutput,
+  options: ApplyPatchOptions = {}
 ): Promise<{ applied: boolean; filePath: string; originalContent: string; newContent: string }> {
-  const fullPath = await resolveSafeWorkspacePath(workDir, output.target_file);
-
-  const stat = await fs.promises.stat(fullPath).catch(() => null);
-  if (!stat || !stat.isFile()) {
-    throw new Error(`Target file ${fullPath} not found in workspace`);
+  // 1. Validate all unified diff header paths BEFORE reading or touching any file.
+  // Rejects multi-file diffs or invalid paths appearing after a valid entry.
+  const diffPaths = extractUnifiedDiffPaths(output.patch);
+  for (const dp of diffPaths) {
+    await resolveSafeWorkspacePath(workDir, dp);
+    if (dp !== output.target_file) {
+      throw new Error(`Rejected multi-file or mismatched diff target "${dp}" (expected "${output.target_file}")`);
+    }
   }
 
-  const originalContent = await fs.promises.readFile(fullPath, 'utf8');
+  // 2. Canonicalize and validate the target path.
+  const rootReal = await fs.promises.realpath(workDir);
+  const fullPath = await resolveSafeWorkspacePath(workDir, output.target_file);
+
+  const lstat = await fs.promises.lstat(fullPath).catch((err: any) => (err?.code === 'ENOENT' ? null : Promise.reject(err)));
+  if (lstat?.isSymbolicLink()) {
+    throw new Error(`Rejected symlink target at write boundary: ${output.target_file}`);
+  }
+
+  let originalContent = '';
+  let isNewFile = false;
+
+  if (!lstat) {
+    const isDevNullDiff = typeof output.patch === 'string' && /^---\s+(\/dev\/null|a\/dev\/null)\b/m.test(output.patch);
+    if (!options.allowCreate && !isDevNullDiff) {
+      throw new Error(`Target file ${fullPath} not found in workspace`);
+    }
+    isNewFile = true;
+  } else {
+    if (!lstat.isFile()) {
+      throw new Error(`Target file ${fullPath} is not a regular file`);
+    }
+    originalContent = await fs.promises.readFile(fullPath, 'utf8');
+  }
 
   let newContent = originalContent;
 
-  if (output.original_snippet && output.replacement_snippet !== undefined) {
+  if (isNewFile) {
+    if (output.replacement_snippet) {
+      newContent = output.replacement_snippet.replace(/\r\n/g, '\n');
+    } else if (output.patch) {
+      const addLines: string[] = [];
+      for (const l of output.patch.split(/\r?\n/)) {
+        if (l.startsWith('+') && !l.startsWith('+++')) addLines.push(l.slice(1));
+      }
+      newContent = addLines.join('\n');
+    }
+  } else if (output.original_snippet && output.replacement_snippet !== undefined) {
     const normOriginal = originalContent.replace(/\r\n/g, '\n');
     const normSnippet = output.original_snippet.replace(/\r\n/g, '\n').trim();
 
@@ -348,7 +481,6 @@ export async function applyPatchToDirectory(
     }
   } else if (output.patch) {
     // Basic unified diff hunk applicator
-    // If snippet wasn't given, try extracting from patch diff
     const removeLines: string[] = [];
     const addLines: string[] = [];
     for (const l of output.patch.split('\n')) {
@@ -368,11 +500,34 @@ export async function applyPatchToDirectory(
     throw new Error(`Patch produced no content changes for ${output.target_file}`);
   }
 
-  await fs.promises.writeFile(fullPath, newContent, 'utf8');
+  // 3. Revalidate canonical path and parent directories right at the write boundary
+  if (isNewFile) {
+    const parentDir = path.dirname(fullPath);
+    await fs.promises.mkdir(parentDir, { recursive: true });
+    const parentReal = await fs.promises.realpath(parentDir);
+    if (parentReal !== rootReal && !isStrictlyInsideRoot(rootReal, parentReal)) {
+      throw new Error(`Rejected parent directory escape at write boundary: ${output.target_file}`);
+    }
+  }
+
+  const revalidatedPath = await resolveSafeWorkspacePath(workDir, output.target_file);
+  const preWriteLstat = await fs.promises.lstat(revalidatedPath).catch((err: any) => (err?.code === 'ENOENT' ? null : Promise.reject(err)));
+  if (preWriteLstat?.isSymbolicLink()) {
+    throw new Error(`Rejected symlink target at write boundary: ${output.target_file}`);
+  }
+
+  const noFollowFlag = typeof fs.constants.O_NOFOLLOW === 'number' ? fs.constants.O_NOFOLLOW : 0;
+  const openFlags = fs.constants.O_WRONLY | fs.constants.O_TRUNC | (isNewFile ? fs.constants.O_CREAT | fs.constants.O_EXCL : 0) | noFollowFlag;
+  const fh = await fs.promises.open(revalidatedPath, openFlags, 0o644);
+  try {
+    await fh.writeFile(newContent, 'utf8');
+  } finally {
+    await fh.close();
+  }
 
   return {
     applied: true,
-    filePath: fullPath,
+    filePath: revalidatedPath,
     originalContent,
     newContent,
   };

@@ -249,25 +249,153 @@ test('buildFixerMessages constructs deterministic user message with context', ()
 // --- Workspace path guard (security) ---
 import { resolveSafeWorkspacePath } from './fixer.js';
 
-test('resolveSafeWorkspacePath rejects traversal, absolute escapes and protected files', async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'replay-guard-'));
-  await fs.mkdir(path.join(root, 'src'), { recursive: true });
-  await fs.writeFile(path.join(root, 'src', 'App.tsx'), 'x');
-  await fs.writeFile(path.join(root, 'package.json'), '{}');
-  await fs.writeFile(path.join(root, '.env'), 'SECRET=1');
+test('resolveSafeWorkspacePath and applyPatchToDirectory enforce canonical path containment and sentinel safety', async () => {
+  const outerDir = await fs.mkdtemp(path.join(os.tmpdir(), 'replay-guard-outer-'));
+  const root = path.join(outerDir, 'workspace');
+  const outsideSentinel = path.join(outerDir, 'outside-sentinel.txt');
+  const nmSentinelDir = path.join(root, 'node_modules', 'some-pkg');
+  const nmSentinelFile = path.join(nmSentinelDir, 'index.js');
 
-  // Valid path resolves inside the root
-  const ok = await resolveSafeWorkspacePath(root, 'src/App.tsx');
-  assert.equal(ok, await fs.realpath(path.resolve(root, 'src/App.tsx')));
+  try {
+    await fs.mkdir(path.join(root, 'src', 'nested', 'deep'), { recursive: true });
+    await fs.mkdir(nmSentinelDir, { recursive: true });
+    await fs.writeFile(outsideSentinel, 'OUTSIDE_SENTINEL_UNTOUCHED', 'utf8');
+    await fs.writeFile(nmSentinelFile, 'NM_SENTINEL_UNTOUCHED', 'utf8');
+    await fs.writeFile(path.join(root, 'src', 'App.tsx'), 'const x = 1;\n', 'utf8');
+    await fs.writeFile(path.join(root, 'src', 'nested', 'deep', 'Util.ts'), 'export const u = 1;\n', 'utf8');
+    await fs.writeFile(path.join(root, 'package.json'), '{}', 'utf8');
+    await fs.writeFile(path.join(root, '.env'), 'SECRET=1', 'utf8');
 
-  // Traversal escapes rejected
-  await assert.rejects(resolveSafeWorkspacePath(root, '../../etc/passwd'), /outside the workspace/);
-  await assert.rejects(resolveSafeWorkspacePath(root, 'src/../../../etc/passwd'), /outside the workspace/);
-  await assert.rejects(resolveSafeWorkspacePath(root, '/etc/passwd'), /outside the workspace/);
+    // Create symlinks inside workspace:
+    // 1. Symlink file pointing outside workspace to outsideSentinel
+    await fs.symlink(outsideSentinel, path.join(root, 'src', 'escape-file.tsx'));
+    // 2. Symlink dir pointing outside workspace to outerDir
+    await fs.symlink(outerDir, path.join(root, 'src', 'escape-dir'));
+    // 3. Symlink inside src pointing to workspace node_modules
+    await fs.symlink(nmSentinelDir, path.join(root, 'src', 'nm-link'));
+    // 4. Symlink file inside src pointing directly to node_modules/some-pkg/index.js
+    await fs.symlink(nmSentinelFile, path.join(root, 'src', 'nm-file.js'));
 
-  // Protected files rejected
-  await assert.rejects(resolveSafeWorkspacePath(root, 'package.json'), /protected file/);
-  await assert.rejects(resolveSafeWorkspacePath(root, '.env'), /protected/);
-  await assert.rejects(resolveSafeWorkspacePath(root, 'node_modules/x/index.js'), /protected path/);
-  await assert.rejects(resolveSafeWorkspacePath(root, 'tests/anything.spec.ts'), /protected path/);
+    // Valid existing nested source files resolve inside the root
+    const okApp = await resolveSafeWorkspacePath(root, 'src/App.tsx');
+    assert.equal(okApp, await fs.realpath(path.resolve(root, 'src/App.tsx')));
+    const okNested = await resolveSafeWorkspacePath(root, 'src/nested/deep/Util.ts');
+    assert.equal(okNested, await fs.realpath(path.resolve(root, 'src/nested/deep/Util.ts')));
+
+    // Valid new source file path inside existing nested dir or new subdir
+    const okNew = await resolveSafeWorkspacePath(root, 'src/nested/NewHelper.ts');
+    assert.ok(okNew.endsWith(path.join('src', 'nested', 'NewHelper.ts')));
+
+    // Attack vectors that MUST be rejected by resolveSafeWorkspacePath & applyPatchToDirectory:
+    const attackPaths = [
+      '',
+      '   ',
+      '../../etc/passwd',
+      '../../../tmp/attacker-file',
+      'src/../../../etc/passwd',
+      '/etc/passwd',
+      '..\\..\\etc\\passwd',
+      'src\\..\\..\\etc\\passwd',
+      'C:\\Windows\\system.ini',
+      'D:/secret/config.ts',
+      '\\\\server\\share\\evil.ts',
+      '//server/share/evil.ts',
+      'src/App.tsx\0.jpg',
+      'src/escape-file.tsx',
+      'src/escape-dir/outside-sentinel.txt',
+      'src/escape-dir/new-escaped-file.ts',
+      'src/nm-link/index.js',
+      'src/nm-file.js',
+      'node_modules/some-pkg/index.js',
+      'package.json',
+      '.env',
+      '.env.local',
+      'src/id_rsa',
+      'src/cert.pem',
+      'tests/anything.spec.ts',
+      'src/App.spec.tsx',
+    ];
+
+    for (const attackPath of attackPaths) {
+      await assert.rejects(
+        resolveSafeWorkspacePath(root, attackPath),
+        (err: any) => err instanceof Error && /Rejected/.test(err.message),
+        `Expected resolveSafeWorkspacePath to reject "${attackPath}"`
+      );
+
+      await assert.rejects(
+        applyPatchToDirectory(root, {
+          fixed: true,
+          target_file: attackPath || 'src/App.tsx',
+          original_snippet: attackPath ? 'OUTSIDE_SENTINEL_UNTOUCHED' : '',
+          replacement_snippet: 'COMPROMISED',
+          patch: attackPath ? '' : '--- a/../../etc/passwd\n+++ b/../../etc/passwd\n@@ -1 +1 @@\n-root\n+hacked',
+          explanation: 'test attack rejection',
+          attempts: 1,
+        }),
+        (err: any) => err instanceof Error,
+        `Expected applyPatchToDirectory to reject "${attackPath}"`
+      );
+    }
+
+    // Multi-file patch and invalid filename appearing AFTER a valid patch entry
+    const multiFileAttack = FixerOutputSchema.parse({
+      fixed: true,
+      target_file: 'src/App.tsx',
+      original_snippet: 'const x = 1;',
+      replacement_snippet: 'const x = 2;',
+      patch: [
+        '--- a/src/App.tsx',
+        '+++ b/src/App.tsx',
+        '@@ -1 +1 @@',
+        '-const x = 1;',
+        '+const x = 2;',
+        '--- a/../../outside-sentinel.txt',
+        '+++ b/../../outside-sentinel.txt',
+        '@@ -1 +1 @@',
+        '-OUTSIDE_SENTINEL_UNTOUCHED',
+        '+PWNED',
+      ].join('\n'),
+      explanation: 'Smuggled second file after valid entry',
+      attempts: 1,
+    });
+
+    const safetyCheck = validatePatchSafety(multiFileAttack, MOCK_BUNDLE);
+    assert.equal(safetyCheck.valid, false);
+    assert.ok(safetyCheck.errors.some((e) => e.includes('outside-sentinel.txt')));
+
+    await assert.rejects(
+      applyPatchToDirectory(root, multiFileAttack),
+      /Rejected/
+    );
+
+    // Verify src/App.tsx was NOT modified when multi-file patch was rejected
+    assert.equal(await fs.readFile(path.join(root, 'src', 'App.tsx'), 'utf8'), 'const x = 1;\n');
+
+    // Verify sentinels outside workspace and in node_modules remain 100% untouched
+    assert.equal(await fs.readFile(outsideSentinel, 'utf8'), 'OUTSIDE_SENTINEL_UNTOUCHED');
+    assert.equal(await fs.readFile(nmSentinelFile, 'utf8'), 'NM_SENTINEL_UNTOUCHED');
+
+    // Verify creation of a new source file inside the workspace works when authorized
+    const createRes = await applyPatchToDirectory(
+      root,
+      FixerOutputSchema.parse({
+        fixed: true,
+        target_file: 'src/nested/CreatedComponent.tsx',
+        original_snippet: '',
+        replacement_snippet: 'export const Created = () => null;\n',
+        patch: '--- /dev/null\n+++ b/src/nested/CreatedComponent.tsx\n@@ -0,0 +1 @@\n+export const Created = () => null;\n',
+        explanation: 'Create new helper component inside workspace',
+        attempts: 1,
+      }),
+      { allowCreate: true }
+    );
+    assert.equal(createRes.applied, true);
+    assert.equal(
+      await fs.readFile(path.join(root, 'src', 'nested', 'CreatedComponent.tsx'), 'utf8'),
+      'export const Created = () => null;\n'
+    );
+  } finally {
+    await fs.rm(outerDir, { recursive: true, force: true });
+  }
 });
