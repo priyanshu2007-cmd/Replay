@@ -71,7 +71,7 @@ export function VideoPanel({
       aria-label="Bug recording"
       tabIndex={0}
       onKeyDown={onKeyDown}
-      className="flex flex-col gap-2 rounded-m border border-border-subtle bg-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      className="flex flex-col gap-2 rounded-m border border-border-subtle bg-panel p-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
     >
       {src ? (
         <video
@@ -98,7 +98,7 @@ export function VideoPanel({
                 setActiveStep(i);
                 seek(m.t);
               }}
-              className={`h-7 min-w-[44px] rounded-s border px-2 font-mono text-[12px] transition-colors duration-150 ease-out ${
+              className={`h-7 min-w-11 rounded-s border px-2 font-mono text-[12px] transition-colors duration-150 ease-out ${
                 m.kind === 'failure'
                   ? 'border-fail-fill text-fail-text'
                   : 'border-border-subtle text-secondary hover:border-border-strong hover:text-primary'

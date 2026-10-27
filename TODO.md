@@ -5,6 +5,7 @@ This document tracks progress across all phases defined in `docs/HACKATHON_BUILD
 ---
 
 ## Phase 0: Repository Audit
+
 Track repository inspection, architecture mapping, baseline tests, environment checks and identified blockers.
 
 - [x] **Step 0.1 Architecture mapping & doc reconciliation**: `DONE`
@@ -18,6 +19,7 @@ Track repository inspection, architecture mapping, baseline tests, environment c
 ---
 
 ## Phase A: Foundation (Steps 1–4)
+
 Track account and credit setup, model smoke tests, monorepo setup, database schema and storage.
 
 - [x] **Step 1 Accounts and credits**: `DONE`
@@ -35,6 +37,7 @@ Track account and credit setup, model smoke tests, monorepo setup, database sche
 ---
 
 ## Phase B: Demo Shop and Test Fixtures (Steps 5–8)
+
 Track the Demo Shop, baseline tests, all five planted bugs, expected fixtures and genuine sample recordings.
 
 - [x] **Step 5 Demo Shop app**: `DONE`
@@ -50,6 +53,7 @@ Track the Demo Shop, baseline tests, all five planted bugs, expected fixtures an
 ---
 
 ## Phase C: Video and Localization (Steps 9–13)
+
 Track frame extraction, LLM client and schemas, Watcher, Repository Packer and Locator, including live versus offline verification.
 
 - [ ] **Step 9 Frame extractor**: `BLOCKED`
@@ -70,6 +74,7 @@ Track frame extraction, LLM client and schemas, Watcher, Repository Packer and L
 ---
 
 ## Phase D: Reproduction and Fixing (Steps 14–20)
+
 Track sandbox lifecycle, agent tools, orchestration and events, Reproducer, Verifier, Fixer, pipeline, CLI and Reporter.
 
 - [x] **Step 14 Sandbox runner**: `DONE`
@@ -92,6 +97,7 @@ Track sandbox lifecycle, agent tools, orchestration and events, Reproducer, Veri
 ---
 
 ## Phase E: Worker and API (Steps 21–23)
+
 Track worker processing, API endpoints, SSE events, uploads, sample selection, persistence and integration tests.
 
 - [x] **Step 21 Worker**: `DONE`
@@ -112,6 +118,7 @@ Track worker processing, API endpoints, SSE events, uploads, sample selection, p
 ---
 
 ## Phase F: Frontend (Steps 24–30)
+
 Track the design system, homepage, run workspace, video panel and timeline, code and test panels, replay interaction, benchmark view and how-it-works page.
 
 - [x] **Step 24 Design system**: `DONE`
@@ -143,6 +150,7 @@ Track the design system, homepage, run workspace, video panel and timeline, code
 ---
 
 ## Phase G: Delivery (Steps 31–36)
+
 Track deployment readiness, benchmark execution, hallway testing, README, demo video and submission preparation.
 
 - [/] **Step 31 Deploy**: `PARTIAL` (prepared, not deployed)
@@ -165,6 +173,7 @@ Track deployment readiness, benchmark execution, hallway testing, README, demo v
   - Devpost form, public repo, submission links. Requires Steps 31 (deploy), 35 (video) and the public repo push first.
 
 ### Oct 26 fix-list pass (19 findings from FIX_PROMPTS.md)
+
 - [x] Provider migrated to Nebius Token Factory (llm.ts defaults, env names, model IDs, copy, smoke:models script). Live verification pending `NEBIUS_API_KEY` in `.env` (not set by the agent).
 - [x] Model/pipeline errors visible end to end: LlmError classification, `<stage>_model_error` events, fix-attempt `output_tail`, worker failed-stage fix, run-page error panel with cause copy + Retry (new `/api/runs/:id/rerun` route), timeline auto-expands failures, amber fallback labels.
 - [x] Live updates fixed: SSE closes only on pipeline completion (was: report_started), client derives current stage from events, refetches via refs, replay-mode crash fixed (stored events play at recorded speed), polling fallback after 20s.
@@ -176,6 +185,7 @@ Track deployment readiness, benchmark execution, hallway testing, README, demo v
 - Verification: typecheck 9/9; agents 68/68, api 23/23, video 10/10, sandbox 2/2, demo-shop 11/11, web e2e 10/10 (after fixing the CSP hydration break and the listing-schema mismatch the new tests caught).
 
 ### Oct 26 live browser walkthrough (every feature, in the desktop browser)
+
 - [x] Home: hero, 5 real sample cards with genuine recording thumbnails, upload zone, note field, model-key notice, dark/light themes (both verified visually), nav, mascot (tip, playful, minimise persisted), video hover preview.
 - [x] Live run: sample click creates a run, SSE streams stages, watch labeled amber "fallback" (no key), status pill with FALLBACK marker, stage words in header, video panel, timeline rows with per-stage badges, evidence card, keyboard shortcuts.
 - [x] Honest failure path verified live: with no NEBIUS_API_KEY the run fails visibly at Locate with a red error panel showing the exact missing-key message, auto-expanded, and a working Retry button (new rerun route).
@@ -185,6 +195,7 @@ Track deployment readiness, benchmark execution, hallway testing, README, demo v
 - Verification: typecheck 9/9; all package suites green; web production build + e2e 10/10.
 
 ### Oct 27 API fix-list pass (22 findings from API_FIX_PROMPTS.md, review of 13f5c87)
+
 - [x] A1: Dockerfile rebuilt on the Playwright base image (version-pinned to demo-shop's @playwright/test), correct `--filter "@replay/api..."` build, ffmpeg via apt, writable /app/artifacts for pwuser; compose: worker starts (no REPLAY_STANDALONE_DISABLED), inline worker off, shared artifacts volume, migrate service, 3001 no longer published (Caddy only). .dockerignore added. Docker build itself UNVERIFIED (no daemon locally).
 - [x] A2: packages/db migrate.ts (drizzle migrator + demo-shop target seed), `migrate` compose service gated by postgres health; getRunRepository no longer silently falls back when DATABASE_URL is set.
 - [x] A5: clientIp() trusts X-Forwarded-For only from private (proxy) peers when TRUST_PROXY=1; spoofing from untrusted peers is ignored.
@@ -205,6 +216,7 @@ Track deployment readiness, benchmark execution, hallway testing, README, demo v
 - Verification: typecheck 9/9; agents 68/68, api 23/23, video 10/10, sandbox 2/2, demo-shop 11/11, web build + e2e 10/10.
 
 ### Oct 27 final QA pass (release readiness verification)
+
 - [x] Security re-scan: gitleaks full history clean; pnpm audit = only the documented zod exception; working tree clean, no secrets staged (key-mapping edits in .env are gitignored).
 - [x] Live evaluations re-run with the working provider mapping: eval:locator 5/5 (schema, path, line-range, top-1 file and grounded symbol all correct), eval:reproducer PASS (genuine assertion failure, gate passed), eval:pipeline SUCCESS (reproduced, verified, fixed in isolated sandbox, regression-tested).
 - [x] CI on ac0e1aa: 7/7 checks green (typecheck/lint/unit, api smoke, docker build, web e2e, CodeQL, gitleaks, audit).
@@ -213,11 +225,13 @@ Track deployment readiness, benchmark execution, hallway testing, README, demo v
 - Note: the earlier 5-sample benchmark table (README) is from the Oct 25 live run; today's re-verification confirms the pipeline still completes end to end on the current code.
 
 ### Oct 27 project status audit (docs/PROJECT_STATUS_AUDIT.md)
+
 - Full evidence-based audit written: architecture, phase-by-phase status, feature inventory, 12-item issue register (REP-001..012), prioritized action plan, readiness assessment.
 - Key confirmed findings reconciled here: REP-001 Git-integration Vercel build fails (web buildCommand builds @replay/api without workspace deps; CLI deploys still work, production healthy) — Critical, fix is one line, deliberately NOT applied during the audit; REP-002..012 recorded in the report register (provider keys, deployment protection, DockerSandbox wiring, Supabase verification, LISTEN/NOTIFY, hygiene).
 - Statuses below and in the audit report agree as of commit f5c84d7.
 
 ### Oct 27 follow-up: REP-001 fixed and verified (commit 10f16b7)
+
 - [x] Audit deliverables committed and pushed (`3630859`: TODO reconciliation + docs/PROJECT_STATUS_AUDIT.md).
 - [x] REP-001 fix applied: vercel.json web buildCommand → `pnpm --filter "@replay/api..." build && pnpm run build` (builds workspace deps of @replay/api before the Next build).
 - [x] Verified on Vercel: Git-integration production deploy of `10f16b7` is **Ready** (dpl_7wf1tMe3WgG6UfMiUzw8hmmVU3rS); production alias resolves (still 302 = Deployment Protection, REP-003, user action).
@@ -225,6 +239,7 @@ Track deployment readiness, benchmark execution, hallway testing, README, demo v
 - Docs refreshed to match: README Deploy section (single `web` service, API mounted in Next), README known-limitations deployment bullet, audit report REP-001 entry/plan/readiness marked fixed.
 
 ### Submission readiness checklist (evidence-based)
+
 - [x] Working product: web UI + API + worker + CLI pipeline, real red-to-green verified
 - [x] Benchmark results with methodology and honest failures
 - [x] README runnable by a stranger (verified commands)
@@ -236,6 +251,7 @@ Track deployment readiness, benchmark execution, hallway testing, README, demo v
 ---
 
 ## Critical Build Repair, Full Browser QA & Release Verification Pass (Oct 27)
+
 - [x] **Workspace build & Vercel package resolution**: `DONE`
   - Fixed Vercel monorepo build failure where `@replay/api` couldn't resolve `@replay/shared`, `@replay/db`, and `@replay/agents`.
   - Clean checkout build verified: `pnpm --filter "@replay/api..." build && pnpm run build` succeeds from `apps/web`.
@@ -275,6 +291,7 @@ Track deployment readiness, benchmark execution, hallway testing, README, demo v
 ---
 
 ## Critical Security & Pipeline Repair Sprint (Oct 27)
+
 Canonical tracker for the 13 audit findings across security, sandbox isolation, rate limiting, Watcher, Docker, DB migrations, cross-process SSE, and error handling:
 
 - [x] **1. Patch Path Traversal (`packages/agents/src/fixer.ts`)**: `DONE`
@@ -327,6 +344,7 @@ Canonical tracker for the 13 audit findings across security, sandbox isolation, 
 ---
 
 ## Reel Mascot & AI Agent Experience Upgrade (Oct 27–28)
+
 - [x] **1. Reel Companion State Machine & Interactive Help Dialog (`apps/web/components/mascot/mascot.config.ts`, `apps/web/components/mascot/Mascot.tsx`, `apps/web/app/runs/[id]/page.tsx`)**: `DONE`
   - Added `STAGE_ORDER`, `STAGE_EXPLANATIONS`, `NEXT_STEP_COPY`, `STAGE_EVIDENCE_TAB`, and `AgentActivityItem` in `mascot.config.ts`.
   - Enforced stage-order progression and duplicate stage suppression (`STAGE_ORDER`), terminal state lock (`terminalLockedRef` per `runId`), and false-fix celebration protection (`reproAfterFixPassed === false` or `baselineRegressionPassed === false` plays `'confused'`, never `'celebrate'`).
@@ -348,12 +366,12 @@ Canonical tracker for the 13 audit findings across security, sandbox isolation, 
 
 ---
 
-# TODO: Skill Additions Log
+## TODO: Skill Additions Log
 
 **Policy:** every time skills are added, removed or updated from any skills folder / repo, add one row below. This file is the record the agent updates first.
 
 | Date | Action | Source | Skills | Agents updated |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | 2026-10-25 | install | `~/.agents/skills` store (11 tracked repos) | 93 fanned out | claude, codex, commandcode, antigravity(+cli), omnirush |
 | 2026-10-25 | create | `/all` umbrella skill (activates whole library, one command) | +1 | all 6 agent dirs + this project |
 | 2026-10-25 | install | `ai-agent-toolkit/repositories/skills/*` (25 repos, incl. multica-ai/andrej-karpathy-skills) | +82 | all 6 agent dirs |
@@ -365,14 +383,17 @@ Canonical tracker for the 13 audit findings across security, sandbox isolation, 
 | 2026-10-25 | install | Apple design skills for Phase F: emilkowalski/skills `apple-design` via npx skills -g; dickwu/apple-design-skill cloned manually (both repos ship a skill named `apple-design`) | `apple-design` = emilkowalski (fluid motion and interaction principles); `apple-design-hig` = dickwu (HIG reviewer, a11y blocking). Separate folders, both fanned out | all 8 fan-out targets |
 
 ## Store totals
+
 - Master store: `~/.agents/skills`: 470 entries, symlinked into every agent. Add new skills HERE first, then fan out.
 - Agent dirs: `~/.claude/skills`, `~/.codex/skills`, `~/.commandcode/skills`, `~/.gemini/antigravity/skills`, `~/.gemini/antigravity-cli/skills`, `~/.omnirush/agent/skills`, `~/.zcode/skills`
 - Project dir: `.agents/skills/` (this project)
 
 ## Fan-out command (reuse verbatim)
+
 ```bash
 for T in ~/.claude/skills ~/.codex/skills ~/.commandcode/skills ~/.gemini/antigravity/skills ~/.gemini/antigravity-cli/skills ~/.omnirush/agent/skills ~/.zcode/skills ~/Documents/Replay/.agents/skills; do mkdir -p "$T"; for d in ~/.agents/skills/*/; do n=$(basename "$d"); [ -e "$T/$n" ] || ln -s "$d" "$T/$n"; done; done
 ```
 
 ## Pending
+
 - (none)
