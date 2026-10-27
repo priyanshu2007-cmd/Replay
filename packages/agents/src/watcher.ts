@@ -92,7 +92,12 @@ export async function analyzeBugVideo(input: WatcherInput, deps: WatcherDeps = {
       { role: 'system', content: loadWatcherPrompt() },
       { role: 'user', content },
     ],
-    BugReportSchema
+    BugReportSchema,
+    {
+      role: 'watcher',
+      temperature: 0.1,
+      enableThinking: false,
+    }
   );
 
   return { report: res.data, metrics: res.metrics, promptVersion: WATCHER_PROMPT_VERSION, model };
