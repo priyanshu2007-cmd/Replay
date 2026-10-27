@@ -3,6 +3,7 @@ import postgres from 'postgres';
 import * as schema from './schema.js';
 
 export * from './schema.js';
+export { DEMO_SHOP_TARGET_SEED, runMigrationsAndSeed } from './migrate.js';
 
 export function createDb(connectionString?: string) {
   const connStr = connectionString || process.env.DATABASE_URL;

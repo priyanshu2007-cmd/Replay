@@ -10,7 +10,7 @@ import {
   ReproducerOutputSchema,
 } from '@replay/shared';
 import { LlmClient, ModelMetrics, moduleDirOf, resolveApiKey, resolveModel } from './llm.js';
-import { IsolatedWorkspaceSandbox, SandboxUnavailableError } from '@replay/sandbox';
+import { IsolatedWorkspace, IsolatedWorkspaceSandbox, SandboxUnavailableError } from '@replay/sandbox';
 import { DEFAULT_REPRODUCER_PROMPT } from './prompts.js';
 
 export const REPRODUCER_PROMPT_VERSION = 'v1';
@@ -292,6 +292,7 @@ export interface ExecuteReproOptions {
   testTimeoutMs?: number;
   testFileName?: string;
   keepReproFile?: boolean;
+  createSandbox?: (targetRepoRoot: string) => Promise<IsolatedWorkspace>;
 }
 
 /**
@@ -307,8 +308,9 @@ export async function executeReproductionTest(
 ): Promise<ReproExecutionResult> {
   const { demoShopRoot } = options;
   const startTime = Date.now();
+  const createSandbox = options.createSandbox ?? ((root: string) => IsolatedWorkspaceSandbox.create(root));
 
-  const sandbox = await IsolatedWorkspaceSandbox.create(demoShopRoot);
+  const sandbox = await createSandbox(demoShopRoot);
   let stdout = '';
   let stderr = '';
   let exitCode = 0;

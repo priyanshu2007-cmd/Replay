@@ -73,3 +73,11 @@ export const artifacts = pgTable('artifacts', {
   index('artifacts_run_id_idx').on(table.runId),
   index('artifacts_kind_idx').on(table.kind),
 ]);
+
+export const rateLimitHits = pgTable('rate_limit_hits', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  bucketKey: text('bucket_key').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('rate_limit_hits_bucket_created_idx').on(table.bucketKey, table.createdAt),
+]);

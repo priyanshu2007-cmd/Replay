@@ -8,6 +8,13 @@
       "when": 1792930163389,
       "tag": "0000_free_molten_man",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793141300000,
+      "tag": "0001_rate_limit_hits",
+      "breakpoints": true
     }
   ]
 }

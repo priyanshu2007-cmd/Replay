@@ -17,6 +17,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "test": "node --import tsx --test src/migrate.test.ts",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
