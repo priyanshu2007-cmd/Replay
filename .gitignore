@@ -10,6 +10,8 @@ out/
 api-dist/
 public/monaco/
 *.bak*
+.*bak*
+*root_bak*
 
 # Environment files
 .env
