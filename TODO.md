@@ -388,7 +388,20 @@ Canonical tracker for the 13 audit findings across security, sandbox isolation, 
 - [x] **5. Reel Interactive Website Assistant (`apps/web/components/mascot/mascot.config.ts`, `apps/web/components/mascot/Mascot.tsx`)**: `DONE`
   - Enabled Reel across `/`, `/runs/[id]`, `/benchmark`, and `/how`.
   - Added accessible `Ask Reel a question` conversation input answering natural user questions (`"Why can't I run this sample?"`, `"Why does it say recording not available?"`, `"Explain this failure."`, `"What is the Fixer doing?"`, `"Did the fix pass the tests?"`, `"How do I upload my own video?"`, `"Why is this run still queued?"`, plus all 5 sample bugs and 6 agents) and real guiding action buttons (`Open sample section`, `Select sample`, `Open upload guidance`, `Retry API readiness`, `Open relevant evidence`, `Retry failed run`).
-- [ ] **6. Production Regression Tests, Full Local Verification & Live Browser QA on `https://replay-blond-psi.vercel.app/`**: `PENDING`
+- [x] **6. Production Regression Tests, Full Local Verification & Live Browser QA on `https://replay-blond-psi.vercel.app/`**: `DONE`
+  - Clean checkout build test (`rm -rf packages/*/dist apps/api/dist apps/web/.next && (cd apps/web && pnpm --filter @replay/api build && pnpm run build)`): **PASSED** (all 7 routes built).
+  - Monorepo gate: `pnpm --filter "@replay/api..." build && pnpm -r typecheck && pnpm -r lint`: **PASSED** across all 10 projects.
+  - Test suites: `@replay/api` **33/33 PASS**, `@replay/agents` **75/75 PASS**, `@replay/video` **10/10 PASS**, `@replay/sandbox` **7/7 PASS**, `@replay/demo-shop` **11/11 PASS**, `@replay/web` **18/18 PASS**.
+  - Secret scan: `gitleaks git --verbose` **PASSED** (48 commits scanned, 0 leaks found).
+  - Deployed commit `32952bd` to `origin/main`; Vercel deployed commit `32952bd` to `https://replay-blond-psi.vercel.app/`.
+  - Live production Playwright audit (`apps/web/playwright.prod.config.ts` via `tests/prod-audit.spec.ts`): **7/7 PASS** in 8.8s:
+    1. Homepage loads, displays truthful readiness banner and serverless replay mode (`1.3s`).
+    2. All 5 sample cards show "verified replay" badge, `recordingAvailable: true`, no "Recording not available", and valid WebM preview with `videoWidth > 0`, `videoHeight > 0`, `duration > 0` (`1.4s`).
+    3. Upload dropzone clearly indicates why "Run on this video" is disabled before file selection (`447ms`).
+    4. "Run sample" navigates to `/runs/d0000001-...` and displays complete pipeline evidence across `Suspects`, `Test`, `Diff`, `Terminal`, `Copy patch`, `Copy as GitHub issue`, and `Download test` (`2.5s`).
+    5. Reel assistant opens, provides natural Q&A, and executes guiding actions (`803ms`).
+    6. `/benchmark` and `/how` routes load cleanly (`546ms`).
+    7. Responsive layouts at 1440, 1280, 768, 390, and 320 px without horizontal scroll overflow (`1.0s`).
 
 ---
 
