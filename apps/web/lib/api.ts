@@ -150,6 +150,18 @@ export const HealthSchema = z.object({
     .optional(),
 });
 
+export const ReadySchema = z.object({
+  status: z.string(),
+  executionMode: z
+    .enum(['live', 'recorded_sample_replay', 'fixture_assisted', 'read_only'])
+    .optional(),
+  canExecuteLiveRun: z.boolean().optional(),
+  canReplayRecordedSamples: z.boolean().optional(),
+  blockers: z.array(z.string()).optional().default([]),
+  checks: z.record(z.string()).optional().default({}),
+});
+export type ReadyPayload = z.infer<typeof ReadySchema>;
+
 export const CreateRunResponseSchema = z.object({
   id: z.string(),
   state: RunStateSchema,
@@ -207,6 +219,33 @@ export async function checkHealth(): Promise<HealthStatus> {
     return { ok: true, modelsKeyConfigured: parsed.models?.keyConfigured };
   } catch {
     return { ok: false };
+  }
+}
+
+export interface ReadyStatus extends ReadyPayload {
+  ok: boolean;
+}
+
+export async function checkReady(): Promise<ReadyStatus> {
+  try {
+    const res = await fetch(`${API_BASE}/api/ready`, { cache: 'no-store', signal: AbortSignal.timeout(3000) });
+    if (!res.ok) {
+      return {
+        ok: false,
+        status: 'offline',
+        blockers: ['The API readiness endpoint returned an error.'],
+        checks: {},
+      };
+    }
+    const parsed = ReadySchema.parse(await res.json());
+    return { ok: true, ...parsed };
+  } catch {
+    return {
+      ok: false,
+      status: 'offline',
+      blockers: ['The API readiness endpoint could not be reached.'],
+      checks: {},
+    };
   }
 }
 

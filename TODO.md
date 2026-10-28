@@ -366,6 +366,32 @@ Canonical tracker for the 13 audit findings across security, sandbox isolation, 
 
 ---
 
+## Replay Production Rescue — Vercel, Video Assets, Sample Runs, Reel Assistant & E2E QA (Oct 28)
+
+- [x] **1. Production Root-Cause Diagnosis (`https://replay-blond-psi.vercel.app/`)**: `DONE`
+  - Live `/samples/<id>.webm` returns `HTTP/2 200 video/webm` on Vercel CDN for all 5 samples (`cart-nan`, `double-discount`, `string-sort`, `empty-email`, `quantity-reset`).
+  - Root cause #1 (`Recording not available` + disabled `Run sample`): `apps/api/src/server.ts` `/api/samples` checked only `fs.existsSync(path.resolve(repoRoot, 'samples/videos/${id}.webm'))`, which is absent inside the Vercel serverless bundle (`/var/task/apps/web`), returning `recordingAvailable: false` and disabling all 5 `SampleCard` buttons.
+  - Root cause #2 (`observedBehavior` missing on Vercel): `SAMPLE_TITLES` in `apps/api/src/server.ts` used camelCase `observedBehavior` while `/api/samples` read `meta.observed_behavior`.
+  - Root cause #3 (Vercel dashboard Build Command override): `pnpm --filter @replay/api build && pnpm run build` (without `...`) ran `@replay/api` `tsc` before workspace dependencies (`@replay/shared`, `@replay/db`, `@replay/agents`) emitted `dist/*.d.ts`.
+  - Root cause #4 (`POST /api/runs` stuck in `queued` on Vercel): Vercel serverless does not run a background worker (`!process.env.VERCEL`), has no Docker/Playwright sandbox, and has no `DATABASE_URL` or `NEBIUS_API_KEY`, so `POST /api/runs` created a run in ephemeral memory that stayed `queued` forever (or 404'd across serverless instances).
+- [x] **2. Workspace Build Graph & Static Asset Verification (`apps/api/package.json`, `apps/web/scripts/copy-monaco.mjs`)**: `DONE`
+  - Added smart `prebuild` script in `apps/api/package.json` so both `pnpm --filter "@replay/api..." build` and `pnpm --filter @replay/api build` build upstream workspace packages (`@replay/shared`, `@replay/db`, `@replay/agents`, etc.) on a clean checkout.
+  - Updated `apps/web/scripts/copy-monaco.mjs` to ensure `@replay/api` `dist/server.js` is built and all 5 `public/samples/<id>.webm` recordings exist (> 10 KB) before Next.js builds.
+- [x] **3. Sample Metadata, Recording Resolution & Verified Serverless Sample Replay (`apps/api/src/server.ts`, `apps/api/src/runs.ts`, `apps/api/src/recorded-samples.ts`)**: `DONE`
+  - Created `apps/api/src/recorded-samples.ts` with canonical metadata and verified `FIXED` Demo Shop run bundles (`d0000001-...` to `d0000005-...`) for all 5 samples (`cart-nan`, `double-discount`, `string-sort`, `empty-email`, `quantity-reset`).
+  - Fixed `/api/samples` to resolve `recordingAvailable: true` across local and Vercel serverless runtimes and include `expectedBehavior`, `observedBehavior`, `guiltyFile`, and `guiltySymbol`.
+  - Upgraded `/api/ready` with structured, secret-safe checks (`api`, `sampleAssets`, `database`, `storage`, `worker`, `modelKey`, `sandbox`, `ffmpeg`, `executionMode`, `canExecuteLiveRun`, `canReplayRecordedSamples`, `blockers`).
+  - Added `GET /api/runs/:id/video` with HTTP `200`/`206` Range support and safe upload path validation.
+  - Seeded `MemoryRunRepository` on Vercel serverless and materialized verified sample replays on `POST /api/runs` when no background worker/DB is configured so sample runs never stall in `queued`.
+- [x] **4. Homepage Readiness Banner, Sample Video Player & Upload Controls (`apps/web/lib/api.ts`, `apps/web/app/page.tsx`, `apps/web/components/sample-card.tsx`, `apps/web/components/upload-dropzone.tsx`, `apps/web/app/runs/[id]/page.tsx`, `apps/web/components/video-panel.tsx`)**: `DONE`
+  - Unified `refreshReadiness()` in `HomePage` (`API_BASE === ''` and `API_BASE !== ''`), added `Recheck readiness` / `Retry API readiness` controls, kept static sample videos playable with `Preview`/`Pause` toggle, and added explicit helper text on `UploadDropzone` before a file is chosen.
+- [x] **5. Reel Interactive Website Assistant (`apps/web/components/mascot/mascot.config.ts`, `apps/web/components/mascot/Mascot.tsx`)**: `DONE`
+  - Enabled Reel across `/`, `/runs/[id]`, `/benchmark`, and `/how`.
+  - Added accessible `Ask Reel a question` conversation input answering natural user questions (`"Why can't I run this sample?"`, `"Why does it say recording not available?"`, `"Explain this failure."`, `"What is the Fixer doing?"`, `"Did the fix pass the tests?"`, `"How do I upload my own video?"`, `"Why is this run still queued?"`, plus all 5 sample bugs and 6 agents) and real guiding action buttons (`Open sample section`, `Select sample`, `Open upload guidance`, `Retry API readiness`, `Open relevant evidence`, `Retry failed run`).
+- [ ] **6. Production Regression Tests, Full Local Verification & Live Browser QA on `https://replay-blond-psi.vercel.app/`**: `PENDING`
+
+---
+
 ## TODO: Skill Additions Log
 
 **Policy:** every time skills are added, removed or updated from any skills folder / repo, add one row below. This file is the record the agent updates first.
@@ -381,6 +407,7 @@ Canonical tracker for the 13 audit findings across security, sandbox isolation, 
 | 2026-10-25 | n/a | leonxlnx/taste-skill: `stitch-design-taste` requested but not in that repo (only ships design-taste-frontend) | existing Oct 20 store copy retained | no change |
 | 2026-10-25 | install | `@google/stitch` CLI v0.12.0 (npm -g): `stitch agent-skills add` (project) + `--user` + `stitch mcp install` | stitch design skill set (18 files) written to project `.agents/skills/stitch` + `~/.agents/skills/stitch`; MCP server registered in gemini-cli, antigravity, claude-desktop, claude-code, cursor + manually in ZCode `~/.zcode/cli/config.json` | all 8 fan-out targets |
 | 2026-10-25 | install | Apple design skills for Phase F: emilkowalski/skills `apple-design` via npx skills -g; dickwu/apple-design-skill cloned manually (both repos ship a skill named `apple-design`) | `apple-design` = emilkowalski (fluid motion and interaction principles); `apple-design-hig` = dickwu (HIG reviewer, a11y blocking). Separate folders, both fanned out | all 8 fan-out targets |
+| 2026-10-28 | install | `npx skills add https://github.com/latent-spaces/brag --skill brag -g` | `brag` (+1, installed to `~/.agents/skills/brag` and fanned out via symlinks; standby until `/brag` is invoked) | all 8 fan-out targets |
 
 ## Store totals
 

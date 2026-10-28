@@ -1,4 +1,5 @@
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { isIP } from 'node:net';
 import { randomUUID } from 'node:crypto';
@@ -18,6 +19,7 @@ import {
   KNOWN_SAMPLE_IDS,
   RunRepository,
 } from './runs.js';
+import { CANONICAL_SAMPLE_METADATA } from './recorded-samples.js';
 import { Worker } from './worker.js';
 
 // Repo root: filesystem-relative paths only matter outside serverless hosts.
@@ -48,7 +50,7 @@ function computeRepoRoot(): string {
 const REPO_ROOT = computeRepoRoot();
 // Serverless hosts (Vercel) have a read-only repo: transient uploads and run
 // artifacts must live in a writable data dir (e.g. REPLAY_DATA_DIR=/tmp).
-const DATA_DIR = process.env.REPLAY_DATA_DIR || REPO_ROOT;
+const DATA_DIR = process.env.REPLAY_DATA_DIR || (process.env.VERCEL ? os.tmpdir() : REPO_ROOT);
 
 if (fs.existsSync(path.join(REPO_ROOT, '.env'))) {
   dotenv.config({ path: path.join(REPO_ROOT, '.env') });
@@ -62,29 +64,42 @@ const ALLOWED_MIME_TYPES = new Set([
   'video/x-matroska',
 ]);
 
-// Static fallback metadata for serverless deploys without the samples dir.
-const SAMPLE_TITLES: Record<string, { title: string; observedBehavior: string }> = {
-  'cart-nan': {
-    title: 'Cart total becomes NaN after clearing quantity field',
-    observedBehavior: "Clearing the quantity input field causes the cart total and subtotal to display '$NaN'.",
-  },
-  'double-discount': {
-    title: 'Double-clicking Apply applies the discount twice',
-    observedBehavior: 'Double-clicking Apply stacks the coupon twice, applying 20% discount ($20.00 off $100).',
-  },
-  'string-sort': {
-    title: 'String-based sort places $100 before $20',
-    observedBehavior: 'Products are sorted lexicographically: Mechanical Keyboard ($100) appears before Ergonomic Mouse ($20).',
-  },
-  'empty-email': {
-    title: 'Checkout accepts an empty email address',
-    observedBehavior: 'Checkout proceeds without email validation and shows Order Confirmed for an empty email address.',
-  },
-  'quantity-reset': {
-    title: 'Quantity resets after page navigation',
-    observedBehavior: 'Switching to Catalog and returning to Cart resets item quantity back to 1.',
-  },
-};
+function findSampleVideoPath(repoRoot: string, id: string): string | null {
+  const candidates = [
+    path.resolve(repoRoot, `samples/videos/${id}.webm`),
+    path.resolve(repoRoot, `apps/web/public/samples/${id}.webm`),
+    path.resolve(repoRoot, `public/samples/${id}.webm`),
+  ];
+  if (repoRoot === REPO_ROOT) {
+    candidates.push(
+      path.resolve(process.cwd(), `public/samples/${id}.webm`),
+      path.resolve(process.cwd(), `apps/web/public/samples/${id}.webm`),
+    );
+  }
+  for (const candidate of candidates) {
+    try {
+      const stat = fs.statSync(candidate);
+      if (stat.isFile() && stat.size > 0) {
+        return candidate;
+      }
+    } catch {
+      // continue checking next candidate
+    }
+  }
+  return null;
+}
+
+function isSampleRecordingAvailable(repoRoot: string, id: string): boolean {
+  if (findSampleVideoPath(repoRoot, id) !== null) {
+    return true;
+  }
+  // On Vercel serverless deployments, public/samples/<id>.webm is verified at
+  // build time by copy-monaco.mjs and served directly by Vercel's static CDN.
+  if (Boolean(process.env.VERCEL) && repoRoot === REPO_ROOT && isKnownSampleId(id)) {
+    return true;
+  }
+  return false;
+}
 
 const CreateJsonRunSchema = z.object({
   sampleId: z.string().optional(),
@@ -302,25 +317,23 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
   app.get('/api/samples', (c) => {
     const samples = KNOWN_SAMPLE_IDS.map((id) => {
       const expectedPath = path.resolve(repoRoot, `samples/${id}/expected.json`);
-      let meta: any = { id };
+      const canonical = CANONICAL_SAMPLE_METADATA[id];
+      let meta: Record<string, any> = canonical ? { ...canonical } : { id };
       try {
         if (fs.existsSync(expectedPath)) {
-          meta = JSON.parse(fs.readFileSync(expectedPath, 'utf8'));
-        } else if (process.env.VERCEL) {
-          // Serverless bundle ships no samples dir: honest static metadata.
-          meta = SAMPLE_TITLES[id] ? { ...SAMPLE_TITLES[id], id } : { id };
+          meta = { ...meta, ...JSON.parse(fs.readFileSync(expectedPath, 'utf8')) };
         }
       } catch {
-        // Fallback to basic sample ID
+        // Fallback to canonical sample metadata
       }
       return {
         id,
         title: meta.title || id,
-        expectedBehavior: meta.expected_behavior,
-        observedBehavior: meta.observed_behavior,
-        guiltyFile: meta.guilty_file,
-        guiltySymbol: meta.guilty_symbol,
-        recordingAvailable: fs.existsSync(path.resolve(repoRoot, `samples/videos/${id}.webm`)),
+        expectedBehavior: meta.expected_behavior ?? meta.expectedBehavior,
+        observedBehavior: meta.observed_behavior ?? meta.observedBehavior,
+        guiltyFile: meta.guilty_file ?? meta.guiltyFile,
+        guiltySymbol: meta.guilty_symbol ?? meta.guiltySymbol,
+        recordingAvailable: isSampleRecordingAvailable(repoRoot, id),
       };
     });
 
@@ -360,6 +373,22 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
               error: 'Invalid sample ID',
               message: `Unknown sample "${sampleId}". Must be one of: ${KNOWN_SAMPLE_IDS.join(', ')}`,
             }, 400);
+          }
+
+          if (Boolean(process.env.VERCEL) && !process.env.DATABASE_URL && typeof repo.materializeRecordedSampleRun === 'function') {
+            const recorded = await repo.materializeRecordedSampleRun(sampleId, note);
+            if (recorded) {
+              return c.json({
+                id: recorded.id,
+                state: recorded.state,
+                stage: recorded.stage,
+                isSample: true,
+                videoKey: recorded.videoKey,
+                note: recorded.note,
+                executionMode: 'recorded_sample_replay',
+                createdAt: recorded.createdAt.toISOString(),
+              }, 201);
+            }
           }
 
           const run = await repo.createRun({
@@ -472,6 +501,24 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
               note: note ?? null,
             },
           });
+
+          if (Boolean(process.env.VERCEL) && !process.env.DATABASE_URL) {
+            run = (await repo.updateRun(run.id, {
+              state: 'failed',
+              stage: 'ingest',
+              completedAt: new Date(),
+            })) ?? run;
+            await repo.addEvent(run.id, {
+              stage: 'ingest',
+              agent: 'Worker',
+              event_type: 'pipeline_failed',
+              payload: {
+                code: 'serverless_worker_unavailable',
+                error:
+                  'Custom video execution requires a persistent background worker, FFmpeg, Docker/Playwright sandbox, and NEBIUS_API_KEY. On this serverless deployment, use the five verified Demo Shop sample bugs or connect an external worker via DATABASE_URL.',
+              },
+            });
+          }
         } catch (dbErr) {
           try {
             if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
@@ -525,6 +572,22 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
           error: 'Invalid sample ID',
           message: `Unknown sample "${sampleId}". Must be one of: ${KNOWN_SAMPLE_IDS.join(', ')}`,
         }, 400);
+      }
+
+      if (Boolean(process.env.VERCEL) && !process.env.DATABASE_URL && typeof repo.materializeRecordedSampleRun === 'function') {
+        const recorded = await repo.materializeRecordedSampleRun(sampleId, note);
+        if (recorded) {
+          return c.json({
+            id: recorded.id,
+            state: recorded.state,
+            stage: recorded.stage,
+            isSample: true,
+            videoKey: recorded.videoKey,
+            note: recorded.note,
+            executionMode: 'recorded_sample_replay',
+            createdAt: recorded.createdAt.toISOString(),
+          }, 201);
+        }
       }
 
       const run = await repo.createRun({
@@ -625,29 +688,158 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
     });
   });
 
-  // Readiness: what the demo actually depends on, cached 30s. Unlike /health
+  // Readiness: what the demo actually depends on, cached 5s. Unlike /health
   // this answers "can a run work right now", and fails honestly per check.
   let readyCache: { at: number; body: Record<string, unknown> } | null = null;
   app.get('/api/ready', async (c) => {
-    if (readyCache && Date.now() - readyCache.at < 30_000) {
+    if (readyCache && Date.now() - readyCache.at < 5_000) {
       return c.json(readyCache.body);
     }
-    const checks: Record<string, string> = {};
-    if (process.env.DATABASE_URL) {
+    const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+    const hasModelKey = Boolean(process.env.NEBIUS_API_KEY || process.env.NEBIUS_API_KEY_LOCATOR);
+    const sampleAssetsReady = KNOWN_SAMPLE_IDS.every((id) => isSampleRecordingAvailable(repoRoot, id));
+    const checks: Record<string, string> = {
+      api: 'healthy',
+      sampleAssets: sampleAssetsReady ? 'available' : 'missing',
+    };
+    let hasDatabase = false;
+    if (process.env.DATABASE_URL && process.env.DATABASE_URL.trim() !== '') {
       try {
-        const probe = new URL(process.env.DATABASE_URL);
-        checks.database = `configured (${probe.host})`;
+        new URL(process.env.DATABASE_URL);
+        checks.database = 'configured';
+        hasDatabase = true;
       } catch {
         checks.database = 'error';
       }
     } else {
       checks.database = 'memory-fallback';
     }
-    checks.modelKey = process.env.NEBIUS_API_KEY || process.env.NEBIUS_API_KEY_LOCATOR ? 'present' : 'missing';
-    checks.ffmpeg = 'checked-on-worker'; // verified per-run by the live Watcher gate
-    const body = { status: 'ok', checks };
+    checks.storage = process.env.SUPABASE_URL
+      ? 'configured'
+      : isServerless
+        ? 'ephemeral-tmp'
+        : 'local-disk';
+    const workerMode =
+      isServerless && !hasDatabase
+        ? 'unavailable-serverless'
+        : hasDatabase
+          ? 'external-db-queue'
+          : process.env.REPLAY_INLINE_WORKER === '0'
+            ? 'disabled'
+            : 'inline-local';
+    checks.worker = workerMode;
+    checks.modelKey = hasModelKey ? 'present' : 'missing';
+    checks.sandbox = isServerless
+      ? 'unavailable-serverless'
+      : process.env.REPLAY_SANDBOX_MODE === 'docker'
+        ? 'docker'
+        : 'local-workspace';
+    checks.ffmpeg = isServerless ? 'unavailable-serverless' : 'checked-on-worker';
+
+    const canExecuteLiveRun = Boolean(!isServerless && hasModelKey && workerMode !== 'disabled');
+    const canReplayRecordedSamples = sampleAssetsReady;
+    const executionMode = canExecuteLiveRun
+      ? 'live'
+      : isServerless && canReplayRecordedSamples
+        ? 'recorded_sample_replay'
+        : !isServerless && workerMode !== 'disabled'
+          ? 'fixture_assisted'
+          : 'read_only';
+
+    const blockers: string[] = [];
+    if (!hasModelKey) {
+      blockers.push('Model API key (NEBIUS_API_KEY) is not configured on this deployment.');
+    }
+    if (isServerless && !hasDatabase) {
+      blockers.push(
+        'Serverless runtime (Vercel) does not run a persistent background worker or Docker/Playwright sandbox; sample runs use verified recorded Demo Shop artifacts.',
+      );
+    }
+    if (!sampleAssetsReady) {
+      blockers.push('One or more sample video recordings are missing.');
+    }
+
+    const body = {
+      status: sampleAssetsReady ? 'ok' : 'degraded',
+      executionMode,
+      canExecuteLiveRun,
+      canReplayRecordedSamples,
+      blockers,
+      checks,
+    };
     readyCache = { at: Date.now(), body };
     return c.json(body);
+  });
+
+  // Stream or redirect to the recording video for a run.
+  app.get('/api/runs/:id/video', async (c) => {
+    const id = c.req.param('id');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return c.json({ error: 'Invalid run id', message: 'Run id must be a UUID' }, 400);
+    }
+    const run = await repo.getRun(id);
+    if (!run) {
+      return c.json({ error: 'Run not found', message: `No run found with ID ${id}` }, 404);
+    }
+
+    let videoPath: string | null = null;
+    let contentType = 'video/webm';
+
+    if (run.isSample && isKnownSampleId(run.videoKey)) {
+      videoPath = findSampleVideoPath(repoRoot, run.videoKey);
+      if (!videoPath && process.env.VERCEL) {
+        return c.redirect(`/samples/${run.videoKey}.webm`, 307);
+      }
+    } else if (!run.isSample && typeof run.videoKey === 'string') {
+      const uploadsRoot = path.resolve(DATA_DIR, 'artifacts/uploads');
+      const candidate = path.resolve(DATA_DIR, 'artifacts', run.videoKey);
+      if (candidate.startsWith(uploadsRoot + path.sep) && fs.existsSync(candidate)) {
+        videoPath = candidate;
+        if (candidate.endsWith('.mp4')) contentType = 'video/mp4';
+      }
+    }
+
+    if (!videoPath || !fs.existsSync(videoPath)) {
+      return c.json(
+        { error: 'Recording not found', message: 'Video recording is not available on disk for this run.' },
+        404,
+      );
+    }
+
+    const stat = fs.statSync(videoPath);
+    const total = stat.size;
+    const range = c.req.header('range');
+    if (range) {
+      const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+      if (match) {
+        const start = match[1] ? parseInt(match[1], 10) : 0;
+        const end = match[2] ? Math.min(parseInt(match[2], 10), total - 1) : total - 1;
+        if (start >= 0 && start <= end && end < total) {
+          const chunk = fs.readFileSync(videoPath).subarray(start, end + 1);
+          return new Response(chunk, {
+            status: 206,
+            headers: {
+              'Content-Type': contentType,
+              'Content-Length': String(chunk.length),
+              'Content-Range': `bytes ${start}-${end}/${total}`,
+              'Accept-Ranges': 'bytes',
+              'Cache-Control': 'public, max-age=3600',
+            },
+          });
+        }
+      }
+    }
+
+    const buf = fs.readFileSync(videoPath);
+    return new Response(buf, {
+      status: 200,
+      headers: {
+        'Content-Type': contentType,
+        'Content-Length': String(total),
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=3600',
+      },
+    });
   });
 
   // Polling fallback for the events stream (used when SSE is unavailable).
@@ -686,6 +878,23 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
     const run = await repo.getRun(id);
     if (!run) {
       return c.json({ error: 'Run not found', message: `No run found with ID ${id}` }, 404);
+    }
+    if (
+      run.isSample &&
+      isKnownSampleId(run.videoKey) &&
+      Boolean(process.env.VERCEL) &&
+      !process.env.DATABASE_URL &&
+      typeof repo.materializeRecordedSampleRun === 'function'
+    ) {
+      const recorded = await repo.materializeRecordedSampleRun(run.videoKey, run.note ?? undefined);
+      if (recorded) {
+        return c.json({
+          id: recorded.id,
+          state: recorded.state,
+          stage: recorded.stage,
+          executionMode: 'recorded_sample_replay',
+        }, 201);
+      }
     }
     const created = await repo.createRun({
       targetId: run.targetId,

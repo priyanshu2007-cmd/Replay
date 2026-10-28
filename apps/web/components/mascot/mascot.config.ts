@@ -33,12 +33,27 @@ export type MascotEvent =
       runId?: string;
       stage?: string | null;
       state?: string | null;
+      runStateRaw?: string | null;
       fallback?: boolean;
       reproAfterFixPassed?: boolean;
       baselineRegressionPassed?: boolean;
       errorMessage?: string | null;
       blockedReason?: string | null;
       agents?: AgentActivityItem[];
+      bugSummary?: string | null;
+      topSuspect?: string | null;
+      hasDiff?: boolean;
+      verifierReason?: string | null;
+    }
+  | {
+      kind: 'home_context';
+      mode: 'live' | 'replay' | 'offline';
+      executionMode: 'live' | 'recorded_sample_replay' | 'fixture_assisted' | 'read_only';
+      canExecuteLiveRun: boolean;
+      canReplayRecordedSamples: boolean;
+      modelsKeyMissing: boolean;
+      blockers: string[];
+      samplesCount: number;
     };
 
 export const STAGE_ORDER: Record<string, number> = {
@@ -92,6 +107,19 @@ export const PAGE_TIPS: Record<string, string> = {
   '/how': 'Each stage has one model and one deterministic gate. Nothing passes without proof.',
 };
 
+export const SAMPLE_EXPLANATIONS: Record<string, string> = {
+  'cart-nan':
+    "cart-nan: Clearing the quantity input calls parseInt('', 10) without an isNaN guard in handleQuantityChange (src/App.tsx:L84-105), causing Cart total to display '$NaN'.",
+  'double-discount':
+    "double-discount: Clicking Apply twice on SAVE10 increments discountPercent by 10% each click in handleApplyCoupon (src/App.tsx:L107-133) because appliedCoupon === code is not checked.",
+  'string-sort':
+    "string-sort: Sorting by Price: Low to High uses String(a.price).localeCompare(String(b.price)) in handleSortChange (src/App.tsx:L49-70), placing $100 before $15, $20, and $50.",
+  'empty-email':
+    "empty-email: Clicking Complete Purchase with a blank email skips validation in handleCheckout (src/App.tsx:L135-157) and shows Order Confirmed.",
+  'quantity-reset':
+    "quantity-reset: Switching from Cart to Catalog and back resets item quantities to 1 in handleTabChange (src/App.tsx:L41-47).",
+};
+
 export const STAGE_EXPLANATIONS: Record<string, string> = {
   ingest: 'Ingest validates the recording and prepares the target repository workspace.',
   watch: 'Watcher analyzes timestamped video frames to identify user steps and the first failure frame. When live vision or FFmpeg is unavailable on a known sample, fixture-assisted metadata is used and labeled explicitly.',
@@ -133,5 +161,5 @@ export const MASCOT = {
   mobileSize: 80,
   inactivityMs: 30_000,
   /** Routes where the mascot stays out of the way. */
-  hiddenRoutes: ['/dev/components', '/how'],
+  hiddenRoutes: ['/dev/components'],
 };

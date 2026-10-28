@@ -26,6 +26,11 @@ export function VideoPanel({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [activeStep, setActiveStep] = useState(-1);
+  const [mediaError, setMediaError] = useState(false);
+
+  useEffect(() => {
+    setMediaError(false);
+  }, [src]);
 
   const seek = useCallback((t: number) => {
     const v = videoRef.current;
@@ -73,13 +78,14 @@ export function VideoPanel({
       onKeyDown={onKeyDown}
       className="flex flex-col gap-2 rounded-m border border-border-subtle bg-panel p-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
     >
-      {src ? (
+      {src && !mediaError ? (
         <video
           ref={videoRef}
           src={src}
           controls
           playsInline
           preload="metadata"
+          onError={() => setMediaError(true)}
           className="aspect-video w-full rounded-s bg-black"
         />
       ) : (

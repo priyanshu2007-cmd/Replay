@@ -556,4 +556,101 @@ describe('Replay API Server', () => {
       }
     });
   });
+
+  describe('Readiness, video streaming, and Vercel serverless sample replay', () => {
+    test('GET /api/ready returns truthful readiness status and secret-safe checks', async () => {
+      const res = await app.request('/api/ready');
+      assert.equal(res.status, 200);
+      const body: any = await res.json();
+      assert.equal(body.status, 'ok');
+      assert.equal(body.checks.api, 'healthy');
+      assert.equal(body.checks.sampleAssets, 'available');
+      assert.equal(typeof body.canExecuteLiveRun, 'boolean');
+      assert.equal(body.canReplayRecordedSamples, true);
+      assert.ok(Array.isArray(body.blockers));
+    });
+
+    test('GET /api/samples resolves all 5 samples with recordingAvailable and observedBehavior in Vercel mode', async () => {
+      const prevVercel = process.env.VERCEL;
+      process.env.VERCEL = '1';
+      try {
+        const vercelApp = createServer({ repository: new MemoryRunRepository({ seedRecordedSamples: true }) });
+        const res = await vercelApp.request('/api/samples');
+        assert.equal(res.status, 200);
+        const body: any = await res.json();
+        assert.equal(body.samples.length, 5);
+        for (const s of body.samples) {
+          assert.equal(s.recordingAvailable, true, `Sample ${s.id} must have recordingAvailable: true`);
+          assert.ok(typeof s.observedBehavior === 'string' && s.observedBehavior.length > 10);
+          assert.ok(typeof s.expectedBehavior === 'string' && s.expectedBehavior.length > 10);
+          assert.equal(s.guiltyFile, 'src/App.tsx');
+        }
+      } finally {
+        if (prevVercel === undefined) delete process.env.VERCEL;
+        else process.env.VERCEL = prevVercel;
+      }
+    });
+
+    test('POST /api/runs in Vercel serverless mode materializes verified sample replay instead of stalling in queued', async () => {
+      const prevVercel = process.env.VERCEL;
+      const prevDb = process.env.DATABASE_URL;
+      process.env.VERCEL = '1';
+      delete process.env.DATABASE_URL;
+      try {
+        const seededRepo = new MemoryRunRepository({ seedRecordedSamples: true });
+        const vercelApp = createServer({ repository: seededRepo });
+
+        // 1. Seeded repository already lists the 5 verified sample runs
+        const listRes = await vercelApp.request('/api/runs');
+        assert.equal(listRes.status, 200);
+        const listBody: any = await listRes.json();
+        assert.equal(listBody.runs.length, 5);
+
+        // 2. Starting a sample run returns the verified run in fixed state with events
+        const createRes = await vercelApp.request('/api/runs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sampleId: 'cart-nan', note: 'Vercel browser QA' }),
+        });
+        assert.equal(createRes.status, 201);
+        const created: any = await createRes.json();
+        assert.equal(created.state, 'fixed');
+        assert.equal(created.executionMode, 'recorded_sample_replay');
+
+        const detailRes = await vercelApp.request(`/api/runs/${created.id}`);
+        assert.equal(detailRes.status, 200);
+        const detail: any = await detailRes.json();
+        assert.equal(detail.state, 'fixed');
+        assert.ok(detail.outputs.diff.includes('isNaN(qty)'));
+        assert.ok(detail.outputs.generatedTest.includes('cart-total'));
+
+        const eventsRes = await vercelApp.request(`/api/runs/${created.id}/events-page`);
+        assert.equal(eventsRes.status, 200);
+        const eventsBody: any = await eventsRes.json();
+        assert.ok(eventsBody.events.length >= 10);
+        assert.ok(eventsBody.events.some((e: any) => e.event_type === 'watch_fixture_fallback'));
+        assert.ok(eventsBody.events.some((e: any) => e.event_type === 'pipeline_completed'));
+      } finally {
+        if (prevVercel === undefined) delete process.env.VERCEL;
+        else process.env.VERCEL = prevVercel;
+        if (prevDb !== undefined) process.env.DATABASE_URL = prevDb;
+      }
+    });
+
+    test('GET /api/runs/:id/video streams sample video with 200 and 206 Range support', async () => {
+      const run = await repo.createRun({ videoKey: 'cart-nan', isSample: true });
+      const res200 = await app.request(`/api/runs/${run.id}/video`);
+      assert.equal(res200.status, 200);
+      assert.equal(res200.headers.get('content-type'), 'video/webm');
+      const fullBuf = await res200.arrayBuffer();
+      assert.ok(fullBuf.byteLength > 10_000);
+
+      const res206 = await app.request(`/api/runs/${run.id}/video`, {
+        headers: { Range: 'bytes=0-1023' },
+      });
+      assert.equal(res206.status, 206);
+      const partBuf = await res206.arrayBuffer();
+      assert.equal(partBuf.byteLength, 1024);
+    });
+  });
 });

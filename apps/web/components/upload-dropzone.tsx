@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -29,8 +29,18 @@ function probeDuration(file: File): Promise<number | null> {
   });
 }
 
-export function UploadDropzone({ disabled, disabledReason }: { disabled: boolean; disabledReason?: string }) {
+export function UploadDropzone({
+  disabled,
+  disabledReason,
+  serverlessUploadNotice,
+}: {
+  disabled: boolean;
+  disabledReason?: string;
+  serverlessUploadNotice?: string | null;
+}) {
   const router = useRouter();
+  const sectionRef = useRef<HTMLElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [note, setNote] = useState('');
@@ -38,11 +48,24 @@ export function UploadDropzone({ disabled, disabledReason }: { disabled: boolean
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    function onOpenUpload() {
+      sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      triggerRef.current?.focus();
+    }
+    window.addEventListener('replay:open-upload', onOpenUpload);
+    return () => window.removeEventListener('replay:open-upload', onOpenUpload);
+  }, []);
+
   async function pick(f: File | undefined) {
     setError(null);
     if (!f) return;
     if (!ACCEPTED.includes(f.type)) {
       setError(`"${f.type || 'unknown'}" is not a supported video type. Use WebM, MP4, MOV or MKV.`);
+      return;
+    }
+    if (f.size <= 0) {
+      setError('Uploaded video file cannot be empty (0 bytes).');
       return;
     }
     if (f.size > MAX_BYTES) {
@@ -61,11 +84,11 @@ export function UploadDropzone({ disabled, disabledReason }: { disabled: boolean
     e.preventDefault();
     setDragOver(false);
     if (disabled) return;
-    pick(e.dataTransfer.files.item(0) ?? undefined);
+    void pick(e.dataTransfer.files.item(0) ?? undefined);
   }
 
   async function submit() {
-    if (!file || busy) return;
+    if (!file || busy || disabled) return;
     setBusy(true);
     setError(null);
     try {
@@ -78,8 +101,14 @@ export function UploadDropzone({ disabled, disabledReason }: { disabled: boolean
   }
 
   return (
-    <section aria-label="Upload a bug recording" className="flex flex-col gap-4 rounded-m border border-border-subtle bg-panel p-4">
+    <section
+      ref={sectionRef}
+      id="upload-section"
+      aria-label="Upload a bug recording"
+      className="flex flex-col gap-4 rounded-m border border-border-subtle bg-panel p-4"
+    >
       <div
+        ref={triggerRef}
         role="button"
         tabIndex={disabled ? -1 : 0}
         aria-disabled={disabled}
@@ -96,7 +125,8 @@ export function UploadDropzone({ disabled, disabledReason }: { disabled: boolean
           if (!disabled) setDragOver(true);
         }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={onDrop}        className={`flex min-h-[120px] cursor-pointer flex-col items-center justify-center gap-2 rounded-s border border-dashed px-4 py-6 text-center transition-colors duration-150 ease-out ${
+        onDrop={onDrop}
+        className={`flex min-h-[120px] cursor-pointer flex-col items-center justify-center gap-2 rounded-s border border-dashed px-4 py-6 text-center transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
           dragOver ? 'border-accent' : 'border-border-strong'
         } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
       >
@@ -119,7 +149,7 @@ export function UploadDropzone({ disabled, disabledReason }: { disabled: boolean
           type="file"
           accept={ACCEPTED.join(',')}
           className="sr-only"
-          onChange={(e) => pick(e.target.files?.item(0) ?? undefined)}
+          onChange={(e) => void pick(e.target.files?.item(0) ?? undefined)}
         />
       </div>
       {error && (
@@ -135,9 +165,19 @@ export function UploadDropzone({ disabled, disabledReason }: { disabled: boolean
         maxLength={1000}
         disabled={disabled || busy}
       />
-      <Button variant="primary" disabled={!file || busy || disabled} onClick={submit}>
-        {busy ? 'Uploading' : 'Run on this video'}
-      </Button>
+      <div className="flex flex-col gap-1.5">
+        <Button variant="primary" disabled={!file || busy || disabled} onClick={submit}>
+          {busy ? 'Uploading' : 'Run on this video'}
+        </Button>
+        {!file && !disabled && (
+          <p className="text-[11px] text-muted">
+            Choose a .webm or .mp4 bug recording above to enable <span className="font-mono">Run on this video</span>.
+          </p>
+        )}
+        {serverlessUploadNotice && !disabled && (
+          <p className="text-[11px] text-muted">{serverlessUploadNotice}</p>
+        )}
+      </div>
     </section>
   );
 }

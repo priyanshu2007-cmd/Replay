@@ -11,7 +11,7 @@ import { ReportView } from '@/components/report-view';
 import { StatusPill } from '@/components/status-pill';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ReplayBanner } from '@/components/replay-banner';
-import { getRun, rerunRun, type RunDetail, type RunStage, type RunEvent } from '@/lib/api';
+import { API_BASE, getRun, rerunRun, type RunDetail, type RunStage, type RunEvent } from '@/lib/api';
 import { useRunEvents } from '@/hooks/use-run-events';
 import { getReplayEvents, getReplayRun } from '@/lib/replay';
 import type { AgentActivityItem } from '@/components/mascot/mascot.config';
@@ -256,6 +256,10 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
 
     const afterResult = run?.outputs.afterTestResult as { passed?: boolean } | null;
     const suiteResult = run?.outputs.suiteResult as { passed?: boolean } | null;
+    const topSuspectObj = run?.outputs.suspects?.[0];
+    const topSuspect = topSuspectObj
+      ? `${topSuspectObj.file}:L${topSuspectObj.start_line}-${topSuspectObj.end_line} (${topSuspectObj.symbol})`
+      : null;
 
     window.dispatchEvent(
       new CustomEvent('replay:mascot', {
@@ -264,17 +268,22 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
           runId,
           stage: currentStage,
           state: run?.state && TERMINAL.has(run.state) ? run.state : null,
+          runStateRaw: run?.state ?? null,
           fallback: hadFallback,
           reproAfterFixPassed: typeof afterResult?.passed === 'boolean' ? afterResult.passed : run?.state === 'fixed',
           baselineRegressionPassed: typeof suiteResult?.passed === 'boolean' ? suiteResult.passed : run?.state === 'fixed',
           errorMessage: errorInfo?.message ?? null,
           agents: agentItems,
+          bugSummary: run?.outputs.bugReport?.summary ?? null,
+          topSuspect,
+          hasDiff: Boolean(run?.outputs.diff),
+          verifierReason: run?.outputs.sameSymptomVerdict?.reason ?? null,
         },
       }),
     );
   }, [runId, allEvents, currentStage, run, hadFallback, errorInfo]);
 
-  async function retry() {
+  const retry = useCallback(async () => {
     if (!runId || rerunning) return;
     setRerunning(true);
     try {
@@ -287,7 +296,18 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
       setError((err as Error).message);
       setRerunning(false);
     }
-  }
+  }, [runId, rerunning]);
+
+  useEffect(() => {
+    function onMascotAction(e: Event) {
+      const action = (e as CustomEvent<{ action?: string }>).detail?.action;
+      if (action === 'retry-run') {
+        void retry();
+      }
+    }
+    window.addEventListener('replay:mascot-action', onMascotAction);
+    return () => window.removeEventListener('replay:mascot-action', onMascotAction);
+  }, [retry]);
 
   if (error) {
     return (
@@ -322,7 +342,10 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
           description: s.description,
         }))
       : [];
-  const videoSrc = run.isSample && /^[a-z0-9-]+$/.test(run.videoKey) ? `/samples/${run.videoKey}.webm` : null;
+  const videoSrc =
+    run.isSample && /^[a-z0-9-]+$/.test(run.videoKey)
+      ? `/samples/${run.videoKey}.webm`
+      : `${API_BASE}/api/runs/${encodeURIComponent(run.id)}/video`;
   const tokens = run.metrics.totalTokens;
   const cost = run.metrics.estimatedCostUsd;
 
@@ -393,7 +416,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
         </section>
       )}
 
-      {run.state === 'queued' && process.env.NODE_ENV === 'development' && (
+      {run.state === 'queued' && (
         <p className="mb-4 rounded-s border border-border-subtle bg-panel px-3 py-2 text-[13px] text-secondary">
           Waiting for a worker to claim this run. In local mode the API runs one automatically; with Postgres,
           start the worker with pnpm dev:worker.

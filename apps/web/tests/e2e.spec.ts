@@ -52,11 +52,42 @@ test.describe('Replay web', () => {
     expect(pulsing).toBe(0);
   });
 
-  test('mascot renders on home and stays off the how page', async ({ page }) => {
+  test('mascot renders on home, how, benchmark and stays off /dev/components', async ({ page }) => {
+    const reel = page.getByRole('button', { name: /Reel, the Replay mascot/ });
     await page.goto('/');
-    await expect(page.getByRole('button', { name: /Reel, the Replay mascot/ })).toBeVisible({ timeout: 15000 });
+    await expect(reel).toBeVisible({ timeout: 15000 });
     await page.goto('/how');
-    await expect(page.getByRole('button', { name: /Reel, the Replay mascot/ })).toHaveCount(0);
+    await expect(reel).toBeVisible({ timeout: 15000 });
+    await page.goto('/benchmark');
+    await expect(reel).toBeVisible({ timeout: 15000 });
+    await page.goto('/dev/components');
+    await expect(reel).toHaveCount(0);
+  });
+
+  test('all five sample recordings serve real WebM and load metadata', async ({ page }) => {
+    await page.goto('/');
+    for (const id of ['cart-nan', 'double-discount', 'string-sort', 'empty-email', 'quantity-reset']) {
+      const res = await page.request.get(`/samples/${id}.webm`);
+      expect(res.status(), id).toBe(200);
+      expect(res.headers()['content-type'], id).toContain('video/webm');
+      const body = await res.body();
+      expect(body.length, id).toBeGreaterThan(10_000);
+      expect(body.subarray(0, 4).toString('hex'), id).toBe('1a45dfa3');
+      const dims = await page.evaluate(
+        (u) =>
+          new Promise<{ w: number; h: number; d: number }>((resolve, reject) => {
+            const v = document.createElement('video');
+            v.preload = 'metadata';
+            v.onloadedmetadata = () => resolve({ w: v.videoWidth, h: v.videoHeight, d: v.duration });
+            v.onerror = () => reject(new Error('video error ' + u));
+            v.src = u;
+          }),
+        `/samples/${id}.webm`,
+      );
+      expect(dims.w, id).toBeGreaterThan(0);
+      expect(dims.h, id).toBeGreaterThan(0);
+      expect(dims.d, id).toBeGreaterThan(0);
+    }
   });
 
   test('benchmark shows the runs table or its empty state', async ({ page }) => {
@@ -263,6 +294,55 @@ test.describe('Replay web', () => {
     await expect(helpDialog).toContainText('Fixer');
     await helpDialog.getByRole('button', { name: 'Open relevant evidence' }).click();
     await expect(page.getByRole('tab', { name: 'Diff' })).toHaveAttribute('data-state', 'active');
+
+    // Ask Reel natural questions on the run workspace
+    const askInput = helpDialog.getByRole('textbox', { name: 'Ask Reel a question' });
+    await expect(askInput).toBeVisible();
+    await askInput.fill('What is the Fixer doing?');
+    await helpDialog.getByRole('button', { name: 'Ask' }).click();
+    await expect(helpDialog.getByRole('region')).toContainText(/Fixer|diff|sandbox/i);
+
+    await askInput.fill('Did the fix pass the tests?');
+    await helpDialog.getByRole('button', { name: 'Ask' }).click();
+    await expect(helpDialog.getByRole('region')).toContainText(/reproduction test|baseline/i);
+  });
+
+  test('sample video assets, upload helper text, and Reel homepage/how guidance work end-to-end', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByText('Recording not available')).toHaveCount(0);
+
+    // Every sample card renders a <video> pointing to /samples/<id>.webm and an enabled Run sample button
+    const videos = page.locator('article video');
+    await expect(videos).toHaveCount(5);
+    const runButtons = page.getByRole('button', { name: 'Run sample' });
+    await expect(runButtons).toHaveCount(5);
+    for (let i = 0; i < 5; i++) {
+      await expect(runButtons.nth(i)).toBeEnabled();
+    }
+
+    // Upload dropzone explains why Run on this video is disabled before file selection
+    const runUploadBtn = page.getByRole('button', { name: 'Run on this video' });
+    await expect(runUploadBtn).toBeDisabled();
+    await expect(page.getByText(/Choose a \.webm or \.mp4 bug recording above/i)).toBeVisible();
+
+    // Open Reel on homepage and test interactive Q&A + guiding actions
+    await page.getByRole('button', { name: 'Open Reel help' }).click();
+    const helpDialog = page.getByRole('dialog', { name: 'Reel companion help' });
+    const askInput = helpDialog.getByRole('textbox', { name: 'Ask Reel a question' });
+    await askInput.fill('How do I upload my own video?');
+    await helpDialog.getByRole('button', { name: 'Ask' }).click();
+    await expect(helpDialog.getByRole('region')).toContainText(/50 MB|30s/i);
+
+    await askInput.fill('Tell me about double-discount');
+    await helpDialog.getByRole('button', { name: 'Ask' }).click();
+    await expect(helpDialog.getByRole('region')).toContainText(/SAVE10/i);
+
+    await helpDialog.getByRole('button', { name: 'Open upload guidance' }).click();
+    await expect(helpDialog.getByRole('region')).toContainText(/Focused the upload dropzone/i);
+
+    // Reel is also present and helpful on /how
+    await page.goto('/how');
+    await expect(page.getByRole('button', { name: /Reel, the Replay mascot/ })).toBeVisible();
   });
 
   test('responsive layout verification across 1440, 1280, 768, 390, and 320 viewports', async ({ page }) => {

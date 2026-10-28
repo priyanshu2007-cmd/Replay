@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prebuild": "node -e \"const fs=require('node:fs');if(!fs.existsSync('../../packages/shared/dist/index.d.ts')||!fs.existsSync('../../packages/db/dist/index.d.ts')||!fs.existsSync('../../packages/agents/dist/index.d.ts')){require('node:child_process').execSync('pnpm --filter \\\"@replay/api^...\\\" build',{stdio:'inherit'})}\"",
     "build": "mkdir -p api-dist && tsc && npx esbuild src/server.ts --bundle --platform=node --format=cjs --define:import.meta=undefined --outfile=api-dist/server.cjs && npx esbuild src/worker.ts --bundle --platform=node --format=cjs --define:import.meta=undefined --outfile=api-dist/worker.cjs && npx esbuild ../../packages/db/src/migrate.ts --bundle --platform=node --format=cjs --define:import.meta=undefined --outfile=api-dist/migrate.cjs && printf '{\"type\":\"commonjs\",\"main\":\"server.cjs\"}' > api-dist/package.json",
     "typecheck": "tsc --noEmit",
     "dev": "tsx watch src/server.ts",

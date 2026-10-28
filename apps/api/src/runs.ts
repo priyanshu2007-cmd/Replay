@@ -1,10 +1,12 @@
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { RunEvent, RunStage, RunState } from '@replay/shared';
 import { createDb, runs, runEvents, DbClient } from '@replay/db';
 import { eq, asc, desc, lt, and } from 'drizzle-orm';
+import { RECORDED_SAMPLE_BUNDLES } from './recorded-samples.js';
 
 export interface RunRecord {
   id: string;
@@ -58,6 +60,7 @@ export interface RunRepository {
   getEvents(runId: string): Promise<RunEvent[]>;
   subscribeEvents(runId: string, listener: (event: RunEvent) => void): () => void;
   checkRateLimit?(key: string, limit: number, windowMs: number): Promise<RateLimitResult>;
+  materializeRecordedSampleRun?(sampleId: string, note?: string): Promise<RunRecord | null>;
 }
 
 /**
@@ -65,7 +68,7 @@ export interface RunRepository {
  * looks like an absolute server path with a relative label.
  */
 function REPO_ROOT_DATA(): string {
-  return process.env.REPLAY_DATA_DIR || process.cwd();
+  return process.env.REPLAY_DATA_DIR || (process.env.VERCEL ? os.tmpdir() : process.cwd());
 }
 
 function sanitizeEventPayload(payload: Record<string, unknown>): Record<string, unknown> {
@@ -128,12 +131,74 @@ export class MemoryRunRepository implements RunRepository {
   private emitter = new EventEmitter();
   private persistPath?: string;
 
-  constructor(options?: { persistPath?: string }) {
+  constructor(options?: { persistPath?: string; seedRecordedSamples?: boolean }) {
     this.persistPath = options?.persistPath;
     this.emitter.setMaxListeners(100);
+    if (options?.seedRecordedSamples) {
+      this.seedAllRecordedSamples();
+    }
     if (this.persistPath) {
       this.loadFromFile();
     }
+  }
+
+  private seedAllRecordedSamples(): void {
+    const baseTime = new Date('2026-10-28T00:00:00.000Z').getTime();
+    let idx = 0;
+    for (const [sampleId, bundle] of Object.entries(RECORDED_SAMPLE_BUNDLES)) {
+      if (this.runs.has(bundle.run.id)) continue;
+      const createdAt = new Date(baseTime + idx * 60_000);
+      const completedAt = new Date(createdAt.getTime() + (bundle.run.durationMs ?? 40_000));
+      const record: RunRecord = {
+        ...bundle.run,
+        createdAt,
+        updatedAt: completedAt,
+        completedAt,
+      };
+      this.runs.set(record.id, record);
+      const evList: RunEvent[] = bundle.events.map((ev, seqIdx) => ({
+        run_id: record.id,
+        seq: seqIdx + 1,
+        stage: ev.stage,
+        agent: ev.agent,
+        event_type: ev.event_type,
+        payload: sanitizeEventPayload(ev.payload),
+        timestamp: new Date(createdAt.getTime() + seqIdx * 1200).toISOString(),
+      }));
+      this.events.set(record.id, evList);
+      idx++;
+      void sampleId;
+    }
+  }
+
+  async materializeRecordedSampleRun(sampleId: string, note?: string): Promise<RunRecord | null> {
+    this.loadFromFile();
+    const bundle = RECORDED_SAMPLE_BUNDLES[sampleId];
+    if (!bundle) return null;
+    const now = new Date();
+    const createdAt = new Date(now.getTime() - (bundle.run.durationMs ?? 40_000));
+    const record: RunRecord = {
+      ...bundle.run,
+      note: note ?? bundle.run.note,
+      createdAt,
+      updatedAt: now,
+      completedAt: now,
+    };
+    const evList: RunEvent[] = bundle.events.map((ev, seqIdx) => ({
+      run_id: record.id,
+      seq: seqIdx + 1,
+      stage: ev.stage,
+      agent: ev.agent,
+      event_type: ev.event_type,
+      payload: sanitizeEventPayload(
+        seqIdx === 0 && note ? { ...ev.payload, note } : ev.payload,
+      ),
+      timestamp: new Date(createdAt.getTime() + seqIdx * 1200).toISOString(),
+    }));
+    this.runs.set(record.id, record);
+    this.events.set(record.id, evList);
+    this.saveToFile();
+    return { ...record };
   }
 
   private loadFromFile(): void {
@@ -837,7 +902,10 @@ export function getRunRepository(): RunRepository {
   }
 
   const persistPath = path.resolve(process.env.REPLAY_DATA_DIR || REPO_ROOT_DATA(), 'artifacts/runs.json');
-  currentRepo = new MemoryRunRepository({ persistPath });
+  currentRepo = new MemoryRunRepository({
+    persistPath,
+    seedRecordedSamples: Boolean(process.env.VERCEL),
+  });
   return currentRepo;
 }
 
