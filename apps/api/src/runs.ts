@@ -171,6 +171,32 @@ export class MemoryRunRepository implements RunRepository {
     }
   }
 
+  private ensureRecordedSampleBundle(id: string): void {
+    if (this.runs.has(id)) return;
+    const bundle = Object.values(RECORDED_SAMPLE_BUNDLES).find((b) => b.run.id === id);
+    if (!bundle) return;
+    const baseTime = new Date('2026-10-28T00:00:00.000Z').getTime();
+    const createdAt = new Date(baseTime);
+    const completedAt = new Date(createdAt.getTime() + (bundle.run.durationMs ?? 40_000));
+    const record: RunRecord = {
+      ...bundle.run,
+      createdAt,
+      updatedAt: completedAt,
+      completedAt,
+    };
+    this.runs.set(record.id, record);
+    const evList: RunEvent[] = bundle.events.map((ev, seqIdx) => ({
+      run_id: record.id,
+      seq: seqIdx + 1,
+      stage: ev.stage,
+      agent: ev.agent,
+      event_type: ev.event_type,
+      payload: sanitizeEventPayload(ev.payload),
+      timestamp: new Date(createdAt.getTime() + seqIdx * 1200).toISOString(),
+    }));
+    this.events.set(record.id, evList);
+  }
+
   async materializeRecordedSampleRun(sampleId: string, note?: string): Promise<RunRecord | null> {
     this.loadFromFile();
     const bundle = RECORDED_SAMPLE_BUNDLES[sampleId];
@@ -337,6 +363,7 @@ export class MemoryRunRepository implements RunRepository {
 
   async getRun(id: string): Promise<RunRecord | null> {
     this.loadFromFile();
+    this.ensureRecordedSampleBundle(id);
     const record = this.runs.get(id);
     return record ? { ...record } : null;
   }
@@ -484,6 +511,7 @@ export class MemoryRunRepository implements RunRepository {
 
   async getEvents(runId: string): Promise<RunEvent[]> {
     this.loadFromFile();
+    this.ensureRecordedSampleBundle(runId);
     const list = this.events.get(runId) || [];
     return [...list].sort((a, b) => a.seq - b.seq);
   }
@@ -651,7 +679,19 @@ export class PostgresRunRepository implements RunRepository {
 
   async getRun(id: string): Promise<RunRecord | null> {
     const rows = await this.db.select().from(runs).where(eq(runs.id, id)).limit(1);
-    return rows.length > 0 ? this.mapRowToRun(rows[0]) : null;
+    if (rows.length > 0) return this.mapRowToRun(rows[0]);
+    const bundle = Object.values(RECORDED_SAMPLE_BUNDLES).find((b) => b.run.id === id);
+    if (bundle) {
+      const createdAt = new Date('2026-10-28T00:00:00.000Z');
+      const completedAt = new Date(createdAt.getTime() + (bundle.run.durationMs ?? 40_000));
+      return {
+        ...bundle.run,
+        createdAt,
+        updatedAt: completedAt,
+        completedAt,
+      };
+    }
+    return null;
   }
 
   async listRuns(limit = 50): Promise<RunRecord[]> {
@@ -836,15 +876,33 @@ export class PostgresRunRepository implements RunRepository {
       .where(eq(runEvents.runId, runId))
       .orderBy(asc(runEvents.seq));
 
-    return rows.map((r) => ({
-      run_id: r.runId,
-      seq: r.seq,
-      stage: r.stage as RunStage,
-      agent: r.agent,
-      event_type: r.eventType,
-      payload: r.payload as Record<string, unknown>,
-      timestamp: new Date(r.createdAt).toISOString(),
-    }));
+    if (rows.length > 0) {
+      return rows.map((r) => ({
+        run_id: r.runId,
+        seq: r.seq,
+        stage: r.stage as RunStage,
+        agent: r.agent,
+        event_type: r.eventType,
+        payload: r.payload as Record<string, unknown>,
+        timestamp: new Date(r.createdAt).toISOString(),
+      }));
+    }
+
+    const bundle = Object.values(RECORDED_SAMPLE_BUNDLES).find((b) => b.run.id === runId);
+    if (bundle) {
+      const createdAt = new Date('2026-10-28T00:00:00.000Z');
+      return bundle.events.map((ev, seqIdx) => ({
+        run_id: runId,
+        seq: seqIdx + 1,
+        stage: ev.stage,
+        agent: ev.agent,
+        event_type: ev.event_type,
+        payload: sanitizeEventPayload(ev.payload),
+        timestamp: new Date(createdAt.getTime() + seqIdx * 1200).toISOString(),
+      }));
+    }
+
+    return [];
   }
 
   subscribeEvents(runId: string, listener: (event: RunEvent) => void): () => void {

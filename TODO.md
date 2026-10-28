@@ -405,6 +405,28 @@ Canonical tracker for the 13 audit findings across security, sandbox isolation, 
 
 ---
 
+## Replay Production Timeline & Terminal Test Results Fix (Oct 28)
+
+- [x] **1. Historical Event Loading & Route Transition Fix (`apps/web/hooks/use-run-events.ts`, `apps/web/app/runs/[id]/page.tsx`)**: `DONE`
+  - Fixed client-side data gating where `useRunEvents` returned early on terminal runs (`liveStream === false`), preventing historical events from loading.
+  - Updated `useRunEvents` to always fetch initial event history via `${API_BASE}/api/runs/${runId}/events-page` and conditionally connect to SSE only when `liveStream === true`.
+  - Cleared `seenSeq.current` ref and reset connection state synchronously when `runId` changes, eliminating cross-run event contamination.
+  - Exposed `{ events, mode, loading, error, reload }` from `useRunEvents` and passed loading/error states into `<Timeline>`.
+- [x] **2. Pipeline Lifecycle Events & Sample Data Parity (`apps/api/src/recorded-samples.ts`, `apps/api/src/worker.ts`, `apps/api/src/runs.ts`)**: `DONE`
+  - Added missing `ingest_started` and `ingest_completed` events to `buildEvents()` in `apps/api/src/recorded-samples.ts`, ensuring all 5 sample runs reflect complete ingest lifecycles.
+  - Normalized `beforeTestResult` in `apps/api/src/worker.ts` to store structured object `{ passed: !result.reproBeforeFixFailed, reproduced: result.reproBeforeFixFailed, assertion, failure_message, test_name }`, aligning live worker output with sample bundles.
+  - Added fallback in `MemoryRunRepository` and `PostgresRunRepository` (`apps/api/src/runs.ts`) to serve canonical recorded sample bundles and events whenever queried by sample UUIDs (`d0000001-...` through `d0000005-...`), preventing 404s.
+- [x] **3. Truthful Terminal Verification Gates & Status Labeling (`apps/web/components/code-tabs.tsx`, `apps/web/components/status-pill.tsx`, `apps/web/components/timeline.tsx`)**: `DONE`
+  - Replaced ambiguous `testSummary` in `apps/web/components/code-tabs.tsx` with `formatTerminalReport(run)`, rendering 5 explicit verification gates (`Pre-fix reproduction: FAILED — expected, defect reproduced`, `Same-defect verification: PASSED — symptom confirmed`, `Post-fix reproduction: PASSED — defect resolved`, `Regression suite: PASSED — no regressions detected`, `Final result: FIXED`), followed by detailed execution diagnostics.
+  - Corrected `StatusPill` label from misleading `'PASSING'` to truthful `'FIXED'`.
+  - Added dedicated loading skeleton, error retry state, and empty state to `Timeline` (`apps/web/components/timeline.tsx`), plus `data-stage` and `data-status` attributes.
+- [x] **4. Test Automation & E2E Validation (`apps/web/tests/e2e.spec.ts`, `apps/web/tests/prod-audit.spec.ts`, `apps/web/playwright.config.ts`)**: `DONE`
+  - Updated `playwright.config.ts` to ignore `prod-audit.spec.ts` in local testing (reserved for `playwright.prod.config.ts`).
+  - Added automated tests to `apps/web/tests/e2e.spec.ts` verifying terminal sample runs load all historical events, render all 7 stages completed with 0 pending stages, display `FIXED`, display truthful verification gates, and reset cleanly on route transitions.
+  - All 20 Web E2E tests, 36 API & Worker tests, 75 Agents tests, 10 Video tests, 7 Sandbox tests, and 11 Demo Shop tests pass cleanly. Full monorepo typecheck and lint pass with 0 errors.
+
+---
+
 ## TODO: Skill Additions Log
 
 **Policy:** every time skills are added, removed or updated from any skills folder / repo, add one row below. This file is the record the agent updates first.

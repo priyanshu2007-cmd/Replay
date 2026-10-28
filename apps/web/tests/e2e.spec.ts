@@ -357,4 +357,61 @@ test.describe('Replay web', () => {
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     }
   });
+
+  test('terminal sample run timeline loads historical events with zero pending stages and truthful verification gates', async ({ page }) => {
+    // String sort sample run
+    const runId = 'd0000003-0000-4000-8000-000000000003';
+    await page.goto(`/runs/${runId}`);
+
+    // Verify workspace loaded
+    await expect(page.getByRole('heading', { name: new RegExp(runId.slice(0, 8)) })).toBeVisible({ timeout: 15000 });
+
+    // Status pill displays FIXED (not PASSING or pending)
+    await expect(page.getByText('FIXED').first()).toBeVisible();
+
+    // Timeline stages: all 7 stages must be rendered and completed (done or fallback), none pending
+    const timeline = page.getByRole('region', { name: 'Agent timeline' });
+    await expect(timeline).toBeVisible();
+
+    const expectedStages = ['ingest', 'watch', 'locate', 'reproduce', 'verify', 'fix', 'report'];
+    for (const stage of expectedStages) {
+      const stageRow = timeline.locator(`[data-stage="${stage}"]`);
+      await expect(stageRow).toBeVisible();
+      // Status text must be done or blocked (rendered as fallback in UI), never pending
+      const statusAttr = await stageRow.getAttribute('data-status');
+      expect(['done', 'blocked']).toContain(statusAttr);
+    }
+
+    // Zero stages should be pending
+    const pendingStages = timeline.locator('[data-status="pending"]');
+    await expect(pendingStages).toHaveCount(0);
+
+    // Switch to Terminal tab and inspect verification gates
+    const terminalTab = page.getByRole('tab', { name: 'Terminal' });
+    await terminalTab.click();
+
+    const terminalPanel = page.getByRole('tabpanel');
+    await expect(terminalPanel).toBeVisible();
+    await expect(terminalPanel.getByText('Pre-fix reproduction: FAILED — expected, defect reproduced')).toBeVisible();
+    await expect(terminalPanel.getByText('Same-defect verification: PASSED — symptom confirmed')).toBeVisible();
+    await expect(terminalPanel.getByText('Post-fix reproduction: PASSED — defect resolved')).toBeVisible();
+    await expect(terminalPanel.getByText('Regression suite: PASSED — no regressions detected')).toBeVisible();
+    await expect(terminalPanel.getByText('Final result: FIXED')).toBeVisible();
+  });
+
+  test('navigating between sample runs resets timeline and events without cross-run leaks', async ({ page }) => {
+    const runId1 = 'd0000001-0000-4000-8000-000000000001';
+    const runId2 = 'd0000003-0000-4000-8000-000000000003';
+
+    await page.goto(`/runs/${runId1}`);
+    await expect(page.getByRole('heading', { name: new RegExp(runId1.slice(0, 8)) })).toBeVisible({ timeout: 15000 });
+    const timeline1 = page.getByRole('region', { name: 'Agent timeline' });
+    await expect(timeline1.locator('[data-status="pending"]')).toHaveCount(0);
+
+    // Navigate to second run
+    await page.goto(`/runs/${runId2}`);
+    await expect(page.getByRole('heading', { name: new RegExp(runId2.slice(0, 8)) })).toBeVisible({ timeout: 15000 });
+    const timeline2 = page.getByRole('region', { name: 'Agent timeline' });
+    await expect(timeline2.locator('[data-status="pending"]')).toHaveCount(0);
+  });
 });

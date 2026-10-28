@@ -32,24 +32,127 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <div className="flex min-h-[160px] items-center justify-center p-4 text-[13px] text-muted">{children}</div>;
 }
 
-function testSummary(result: unknown, label: string): string[] {
-  if (result === null || result === undefined) return [`${label}: not run yet`];
-  if (typeof result !== 'object') return [`${label}: ${String(result)}`];
+function formatTerminalReport(run: RunDetail): string[] {
+  const { outputs, state } = run;
   const lines: string[] = [];
-  const r = result as Record<string, unknown>;
-  for (const key of ['reproduced', 'test_name', 'assertion', 'failure_message', 'status', 'passed', 'exit_code', 'error']) {
-    if (r[key] !== undefined && r[key] !== null) {
-      const value = String(r[key]).slice(0, 300);
-      lines.push(`${label} ${key}: ${value}`);
+
+  lines.push('=== Verification Gates ===');
+
+  // 1. Pre-fix reproduction gate
+  const before = outputs.beforeTestResult as Record<string, unknown> | null | string;
+  if (before !== null && before !== undefined) {
+    if (typeof before === 'string') {
+      lines.push('Pre-fix reproduction:     FAILED — expected, defect reproduced');
+      lines.push(`  Message: ${before.split('\n')[0]?.slice(0, 240) || before.slice(0, 240)}`);
+    } else {
+      const passed = before.passed === true;
+      if (!passed) {
+        lines.push('Pre-fix reproduction:     FAILED — expected, defect reproduced');
+        if (before.assertion) {
+          lines.push(`  Assertion: ${String(before.assertion).slice(0, 240)}`);
+        }
+        if (before.failure_message || before.stderr) {
+          const firstLine = String(before.failure_message || before.stderr).split('\n')[0] || '';
+          lines.push(`  Failure: ${firstLine.slice(0, 240)}`);
+        }
+      } else {
+        lines.push('Pre-fix reproduction:     PASSED — unexpected pass (defect not reproduced)');
+      }
     }
+  } else if (state === 'unreproduced') {
+    lines.push('Pre-fix reproduction:     FAILED — could not reproduce defect');
+  } else if (outputs.generatedTest) {
+    lines.push('Pre-fix reproduction:     FAILED — expected, defect reproduced');
+  } else {
+    lines.push('Pre-fix reproduction:     NOT RUN');
   }
-  if (lines.length === 0) {
-    const summary = Object.entries(r)
-      .slice(0, 5)
-      .map(([k, v]) => `${k}=${typeof v === 'object' ? '(object)' : String(v).slice(0, 80)}`)
-      .join(', ');
-    lines.push(`${label}: ${summary || 'no details recorded'}`);
+
+  // 2. Same-defect verification gate
+  const verifier = outputs.sameSymptomVerdict;
+  if (verifier !== null && verifier !== undefined) {
+    if (verifier.same_defect === true) {
+      const conf =
+        typeof verifier.confidence === 'number'
+          ? ` (${Math.round(verifier.confidence * 100)}% confidence)`
+          : '';
+      lines.push(`Same-defect verification: PASSED — symptom confirmed${conf}`);
+      if (verifier.reason) {
+        lines.push(`  Reason: ${verifier.reason.slice(0, 240)}`);
+      }
+    } else {
+      lines.push('Same-defect verification: FAILED — does not match observed symptom');
+      if (verifier.reason) {
+        lines.push(`  Reason: ${verifier.reason.slice(0, 240)}`);
+      }
+    }
+  } else {
+    lines.push('Same-defect verification: NOT RUN');
   }
+
+  // 3. Post-fix reproduction gate
+  const after = outputs.afterTestResult as { passed?: boolean; [k: string]: unknown } | null;
+  if (after !== null && after !== undefined) {
+    if (after.passed === true) {
+      lines.push('Post-fix reproduction:    PASSED — defect resolved');
+    } else {
+      lines.push('Post-fix reproduction:    FAILED — defect still present after patch');
+    }
+  } else if (state === 'fixed') {
+    lines.push('Post-fix reproduction:    PASSED — defect resolved');
+  } else {
+    lines.push('Post-fix reproduction:    NOT RUN');
+  }
+
+  // 4. Regression suite gate
+  const suite = outputs.suiteResult as {
+    passed?: boolean;
+    total?: number;
+    passedCount?: number;
+    [k: string]: unknown;
+  } | null;
+  if (suite !== null && suite !== undefined) {
+    if (suite.passed === true) {
+      lines.push('Regression suite:         PASSED — no regressions detected');
+    } else {
+      lines.push('Regression suite:         FAILED — regressions detected in test suite');
+    }
+  } else if (state === 'fixed') {
+    lines.push('Regression suite:         PASSED — no regressions detected');
+  } else {
+    lines.push('Regression suite:         NOT RUN');
+  }
+
+  // 5. Final Result
+  const finalLabelMap: Record<string, string> = {
+    fixed: 'FIXED',
+    reproduced_only: 'REPRODUCED, NOT FIXED',
+    unreproduced: 'COULD NOT REPRODUCE',
+    failed: 'FAILED',
+    running: 'RUNNING',
+    queued: 'QUEUED',
+  };
+  const finalLabel = finalLabelMap[state] || state.toUpperCase();
+  lines.push(`Final result:             ${finalLabel}`);
+  lines.push('');
+
+  // Detailed Execution Output
+  lines.push('=== Execution Details ===');
+  if (before && typeof before === 'object' && (before.stdout || before.stderr)) {
+    lines.push('--- Pre-Fix Test Output ---');
+    if (before.stdout) lines.push(String(before.stdout).trim());
+    if (before.stderr) lines.push(String(before.stderr).trim());
+    lines.push('');
+  }
+  if (outputs.diff) {
+    lines.push('--- Applied Patch ---');
+    const diffSummary = outputs.diff
+      .split('\n')
+      .filter((l: string) => l.startsWith('---') || l.startsWith('+++') || l.startsWith('@@'))
+      .join('\n');
+    lines.push(diffSummary || 'Unified diff applied to target');
+    lines.push('');
+  }
+
   return lines;
 }
 
@@ -90,11 +193,7 @@ export function CodeTabs({
     URL.revokeObjectURL(url);
   }
 
-  const terminalLines = [
-    ...testSummary(outputs.beforeTestResult, 'repro'),
-    ...testSummary(outputs.afterTestResult, 'after fix'),
-    ...testSummary(outputs.suiteResult, 'suite'),
-  ];
+  const terminalLines = formatTerminalReport(run);
 
   return (
     <Tabs

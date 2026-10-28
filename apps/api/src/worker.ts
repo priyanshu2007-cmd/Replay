@@ -251,7 +251,15 @@ export class Worker {
         bugReport: result.bugReport,
         suspects: result.locatorOutput?.suspects ?? null,
         generatedTest: result.reproducerOutput?.test_code ?? null,
-        beforeTestResult: result.reproducerOutput?.failure_message ?? null,
+        beforeTestResult: result.reproducerOutput
+          ? {
+              passed: !result.reproBeforeFixFailed,
+              reproduced: result.reproBeforeFixFailed,
+              assertion: result.reproducerOutput.assertion,
+              failure_message: result.reproducerOutput.failure_message,
+              test_name: result.reproducerOutput.test_name,
+            }
+          : null,
         sameSymptomVerdict: result.verifierOutput ?? null,
         diff: result.fixerOutput?.patch ?? null,
         afterTestResult: { passed: result.reproAfterFixPassed },

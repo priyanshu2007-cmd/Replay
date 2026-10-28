@@ -31,7 +31,10 @@ test.describe('Production Website Live Audit (https://replay-blond-psi.vercel.ap
 
     for (let i = 0; i < 5; i++) {
       const card = cards.nth(i);
-      await expect(card.getByRole('heading', { level: 3 })).toContainText(sampleTitles[i]);
+      const title = sampleTitles[i];
+      if (title) {
+        await expect(card.getByRole('heading', { level: 3 })).toContainText(title);
+      }
       await expect(card.getByText('verified replay')).toBeVisible();
 
       // "Run sample" button must be enabled
@@ -80,7 +83,7 @@ test.describe('Production Website Live Audit (https://replay-blond-psi.vercel.ap
 
     // Workspace elements
     await expect(page.getByRole('heading', { name: /d0000001/ })).toBeVisible();
-    await expect(page.getByText('PASSING')).toBeVisible();
+    await expect(page.getByText('FIXED').first()).toBeVisible();
 
     // Check tabs
     const suspectsTab = page.getByRole('tab', { name: 'Suspects' });

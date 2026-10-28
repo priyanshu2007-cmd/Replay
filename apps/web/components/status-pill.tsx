@@ -11,7 +11,7 @@ const CONFIG: Record<RunState, { label: string; className: string }> = {
   queued: { label: 'QUEUED', className: 'border-border-strong text-secondary' },
   running: { label: 'RUNNING', className: 'border-progress text-progress' },
   reproduced_only: { label: 'REPRODUCED, NOT FIXED', className: 'border-fail-fill text-fail-text' },
-  fixed: { label: 'PASSING', className: 'border-pass text-pass' },
+  fixed: { label: 'FIXED', className: 'border-pass text-pass' },
   unreproduced: { label: 'COULD NOT REPRODUCE', className: 'border-border-strong text-secondary' },
   failed: { label: 'FAILED', className: 'border-fail-fill text-fail-text' },
 };

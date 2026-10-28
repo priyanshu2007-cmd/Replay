@@ -112,6 +112,26 @@ function buildEvents(
       },
     },
     {
+      stage: 'ingest',
+      agent: 'orchestrator',
+      event_type: 'ingest_started',
+      payload: {
+        sample_id: sampleId,
+        target_repo: 'demo-shop',
+        message: 'Loaded sample recording and target repository metadata',
+      },
+    },
+    {
+      stage: 'ingest',
+      agent: 'orchestrator',
+      event_type: 'ingest_completed',
+      payload: {
+        status: 'ok',
+        target_repo: 'demo-shop',
+        duration_ms: 85,
+      },
+    },
+    {
       stage: 'watch',
       agent: 'Watcher',
       event_type: 'watch_started',

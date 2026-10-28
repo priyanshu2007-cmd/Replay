@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { STAGES, type RunEvent, type RunStage } from '@/lib/api';
+import { STAGES, type RunEvent, type RunStage, type RunState } from '@/lib/api';
 import { ModelBadge, STAGE_MODEL } from '@/components/ui/badge';
 
 /**
@@ -22,6 +22,8 @@ const STATUS_DOT: Record<StageStatus, string> = {
   failed: 'bg-fail-fill',
   blocked: 'bg-progress',
 };
+
+const TERMINAL_STATES = new Set<RunState>(['fixed', 'reproduced_only', 'unreproduced', 'failed']);
 
 function fmtMs(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
@@ -48,7 +50,21 @@ function payloadLines(payload: Record<string, unknown>): string[] {
   return lines;
 }
 
-export function Timeline({ events, currentStage }: { events: RunEvent[]; currentStage: RunStage | null }) {
+export function Timeline({
+  events,
+  currentStage,
+  loading = false,
+  error = null,
+  onRetry,
+  runState,
+}: {
+  events: RunEvent[];
+  currentStage: RunStage | null;
+  loading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
+  runState?: RunState;
+}) {
   const [openStage, setOpenStage] = useState<RunStage | null>(null);
 
   const byStage = new Map<RunStage, RunEvent[]>();
@@ -61,7 +77,12 @@ export function Timeline({ events, currentStage }: { events: RunEvent[]; current
 
   function statusOf(stage: RunStage): StageStatus {
     const list = byStage.get(stage) ?? [];
-    const started = list.some((e) => e.event_type.endsWith('_started') || e.event_type === 'run_created');
+    const started = list.some(
+      (e) =>
+        e.event_type.endsWith('_started') ||
+        e.event_type === 'run_created' ||
+        e.event_type === 'pipeline_started',
+    );
     const completed = list.some((e) => e.event_type.endsWith('_completed'));
     // A fixture fallback means the live model was unavailable for this stage:
     // the run continues on fixtures, shown as amber "fallback", never green.
@@ -107,6 +128,53 @@ export function Timeline({ events, currentStage }: { events: RunEvent[]; current
     return null;
   }
 
+  if (loading && events.length === 0) {
+    return (
+      <section aria-label="Agent timeline" className="rounded-m border border-border-subtle bg-panel p-3">
+        <div className="mb-2 flex items-center justify-between border-b border-border-subtle pb-2">
+          <span className="font-mono text-[12px] text-muted">Loading stage events...</span>
+          <span className="h-2 w-2 animate-pulse rounded-full bg-progress motion-reduce:animate-none" />
+        </div>
+        <ol className="divide-y divide-border-subtle">
+          {STAGES.map((stage) => (
+            <li key={stage} className="flex items-center gap-3 py-2.5 opacity-50">
+              <span className="h-2 w-2 rounded-full bg-border-strong" />
+              <span className="w-20 font-mono text-[13px] text-muted">{stage}</span>
+              <span className="ml-auto font-mono text-[11px] text-muted">loading...</span>
+            </li>
+          ))}
+        </ol>
+      </section>
+    );
+  }
+
+  if (error && events.length === 0) {
+    return (
+      <section aria-label="Agent timeline" className="rounded-m border border-fail-fill/40 bg-panel p-4">
+        <p className="mb-1 font-mono text-[13px] text-fail-text">{error}</p>
+        <p className="mb-3 text-[12px] text-muted">Could not load historical events for this run.</p>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="rounded-s border border-border-subtle bg-canvas px-3 py-1 font-mono text-[12px] text-primary hover:border-border-strong"
+          >
+            Retry loading events
+          </button>
+        )}
+      </section>
+    );
+  }
+
+  if (!loading && !error && events.length === 0 && runState && TERMINAL_STATES.has(runState)) {
+    return (
+      <section aria-label="Agent timeline" className="rounded-m border border-border-subtle bg-panel p-4 text-center">
+        <p className="mb-1 font-mono text-[13px] text-secondary">No historical events recorded</p>
+        <p className="text-[12px] text-muted">No pipeline stage events were found for this run.</p>
+      </section>
+    );
+  }
+
   return (
     <section aria-label="Agent timeline" className="rounded-m border border-border-subtle bg-panel">
       <ol className="divide-y divide-border-subtle">
@@ -118,7 +186,12 @@ export function Timeline({ events, currentStage }: { events: RunEvent[]; current
           const cost = costOf(stage);
           const open = openStage === stage;
           return (
-            <li key={stage} className={status === 'pending' ? 'opacity-50' : ''}>
+            <li
+              key={stage}
+              data-stage={stage}
+              data-status={status}
+              className={status === 'pending' ? 'opacity-50' : ''}
+            >
               <div className="flex items-center gap-3 px-3 py-2.5">
                 <button
                   type="button"
@@ -130,16 +203,23 @@ export function Timeline({ events, currentStage }: { events: RunEvent[]; current
                 >
                   {open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
                 </button>
-                <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full transition-colors duration-200 ease-out ${STATUS_DOT[status]}`} />
+                <span
+                  aria-hidden
+                  className={`h-2 w-2 shrink-0 rounded-full transition-colors duration-200 ease-out ${STATUS_DOT[status]}`}
+                />
                 <span className="w-20 font-mono text-[13px] text-primary">{stage}</span>
                 {STAGE_MODEL[stage] && <ModelBadge model={STAGE_MODEL[stage]!} />}
                 <span className="ml-auto flex items-center gap-3 font-mono text-[12px] text-secondary">
                   {tokens !== null && <span className="text-muted">{tokens.toLocaleString()} tok</span>}
-                  {cost !== null && <span className="text-muted" title="Estimated cost">${cost} est.</span>}
+                  {cost !== null && (
+                    <span className="text-muted" title="Estimated cost">
+                      ${cost} est.
+                    </span>
+                  )}
                   {elapsed && <span>{elapsed}</span>}
                   <span className={status === 'failed' ? 'text-fail-text' : ''}>
-                  {status === 'blocked' ? 'fallback' : status}
-                </span>
+                    {status === 'blocked' ? 'fallback' : status}
+                  </span>
                 </span>
               </div>
               {open && stageEvents.length > 0 && (

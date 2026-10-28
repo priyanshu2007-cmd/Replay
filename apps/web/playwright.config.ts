@@ -5,6 +5,7 @@ const apiEntry = path.join(__dirname, '../../apps/api/dist/server.js');
 
 export default defineConfig({
   testDir: './tests',
+  testIgnore: '**/prod-audit.spec.ts',
   reporter: [['list'], ['github']],
   fullyParallel: false,
   retries: 0,

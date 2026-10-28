@@ -97,8 +97,18 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
     if (runId) void fetchRun(runId);
   }, [runId, fetchRun]);
 
-  const liveStream = runId !== null && run !== null && !replay && !TERMINAL.has(run.state);
-  const { events, mode: streamMode } = useRunEvents(runId ?? '', liveStream);
+  const isTerminal = run !== null && TERMINAL.has(run.state);
+  const liveStream = runId !== null && run !== null && !replay && !isTerminal;
+  const {
+    events,
+    mode: streamMode,
+    loading: eventsLoading,
+    error: eventsError,
+    reload: reloadEvents,
+  } = useRunEvents(runId ?? '', {
+    liveStream,
+    enabled: Boolean(runId),
+  });
 
   // Replay mode: load stored events once, play them at recorded speed (capped gaps).
   useEffect(() => {
@@ -425,7 +435,14 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
 
       <div className="grid gap-4 lg:grid-cols-[4fr_4fr_5fr]">
         <VideoPanel src={videoSrc} steps={steps} failureTimestampS={failureTs} seekTo={seekTo} />
-        <Timeline events={allEvents} currentStage={currentStage} />
+        <Timeline
+          events={allEvents}
+          currentStage={currentStage}
+          loading={eventsLoading && allEvents.length === 0}
+          error={eventsError}
+          onRetry={reloadEvents}
+          runState={run.state}
+        />
         <CodeTabs run={run} activeTab={activeCodeTab} onTabChange={setActiveCodeTab} />
       </div>
 
