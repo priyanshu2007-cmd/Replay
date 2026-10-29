@@ -248,7 +248,7 @@ Track deployment readiness, benchmark execution, hallway testing, README, demo v
 - [x] README runnable by a stranger (verified commands)
 - [x] MIT LICENSE + THIRD_PARTY_NOTICES (AGPL mascot dependency documented)
 - [x] Public repo push: github.com/priyanshu2007-cmd/Replay @ 521105b (gitleaks clean on history, 2026-10-25)
-- [x] Deployed public URL: https://replay-blond-psi.vercel.app (recorded-sample replay mode; live audit 7/7)
+- [x] Deployed public URL: <https://replay-blond-psi.vercel.app> (recorded-sample replay mode; live audit 7/7)
 - [x] Demo video (Step 35): recorded in `docs/demo/replay-demo.mp4` and `docs/demo/replay-demo.webm`
 - [x] Watcher live-vision unblocked (NVIDIA Nemotron-3.5-VL + FFmpeg 9.0.2 installed and evaluated 5/5)
 - [x] Hackathon submission document (Step 36): authored in `docs/HACKATHON_SUBMISSION.md`

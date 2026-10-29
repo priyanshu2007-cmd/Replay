@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { execFile } from 'node:child_process';
@@ -10,7 +10,7 @@ const OUT_DIR = path.resolve(REPO_ROOT, 'docs/demo');
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function displayCaption(page: any, text: string, subtitle?: string): Promise<void> {
+async function displayCaption(page: Page, text: string, subtitle?: string): Promise<void> {
   await page.evaluate(
     ({ msg, sub }: { msg: string; sub?: string }) => {
       let el = document.getElementById('replay-demo-caption');
@@ -59,7 +59,7 @@ test.use({
   },
 });
 
-test('record comprehensive Replay demo video', async ({ page, request }, testInfo) => {
+test('record comprehensive Replay demo video', async ({ page, request }) => {
   test.setTimeout(120_000);
   await fs.mkdir(OUT_DIR, { recursive: true });
 
