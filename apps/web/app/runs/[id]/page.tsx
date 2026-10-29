@@ -359,9 +359,12 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
   const tokens = run.metrics.totalTokens;
   const cost = run.metrics.estimatedCostUsd;
 
+  const isRecordedReplay = replay || run.executionMode === 'recorded_sample_replay';
+  const isLive = run.executionMode === 'live';
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
-      {replay && <ReplayBanner />}
+      {isRecordedReplay && <ReplayBanner />}
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <Link
           href="/"
@@ -372,6 +375,16 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
         </Link>
         <h1 className="font-mono text-[14px] text-secondary">{run.id.slice(0, 8)}</h1>
         <StatusPill state={run.state} large fallback={hadFallback} />
+        {isRecordedReplay && (
+          <span className="rounded-s border border-border-subtle bg-canvas px-2 py-0.5 font-mono text-[11px] text-secondary">
+            Demo Replay
+          </span>
+        )}
+        {isLive && (
+          <span className="rounded-s border border-border-strong bg-raised px-2 py-0.5 font-mono text-[11px] text-primary">
+            Live Run
+          </span>
+        )}
         {currentStage && !TERMINAL.has(run.state) && (
           <span className="text-[13px] text-secondary">
             {STAGE_WORDS[currentStage] ?? currentStage}

@@ -16,6 +16,7 @@ export interface RunRecord {
   state: RunState;
   stage: RunStage;
   isSample: boolean;
+  executionMode?: 'live' | 'recorded_sample_replay' | 'fixture_assisted' | null;
   workerLock: string | null;
   workerHeartbeat: Date | null;
   bugReport: any | null;
@@ -203,15 +204,18 @@ export class MemoryRunRepository implements RunRepository {
     if (!bundle) return null;
     const now = new Date();
     const createdAt = new Date(now.getTime() - (bundle.run.durationMs ?? 40_000));
+    const newId = randomUUID();
     const record: RunRecord = {
       ...bundle.run,
+      id: newId,
+      executionMode: 'recorded_sample_replay',
       note: note ?? bundle.run.note,
       createdAt,
       updatedAt: now,
       completedAt: now,
     };
     const evList: RunEvent[] = bundle.events.map((ev, seqIdx) => ({
-      run_id: record.id,
+      run_id: newId,
       seq: seqIdx + 1,
       stage: ev.stage,
       agent: ev.agent,

@@ -163,7 +163,7 @@ async function main() {
         console.log(`BLOCKED  ${fixture.id}: provider error — ${msg.slice(0, 120)}`);
       } else {
         failCount++;
-        console.log(`FAIL     ${fixture.id}: ${msg.slice(0, 140)}`);
+        console.log(`FAIL     ${fixture.id}: ${msg}`);
       }
     }
   }

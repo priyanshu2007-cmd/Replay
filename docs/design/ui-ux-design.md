@@ -39,7 +39,7 @@ Z-index: header 20, speech bubble 30, toast 40. Nothing higher.
 - Sample card: title, mono bug id, expected behavior line, frame thumbnail from the real recording, one Run button; disabled state when `recordingAvailable` is false.
 - Model badge: mono 12px, border, e.g. `nemotron-3-ultra-550b`.
 - Stage row: stage name, model badge, status, elapsed, tokens, cost; expandable tool calls; running (amber pulse dot, disabled under reduced motion), done, failed.
-- Status pill: FAILING (fail), PASSING (pass), RUNNING (progress), REPRODUCED ONLY, UNREPRODUCED, FAILED (secondary). 28px tall, mono 12px uppercase.
+- Status pill: FAILING (fail), FIXED (pass), RUNNING (progress), REPRODUCED ONLY, UNREPRODUCED, FAILED (secondary). 28px tall, mono 12px uppercase.
 - Code / diff / terminal panels: mono 13px, line numbers, 1px border, no shadows. Diff: standard red/green line backgrounds at 12% alpha.
 - Evidence card: two squares side by side (video failure frame via canvas capture, test outcome), verdict sentence, timestamps.
 - Toast: bottom-left, panel bg, 1px border, 4s auto-dismiss, manual close.

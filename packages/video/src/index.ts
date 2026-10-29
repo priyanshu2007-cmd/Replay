@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import * as os from 'node:os';
 
 const execFileAsync = promisify(execFile);
 
@@ -12,6 +13,37 @@ export interface FrameInfo {
 }
 
 export type FfmpegExec = (file: string, args: string[]) => Promise<{ stdout?: string; stderr?: string }>;
+
+export const SUPPORTED_VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mov', '.mkv'] as const;
+export type SupportedVideoExtension = typeof SUPPORTED_VIDEO_EXTENSIONS[number];
+
+export const SUPPORTED_VIDEO_MIME_TYPES = [
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  'video/x-matroska',
+] as const;
+export type SupportedVideoMimeType = typeof SUPPORTED_VIDEO_MIME_TYPES[number];
+
+export const MAX_VIDEO_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB default limit
+
+export function isSupportedVideoFormat(filenameOrMime: string): boolean {
+  if (!filenameOrMime) return false;
+  const lower = filenameOrMime.toLowerCase().trim();
+  if (SUPPORTED_VIDEO_MIME_TYPES.some((m) => lower.startsWith(m))) return true;
+  const ext = path.extname(lower);
+  return SUPPORTED_VIDEO_EXTENSIONS.some((e) => e === ext || e === lower);
+}
+
+export interface VideoMetadata {
+  durationS: number;
+  width: number;
+  height: number;
+  fps: number;
+  codec: string;
+  sizeBytes: number;
+  formatName: string;
+}
 
 export interface ExtractFramesOptions {
   /** Uniform sampling rate. Default 2 (plan: ~2 fps). */
@@ -24,6 +56,14 @@ export interface ExtractFramesOptions {
   sceneChange?: boolean;
   /** Scene-change detection threshold. Default 0.3. */
   sceneThreshold?: number;
+  /** Maximum number of frames returned to bound token consumption. Default 40. */
+  maxFrames?: number;
+  /** Optional target timestamps (seconds) to preserve around key moments. */
+  targetTimestampsS?: number[];
+  /** Maximum video file size in bytes. Default 100MB. */
+  maxSizeBytes?: number;
+  /** Process execution timeout in milliseconds. Default 120_000ms. */
+  timeoutMs?: number;
   /** Injectable process runner for deterministic offline tests. */
   exec?: FfmpegExec;
 }
@@ -34,6 +74,10 @@ interface ResolvedOptions {
   jpegQuality: number;
   sceneChange: boolean;
   sceneThreshold: number;
+  maxFrames: number;
+  targetTimestampsS?: number[];
+  maxSizeBytes: number;
+  timeoutMs: number;
 }
 
 function resolveOptions(options: ExtractFramesOptions): ResolvedOptions {
@@ -43,6 +87,10 @@ function resolveOptions(options: ExtractFramesOptions): ResolvedOptions {
     jpegQuality: options.jpegQuality ?? 2,
     sceneChange: options.sceneChange ?? true,
     sceneThreshold: options.sceneThreshold ?? 0.3,
+    maxFrames: options.maxFrames ?? 40,
+    targetTimestampsS: options.targetTimestampsS,
+    maxSizeBytes: options.maxSizeBytes ?? MAX_VIDEO_FILE_SIZE_BYTES,
+    timeoutMs: options.timeoutMs ?? 120_000,
   };
 }
 
@@ -101,6 +149,55 @@ export function mergeFrameSets(sample: FrameInfo[], scene: FrameInfo[], dedupeS 
   return merged.sort((a, b) => a.timestampS - b.timestampS);
 }
 
+/** Pure: downsample frame set to maxFrames while prioritizing target timestamps and boundary frames. */
+export function downsampleFrames(
+  frames: FrameInfo[],
+  maxFrames: number,
+  targetTimestampsS: number[] = []
+): FrameInfo[] {
+  if (frames.length <= maxFrames) return frames;
+
+  const targetSet = new Set<FrameInfo>();
+
+  // Always keep first and last frame
+  if (frames[0]) targetSet.add(frames[0]);
+  if (frames[frames.length - 1]) targetSet.add(frames[frames.length - 1]!);
+
+  // For each target timestamp, find closest frame
+  for (const target of targetTimestampsS) {
+    let closest: FrameInfo | null = null;
+    let minDiff = Infinity;
+    for (const f of frames) {
+      const diff = Math.abs(f.timestampS - target);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = f;
+      }
+    }
+    if (closest) targetSet.add(closest);
+  }
+
+  // If targets alone exceed maxFrames, take subset of targets
+  if (targetSet.size >= maxFrames) {
+    return Array.from(targetSet)
+      .sort((a, b) => a.timestampS - b.timestampS)
+      .slice(0, maxFrames);
+  }
+
+  // Uniformly fill remaining budget from unselected frames
+  const remainingBudget = maxFrames - targetSet.size;
+  const unselected = frames.filter(f => !targetSet.has(f));
+  const step = unselected.length / remainingBudget;
+  const picked: FrameInfo[] = [];
+
+  for (let i = 0; i < remainingBudget; i++) {
+    const idx = Math.min(Math.floor(i * step), unselected.length - 1);
+    if (unselected[idx]) picked.push(unselected[idx]!);
+  }
+
+  return [...Array.from(targetSet), ...picked].sort((a, b) => a.timestampS - b.timestampS);
+}
+
 async function cleanupPartial(outputDir: string): Promise<void> {
   try {
     const files = await fs.readdir(outputDir);
@@ -112,10 +209,29 @@ async function cleanupPartial(outputDir: string): Promise<void> {
   }
 }
 
+function sanitizeErrorMessage(msg: string): string {
+  // Strip absolute user paths from diagnostic messages
+  return msg.replace(/\/(?:[a-zA-Z0-9._-]+\/)+/g, '[path]/');
+}
+
 function execError(err: unknown): Error {
   const e = err as { stderr?: string; message?: string };
-  const tail = String(e?.stderr ?? '').trim().split('\n').slice(-3).join(' | ').slice(0, 300);
-  return new Error(`ffmpeg failed: ${e?.message ?? String(err)}${tail ? ` — stderr tail: ${tail}` : ''}`);
+  const raw = String(e?.stderr || e?.message || err);
+  const sanitized = sanitizeErrorMessage(raw);
+  const tail = sanitized.trim().split('\n').slice(-3).join(' | ').slice(0, 300);
+  return new Error(`ffmpeg failed: ${tail}`);
+}
+
+function parseFpsString(rateStr?: string): number {
+  if (!rateStr) return 0;
+  const parts = rateStr.split('/').map(Number);
+  const num = parts[0];
+  const den = parts[1];
+  if (num !== undefined && den !== undefined && den > 0 && !Number.isNaN(num) && !Number.isNaN(den)) {
+    return Number((num / den).toFixed(2));
+  }
+  const n = Number(rateStr);
+  return Number.isNaN(n) ? 0 : n;
 }
 
 export class VideoProcessor {
@@ -130,11 +246,141 @@ export class VideoProcessor {
     }
   }
 
+  /** True when an ffprobe binary is on PATH. */
+  static async checkFfprobe(exec?: FfmpegExec): Promise<boolean> {
+    try {
+      if (exec) await exec('ffprobe', ['-version']);
+      else await execFileAsync('ffprobe', ['-version']);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Check both ffmpeg and ffprobe availability. */
+  static async checkTools(exec?: FfmpegExec): Promise<{ ffmpeg: boolean; ffprobe: boolean }> {
+    const [ffmpeg, ffprobe] = await Promise.all([
+      this.checkFfmpeg(exec),
+      this.checkFfprobe(exec),
+    ]);
+    return { ffmpeg, ffprobe };
+  }
+
+  /**
+   * Validate that the video exists, is non-empty, within size limits, and has a supported format.
+   * Throws actionable, privacy-safe errors on failure.
+   */
+  static async validateVideo(videoPath: string, maxSizeBytes = MAX_VIDEO_FILE_SIZE_BYTES): Promise<fs.FileHandle | void> {
+    const stat = await fs.stat(videoPath).catch(() => null);
+    const safeName = path.basename(videoPath);
+
+    if (!stat || !stat.isFile()) {
+      throw new Error(`Video file not found: ${safeName}`);
+    }
+
+    if (stat.size === 0) {
+      throw new Error(`Video file is empty (zero bytes): ${safeName}`);
+    }
+
+    if (stat.size > maxSizeBytes) {
+      const maxMb = Math.round(maxSizeBytes / (1024 * 1024));
+      throw new Error(`Video file exceeds maximum size limit of ${maxMb}MB (${stat.size} bytes): ${safeName}`);
+    }
+
+    const ext = path.extname(videoPath).toLowerCase();
+    if (ext && !SUPPORTED_VIDEO_EXTENSIONS.includes(ext as SupportedVideoExtension)) {
+      throw new Error(
+        `Unsupported video format "${ext}" for ${safeName}. Supported formats: ${SUPPORTED_VIDEO_EXTENSIONS.join(', ')}`
+      );
+    }
+  }
+
+  /**
+   * Extract video stream metadata (duration, width, height, fps, codec, size) using ffprobe.
+   */
+  static async extractMetadata(
+    videoPath: string,
+    options: { exec?: FfmpegExec; maxSizeBytes?: number } = {}
+  ): Promise<VideoMetadata> {
+    await this.validateVideo(videoPath, options.maxSizeBytes);
+
+    const run: FfmpegExec =
+      options.exec ??
+      ((file, args) =>
+        execFileAsync(file, args, {
+          timeout: 30_000,
+          maxBuffer: 5 * 1024 * 1024,
+        }));
+
+    if (!(await this.checkFfprobe(options.exec))) {
+      throw new Error('ffprobe is not installed or not available in PATH. Install ffprobe (e.g. brew install ffmpeg) to inspect video metadata.');
+    }
+
+    const probeArgs = [
+      '-v', 'quiet',
+      '-print_format', 'json',
+      '-show_format',
+      '-show_streams',
+      videoPath,
+    ];
+
+    try {
+      const { stdout = '' } = await run('ffprobe', probeArgs);
+      const parsed = JSON.parse(stdout);
+      const streams: any[] = Array.isArray(parsed.streams) ? parsed.streams : [];
+      const videoStream = streams.find(s => s.codec_type === 'video') || streams[0] || {};
+      const format = parsed.format || {};
+
+      const durationS = Number(videoStream.duration || format.duration || 0);
+      const width = Number(videoStream.width || 0);
+      const height = Number(videoStream.height || 0);
+      const fps = parseFpsString(videoStream.avg_frame_rate || videoStream.r_frame_rate);
+      const codec = String(videoStream.codec_name || 'unknown');
+      const sizeBytes = Number(format.size || 0);
+      const formatName = String(format.format_name || '');
+
+      return {
+        durationS: Number(durationS.toFixed(2)),
+        width,
+        height,
+        fps,
+        codec,
+        sizeBytes,
+        formatName,
+      };
+    } catch (err) {
+      throw new Error(`Failed to extract video metadata: ${sanitizeErrorMessage(String((err as Error).message || err))}`);
+    }
+  }
+
+  /**
+   * Helper: create a distinct, isolated temporary directory for a specific run.
+   */
+  static async createRunTempDir(runId: string, baseDir?: string): Promise<string> {
+    const safeRunId = runId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64) || 'default';
+    const parent = baseDir ?? os.tmpdir();
+    const dir = path.join(parent, `replay-run-${safeRunId}-frames`);
+    await fs.mkdir(dir, { recursive: true });
+    return dir;
+  }
+
+  /**
+   * Helper: safely remove a run's temporary directory.
+   */
+  static async cleanupRunTempDir(dir: string): Promise<void> {
+    if (!dir) return;
+    try {
+      await fs.rm(dir, { recursive: true, force: true });
+    } catch {
+      // best-effort cleanup
+    }
+  }
+
   /**
    * Extract timestamped frames from a video file.
    * Throws (and cleans partial output) when ffmpeg is missing, the video cannot
    * be decoded, or no frames are produced. Frame bytes stay on disk at
-   * FrameInfo.filePath — storage upload belongs to the ingest stage, not here.
+   * FrameInfo.filePath.
    */
   static async extractFrames(
     videoPath: string,
@@ -146,7 +392,7 @@ export class VideoProcessor {
       options.exec ??
       ((file, args) =>
         execFileAsync(file, args, {
-          timeout: 120_000,
+          timeout: o.timeoutMs,
           maxBuffer: 10 * 1024 * 1024,
         }));
 
@@ -154,11 +400,7 @@ export class VideoProcessor {
       throw new Error('ffmpeg is not installed or not available in PATH. Install ffmpeg (e.g. brew install ffmpeg) before extracting frames.');
     }
 
-    const stat = await fs.stat(videoPath).catch(() => null);
-    if (!stat?.isFile()) {
-      throw new Error(`Video file not found: ${videoPath}`);
-    }
-
+    await this.validateVideo(videoPath, o.maxSizeBytes);
     await fs.mkdir(outputDir, { recursive: true });
 
     // Pass 1: uniform sampling — the core timeline.
@@ -176,6 +418,8 @@ export class VideoProcessor {
       throw new Error('No frames extracted — the video may be undecodable, empty, or in an unsupported format.');
     }
     const sampleFrames = framesFromListing(sampleFiles, outputDir, o.fps);
+
+    let allFrames = sampleFrames;
 
     // Pass 2: supplemental scene-change frames. Failure here is non-fatal:
     // the sampled timeline is already complete.
@@ -196,12 +440,14 @@ export class VideoProcessor {
             filename: sceneFiles[i] as string,
           });
         }
-        return mergeFrameSets(sampleFrames, sceneFrames);
+        allFrames = mergeFrameSets(sampleFrames, sceneFrames);
       } catch {
-        return sampleFrames;
+        // Fall back to sample frames if scene detection fails
+        allFrames = sampleFrames;
       }
     }
 
-    return sampleFrames;
+    // Downsample to maxFrames to respect token budgets while prioritizing key timestamps
+    return downsampleFrames(allFrames, o.maxFrames, o.targetTimestampsS);
   }
 }

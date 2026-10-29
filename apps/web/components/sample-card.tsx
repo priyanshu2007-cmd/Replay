@@ -1,8 +1,17 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import Link from 'next/link';
 import type { Sample } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+
+export const DEMO_REPLAY_IDS: Record<string, string> = {
+  'cart-nan': 'd0000001-0000-4000-8000-000000000001',
+  'double-discount': 'd0000002-0000-4000-8000-000000000002',
+  'string-sort': 'd0000003-0000-4000-8000-000000000003',
+  'empty-email': 'd0000004-0000-4000-8000-000000000004',
+  'quantity-reset': 'd0000005-0000-4000-8000-000000000005',
+};
 
 /**
  * Sample card: the thumbnail is the real bug recording (first frame via
@@ -103,17 +112,25 @@ export function SampleCard({
         {sample.observedBehavior && (
           <p className="mt-1 line-clamp-2 text-[13px] text-secondary">{sample.observedBehavior}</p>
         )}
-        <div className="mt-auto pt-3">
+        <div className="mt-auto flex flex-col gap-2 pt-3">
           <Button
             variant="primary"
             disabled={runDisabled}
             onClick={() => onRun(sample.id)}
             className="w-full"
           >
-            {busy ? 'Starting' : 'Run sample'}
+            {busy ? 'Starting...' : 'Run sample'}
           </Button>
+          {DEMO_REPLAY_IDS[sample.id] && (
+            <Link
+              href={`/runs/${DEMO_REPLAY_IDS[sample.id]}`}
+              className="inline-flex h-8 items-center justify-center rounded-s border border-border-subtle bg-canvas px-3 font-mono text-[11px] text-secondary transition-colors hover:border-border-strong hover:text-primary"
+            >
+              Watch Demo Replay
+            </Link>
+          )}
           {runDisabled && !busy && (
-            <p className="mt-1.5 text-[11px] text-muted">
+            <p className="mt-1 text-[11px] text-muted">
               {!canPlayVideo
                 ? 'Sample recording file is unavailable.'
                 : disabledReason ?? 'Backend API is currently unreachable.'}

@@ -664,6 +664,7 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
       state: run.state,
       stage: run.stage,
       isSample: run.isSample,
+      executionMode: run.executionMode ?? (run.id.startsWith('d0000001') ? 'recorded_sample_replay' : 'live'),
       videoKey: isKnownSampleId(run.videoKey) ? run.videoKey : 'upload',
       note: run.isSample ? run.note : null,
       outputs: {

@@ -339,8 +339,11 @@ export class LlmClient {
       const detail = err instanceof z.ZodError
         ? 'schema validation failed'
         : 'invalid JSON';
+      const issueDetails = err instanceof z.ZodError
+        ? ` (${err.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ')})`
+        : '';
       throw new LlmError(
-        `Model output ${detail} after retry. Output head: ${redactSecretText(rawContent).slice(0, 300)}`,
+        `Model output ${detail} after retry${issueDetails}. Output head: ${redactSecretText(rawContent).slice(0, 300)}`,
         'bad_output', role as AgentRole, model,
       );
     }

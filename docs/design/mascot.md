@@ -17,7 +17,7 @@ Shape and colors: soft cube (Cubee-style starter family) in the accent teal, two
 | Test FAILING (expected red) | thinking |
 | Verify stage | curious |
 | Fix stage | working |
-| Test PASSING | celebrate once, then idle |
+| Run FIXED | celebrate once, then idle |
 | Cannot reproduce or fix fails | confused |
 | 30s inactivity | drowsy then sleeping |
 | Click on mascot | playful |

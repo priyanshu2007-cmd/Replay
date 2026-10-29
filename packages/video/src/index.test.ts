@@ -6,7 +6,11 @@ import {
   parseSceneTimestamps,
   framesFromListing,
   mergeFrameSets,
+  downsampleFrames,
+  isSupportedVideoFormat,
   VideoProcessor,
+  SUPPORTED_VIDEO_EXTENSIONS,
+  type FrameInfo,
 } from './index.js';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
@@ -61,39 +65,144 @@ test('merge keeps chronological order and drops near-duplicate scene frames', ()
   assert.ok(merged.every(f => !f.filename.startsWith('s_1')));
 });
 
-test('extractFrames reports missing ffmpeg honestly (genuine environment check)', async () => {
-  const ffmpegPresent = await VideoProcessor.checkFfmpeg();
-  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'replay-video-test-'));
+test('downsampleFrames preserves boundaries and targets within maxFrames', () => {
+  const frames: FrameInfo[] = Array.from({ length: 50 }, (_, i) => ({
+    timestampS: i * 0.5,
+    filePath: `/tmp/f_${i}.jpg`,
+    filename: `f_${i}.jpg`,
+  }));
+
+  const downsampled = downsampleFrames(frames, 10, [12.0]);
+  assert.equal(downsampled.length, 10);
+  // Boundaries preserved
+  assert.equal(downsampled[0]?.timestampS, 0);
+  assert.equal(downsampled[downsampled.length - 1]?.timestampS, 24.5);
+  // Target 12.0 preserved
+  assert.ok(downsampled.some(f => f.timestampS === 12.0));
+  // In ascending chronological order
+  for (let i = 1; i < downsampled.length; i++) {
+    assert.ok(downsampled[i]!.timestampS > downsampled[i - 1]!.timestampS);
+  }
+});
+
+test('isSupportedVideoFormat recognizes valid extensions and MIME types', () => {
+  assert.ok(SUPPORTED_VIDEO_EXTENSIONS.includes('.mp4'));
+  assert.ok(isSupportedVideoFormat('bug.mp4'));
+  assert.ok(isSupportedVideoFormat('capture.webm'));
+  assert.ok(isSupportedVideoFormat('recording.mov'));
+  assert.ok(isSupportedVideoFormat('screen.mkv'));
+  assert.ok(isSupportedVideoFormat('video/mp4'));
+  assert.ok(isSupportedVideoFormat('video/webm; codecs="vp9"'));
+
+  assert.ok(!isSupportedVideoFormat('image.png'));
+  assert.ok(!isSupportedVideoFormat('archive.zip'));
+  assert.ok(!isSupportedVideoFormat('script.js'));
+  assert.ok(!isSupportedVideoFormat(''));
+});
+
+test('validateVideo rejects missing, zero-byte, oversized, and unsupported formats', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'replay-validate-test-'));
   try {
-    if (ffmpegPresent) {
-      // Environment has ffmpeg: missing-file path exercises safe failure instead.
-      await assert.rejects(
-        VideoProcessor.extractFrames(path.join(tmp, 'does-not-exist.mp4'), tmp),
-        /not found|ffmpeg/
-      );
-    } else {
-      await assert.rejects(
-        VideoProcessor.extractFrames(path.join(tmp, 'any.mp4'), tmp),
-        /ffmpeg is not installed/
-      );
-    }
+    // Missing
+    await assert.rejects(
+      VideoProcessor.validateVideo(path.join(tmp, 'missing.mp4')),
+      /Video file not found/
+    );
+
+    // Zero-byte
+    const zeroPath = path.join(tmp, 'zero.mp4');
+    await fs.writeFile(zeroPath, '');
+    await assert.rejects(
+      VideoProcessor.validateVideo(zeroPath),
+      /Video file is empty \(zero bytes\)/
+    );
+
+    // Unsupported format
+    const badExt = path.join(tmp, 'test.avi');
+    await fs.writeFile(badExt, 'avi content');
+    await assert.rejects(
+      VideoProcessor.validateVideo(badExt),
+      /Unsupported video format "\.avi"/
+    );
+
+    // Oversized
+    const validMp4 = path.join(tmp, 'big.mp4');
+    await fs.writeFile(validMp4, 'x'.repeat(1024));
+    await assert.rejects(
+      VideoProcessor.validateVideo(validMp4, 500),
+      /Video file exceeds maximum size limit/
+    );
+
+    // Valid
+    await VideoProcessor.validateVideo(validMp4, 2048);
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }
 });
 
-test('extractFrames rejects missing input video when ffmpeg is available', async () => {
-  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'replay-video-missing-'));
+test('extractMetadata parses ffprobe JSON stream and format data correctly', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'replay-metadata-test-'));
   try {
-    await assert.rejects(
-      VideoProcessor.extractFrames(path.join(tmp, 'missing.webm'), tmp, {
-        exec: async () => ({ stdout: 'ffmpeg version mock', stderr: '' }),
-      }),
-      /Video file not found/
-    );
+    const fakeVideo = path.join(tmp, 'fake.webm');
+    await fs.writeFile(fakeVideo, 'webm-header');
+
+    const mockOutput = JSON.stringify({
+      streams: [
+        {
+          codec_type: 'video',
+          codec_name: 'vp9',
+          width: 1920,
+          height: 1080,
+          avg_frame_rate: '30/1',
+          duration: '14.500',
+        },
+      ],
+      format: {
+        format_name: 'matroska,webm',
+        duration: '14.500',
+        size: '1234567',
+      },
+    });
+
+    const meta = await VideoProcessor.extractMetadata(fakeVideo, {
+      exec: async (file, args) => {
+        if (args[0] === '-version') return { stdout: 'ffprobe version 9.0' };
+        assert.equal(file, 'ffprobe');
+        assert.ok(args.includes('-show_streams'));
+        return { stdout: mockOutput };
+      },
+    });
+
+    assert.equal(meta.codec, 'vp9');
+    assert.equal(meta.width, 1920);
+    assert.equal(meta.height, 1080);
+    assert.equal(meta.fps, 30);
+    assert.equal(meta.durationS, 14.5);
+    assert.equal(meta.sizeBytes, 1234567);
+    assert.equal(meta.formatName, 'matroska,webm');
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }
+});
+
+test('createRunTempDir isolates run directories with sanitized names and cleans up', async () => {
+  const runId = 'run:123/evil..attempt';
+  const tmpDir = await VideoProcessor.createRunTempDir(runId);
+  try {
+    assert.ok(tmpDir.includes('replay-run-run_123_evil__attempt-frames'));
+    const stat = await fs.stat(tmpDir);
+    assert.ok(stat.isDirectory());
+  } finally {
+    await VideoProcessor.cleanupRunTempDir(tmpDir);
+    const exists = await fs.stat(tmpDir).catch(() => null);
+    assert.equal(exists, null);
+  }
+});
+
+test('checkTools reports availability for both ffmpeg and ffprobe', async () => {
+  const tools = await VideoProcessor.checkTools();
+  assert.equal(typeof tools.ffmpeg, 'boolean');
+  assert.equal(typeof tools.ffprobe, 'boolean');
 });
 
 test('extractFrames cleans up partial f_* and s_* files on ffmpeg failure', async () => {
@@ -147,7 +256,7 @@ test('extractFrames rejects empty output and cleans up stray scene files', async
   }
 });
 
-test('extractFrames merges uniform + scene-change frames chronologically', async () => {
+test('extractFrames merges uniform + scene-change frames chronologically and caps to maxFrames', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'replay-video-ok-'));
   try {
     const vid = path.join(tmp, 'clip.webm');
@@ -155,6 +264,7 @@ test('extractFrames merges uniform + scene-change frames chronologically', async
     await fs.writeFile(vid, 'webm-bytes');
 
     const frames = await VideoProcessor.extractFrames(vid, out, {
+      maxFrames: 2,
       exec: async (_file, args) => {
         if (args[0] === '-version') return { stdout: 'mock', stderr: '' };
         const pattern = String(args[args.length - 1]);
@@ -168,8 +278,8 @@ test('extractFrames merges uniform + scene-change frames chronologically', async
       },
     });
 
-    assert.deepEqual(frames.map(f => f.timestampS), [0, 0.5, 1.25]);
-    assert.deepEqual(frames.map(f => f.filename), ['f_0001.jpg', 'f_0002.jpg', 's_0001.jpg']);
+    assert.equal(frames.length, 2);
+    assert.deepEqual(frames.map(f => f.filename), ['f_0001.jpg', 's_0001.jpg']);
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }

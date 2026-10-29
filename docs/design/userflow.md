@@ -10,7 +10,7 @@ graph LR
   D --> E[Video seeks to failure frame]
   E --> F[Status pill FAILING red]
   F --> G[Diff applied, suite passes]
-  G --> H[Pill PASSING green, report]
+  G --> H[Pill FIXED green, report]
 ```
 
 Screen states: Home (samples loaded) -> Run view (loading skeleton) -> Run view (running, amber) -> Run view (fixed, green) with report rendered. A judge who reads nothing still sees the pill flip. Purpose understood in 30 seconds: the hero line plus one sample card state the whole product. Red to green in under 2 minutes depends on the pipeline; replay mode guarantees the same sequence from stored events.

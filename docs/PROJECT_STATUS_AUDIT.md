@@ -31,9 +31,10 @@ themes, viewports and journeys.
 Is deployment healthy? Yes. The Vercel production deployment is Ready and its
 routes verified; the Git-integration build path is fixed and verified
 (REP-001 closed on commit `10f16b7`: deploy Ready, CI 7/7).
-What prevents full completion? Public access (Vercel Authentication toggle),
-a Token Factory / NVIDIA key in the Vercel environment for live runs from the
-public URL, the demo video, and the Devpost submission.
+What prevents full completion? A Token Factory / NVIDIA key, a database and a
+worker for live runs from the public URL (the public site currently replays
+verified recorded samples), the demo video, and the Devpost submission.
+(Update 2026-10-28: public access is open; see REP-003, REP-013, REP-014.)
 
 ## B. Architecture and data flow
 
@@ -103,7 +104,7 @@ docs/IMPLEMENTATION_DECISIONS.md).
 |---|---|---|---|---|---|---|---|---|---|
 | REP-001 | Git-integration Vercel build fails | Critical | Deployment | **Fixed & verified** | vercel inspect of replay-2wjg4ijgk: `pnpm --filter @replay/api build` → TS2307 cannot find @replay/shared/@replay/db/@replay/agents | web service buildCommand built @replay/api without its workspace deps (`--filter @replay/api build` lacks the `...` suffix); fresh CI-style checkout has no dist/ | Every Git push produced a failed production deployment; CLI deploys still worked | Fixed in commit `10f16b7`: vercel.json now `pnpm --filter "@replay/api..." build && pnpm run build`; Git deploy of that commit is Ready, CI 7/7 | 1 |
 | REP-002 | Model credentials are NVIDIA Build keys under NEBIUS_* names | High | Deployment/Provider | Confirmed | .env (gitignored): NEBIUS_BASE_URL=https://integrate.api.nvidia.com/v1 | Token Factory key was never provisioned; working keys are NVIDIA Build keys | Hackathon rules ask for Token Factory; judges may check the endpoint | Provision a Token Factory key and change only .env (code is endpoint-agnostic) | 2 |
-| REP-003 | Vercel Authentication blocks public access | High | Deployment | Confirmed | curl of the production alias returns 302 "Protected by Vercel Authentication" | account-level Deployment Protection enabled | Judges cannot open the demo URL | Dashboard: Settings → Deployment Protection → disable Vercel Authentication | 3 |
+| REP-003 | Vercel Authentication blocks public access | High | Deployment | **Resolved (2026-10-28)** | live Playwright audit of https://replay-blond-psi.vercel.app passes 7/7 without authentication | account-level Deployment Protection was enabled | Judges could not open the demo URL | Protection disabled; public URL verified | 3 |
 | REP-004 | Sandbox runs on host in dev; DockerSandbox not wired in containers | High | Security | Confirmed | packages/sandbox fail-closed policy; compose worker sets REPLAY_ALLOW_HOST_SANDBOX=1 | DockerSandbox was never connected to the pipeline stages; worker container has no Docker socket | Model code runs in a workspace copy with env allowlist but without container isolation on the VM | Mount docker socket + CLI in worker image and wire DockerSandbox into verify/fix stages, or run worker on the VM host with Docker | 4 |
 | REP-005 | Zod < 4.6.6 audit high | Medium | Security | Confirmed (accepted) | pnpm audit; docs/SECURITY.md | zod 4 is a breaking major; migration deferred | Audit noise; no known exploited path in this codebase | Migrate schemas to zod 4 post-deadline | 8 |
 | REP-006 | Watch stage fixture-fallback on live vision key rejection | Medium | Agent | Confirmed | watch_fixture_fallback events in live runs | designated watcher key 403 (dead); mapped global key works for super-vl text and vision on some calls; intermittent 403s remain | Watch accuracy depends on fixture quality, not the video, when fallback fires | Provision a stable working vision key; keep fallback | 5 |
@@ -113,6 +114,8 @@ docs/IMPLEMENTATION_DECISIONS.md).
 | REP-010 | Memory repo writes JSON on every event; no debounce | Low | Backend | Confirmed | runs.ts saveToFile on each addEvent | simplest implementation | acceptable locally; unnecessary IO at scale | debounce + async tmp-rename write | 10 |
 | REP-011 | ~130 local artifact reports + .playwright-results-repro in packages/agents/artifacts and targets/demo-shop | Low | Hygiene | Confirmed | find output; gitignored (0 untracked in git status) | pipeline writes artifacts relative to package cwd | repo dir clutter; no git impact | relocate artifact root via REPLAY_DATA_DIR (already supported) | 11 |
 | REP-012 | Demo video + Devpost submission missing | High | Delivery | PENDING | TODO.md Phase G 35–36 | not yet produced | submission incomplete | record ~70s live run (procedure in TODO), submit on Devpost | 12 |
+| REP-013 | Sample cards showed "Recording not available" and disabled "Run sample" on Vercel | Critical | Deployment | **Fixed & verified (2026-10-28)** | `/api/samples` returned `recordingAvailable: false`; fixed in `apps/api/src/server.ts` | asset check used `fs.existsSync` on a path absent from the serverless bundle | All five sample runs unusable in production | Resolve static `/samples/<id>.webm`; serve verified recorded sample replays (`apps/api/src/recorded-samples.ts`) when no worker/DB/sandbox exists | 1 |
+| REP-014 | Terminal runs showed every timeline stage `pending`; misleading `PASSING` / `repro passed: false` | High | Frontend | **Fixed & verified (2026-10-28, commit `967fc0e`)** | live check of run `d0000003-0000-4000-8000-000000000003`: 7 stages, 0 pending, `FIXED` pill, 5 verification gates | `useRunEvents` skipped the history fetch for terminal runs; sample bundles lacked `ingest_*` events; ambiguous labels | Completed runs looked unfinished and defective | Always fetch history from `events-page`; add ingest lifecycle events; render explicit verification gates; label `FIXED` | 1 |
 
 Resolved in prior work (verified this session, not re-listed above): services
 builder ESM/CJS crash (API mounted in Next), ERR_PNPM_IGNORED_BUILDS,
@@ -126,7 +129,7 @@ bundles.
 1. **REP-001 (DONE, commit `10f16b7`):** one-line change in vercel.json —
    `"buildCommand": "pnpm --filter \"@replay/api...\" build && pnpm run build"`.
    Regression check DONE: Git deploy of that commit is Ready, CI 7/7.
-2. **REP-003 (no code):** toggle Deployment Protection off in the dashboard.
+2. **REP-003 (RESOLVED 2026-10-28):** Deployment Protection disabled; public URL verified.
    Verify: curl the production alias returns 200 and the home page renders.
 3. **REP-002 (decision + .env):** provision a Token Factory key (Builder
    Program), set NEBIUS_API_KEY/NEBIUS_BASE_URL to Token Factory values, run
@@ -202,7 +205,6 @@ aliases attached.
 
 | Blocker | Depends on | Blocks | Action needed |
 |---|---|---|---|
-| Vercel Deployment Protection | dashboard access | public demo URL | user toggles it off |
 | Token Factory key | Nebius Builder Program account | rules-compliant provider claim | provision key, update .env |
 | DATABASE_URL (Supabase) | Supabase project | live runs from public URL, replay mode, RLS | create project, set env, migrate |
 | Docker on the VM + DockerSandbox wiring | VM access | production sandbox isolation | wire DockerSandbox (REP-004) |
@@ -211,7 +213,7 @@ aliases attached.
 ## L. Prioritized action plan
 
 1. **Immediate (DONE):** REP-001 fixed in commit `10f16b7` (Git deploy Ready,
-   CI 7/7). Remaining: disable Deployment Protection (dashboard).
+   CI 7/7). Deployment Protection disabled (REP-003 resolved 2026-10-28).
 2. **High (live-demo quality, ~1-2h):** provision Token Factory key (REP-002);
    set DATABASE_URL on Vercel + Supabase migrate + VM worker (REP-007).
 3. **High security (pre-public, ~2-4h):** DockerSandbox wiring (REP-004).
@@ -236,5 +238,5 @@ Tasks 1–2 are independent and parallelizable; 3 requires a VM; 5 requires
 | Frontend usability | **Ready** | browser-verified across journeys and viewports |
 | Security | **Good for demo; 1 open item for public** | sandbox fail-closed; DockerSandbox wiring open |
 | CI | **Ready** | 7/7 green, runs on every push |
-| Deployment | **Ready** (public access still gated) | Git-integration build fixed and verified (commit `10f16b7`, deploy Ready); public access blocked only by Deployment Protection (REP-003) |
-| Hackathon demo readiness | **Ready for local + CLI-demo; public URL pending 3 user actions** | see K |
+| Deployment | **Ready** (public, recorded-sample replay mode) | Git-integration build verified; public URL live (REP-003 resolved); commit `967fc0e` deployed; live audit 7/7. Live model runs on Vercel still need a key, DB and worker |
+| Hackathon demo readiness | **Ready for local + CLI-demo and public recorded-sample replay; demo video and submission pending** | see K |

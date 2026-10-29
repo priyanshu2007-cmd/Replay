@@ -30,10 +30,13 @@
     "esbuild": "^0.25.12",
     "typescript": "^5.7.3"
   },
+  "main": "./dist/server.js",
+  "types": "./dist/server.d.ts",
   "exports": {
     ".": {
       "types": "./dist/server.d.ts",
-      "import": "./dist/server.js"
+      "import": "./dist/server.js",
+      "default": "./dist/server.js"
     }
   }
 }

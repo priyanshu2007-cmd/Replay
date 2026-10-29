@@ -98,6 +98,7 @@ export const RunDetailSchema = z.object({
   state: RunStateSchema,
   stage: RunStageSchema,
   isSample: z.boolean(),
+  executionMode: z.string().optional(),
   videoKey: z.string(),
   note: z.string().nullable(),
   outputs: z.object({

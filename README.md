@@ -296,6 +296,8 @@ vercel deploy
 - `ALLOWED_ORIGINS`: Your Vercel app domain
 - `NEBIUS_API_KEY`: Optional (used by worker host)
 
+**Serverless replay mode**: Vercel has no background worker, Docker/Playwright sandbox, or model key. Without `DATABASE_URL`, `/api/ready` reports `executionMode: recorded_sample_replay`, and "Run sample" opens a verified recorded Demo Shop run (`apps/api/src/recorded-samples.ts`). Run view timelines load stored events from `GET /api/runs/:id/events-page`. Live runs from a public URL need a model key, a database, and a worker host.
+
 ### Database Migrations
 
 ```bash
