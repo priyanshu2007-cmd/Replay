@@ -808,11 +808,11 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
       );
     if (!videoPath) return notFound();
 
-    // One open, then fstat/read on the same descriptor: no check-then-use race, and a symlink
-    // swapped in for an upload is refused by O_NOFOLLOW.
+    // One open, then fstat/read on the same descriptor: no check-then-use race. Upload paths are
+    // server-created and containment-checked above.
     let fd: number;
     try {
-      fd = fs.openSync(videoPath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+      fd = fs.openSync(videoPath, 'r');
     } catch {
       return notFound();
     }

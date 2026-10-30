@@ -417,34 +417,29 @@ export async function applyPatchToDirectory(
   const rootReal = await fs.promises.realpath(workDir);
   const fullPath = await resolveSafeWorkspacePath(workDir, output.target_file);
 
-  const lstat = await fs.promises.lstat(fullPath).catch((err: any) => (err?.code === 'ENOENT' ? null : Promise.reject(err)));
-  if (lstat?.isSymbolicLink()) {
-    throw new Error(`Rejected symlink target at write boundary: ${output.target_file}`);
+  // Open first (O_NOFOLLOW) and decide from the descriptor: there is no lstat-then-open window in
+  // which the target could be swapped for a symlink. ENOENT means the file does not exist yet.
+  const readFlags = fs.constants.O_RDONLY | (typeof fs.constants.O_NOFOLLOW === 'number' ? fs.constants.O_NOFOLLOW : 0);
+  let readHandle: fs.promises.FileHandle | null = null;
+  try {
+    readHandle = await fs.promises.open(fullPath, readFlags);
+  } catch (err: any) {
+    if (err?.code === 'ELOOP') {
+      throw new Error(`Rejected symlink target at write boundary: ${output.target_file}`);
+    }
+    if (err?.code !== 'ENOENT') throw err;
   }
 
   let originalContent = '';
   let isNewFile = false;
 
-  if (!lstat) {
+  if (!readHandle) {
     const isDevNullDiff = typeof output.patch === 'string' && /^---\s+(\/dev\/null|a\/dev\/null)\b/m.test(output.patch);
     if (!options.allowCreate && !isDevNullDiff) {
       throw new Error(`Target file ${fullPath} not found in workspace`);
     }
     isNewFile = true;
   } else {
-    if (!lstat.isFile()) {
-      throw new Error(`Target file ${fullPath} is not a regular file`);
-    }
-    // Open once with O_NOFOLLOW and read through the same descriptor, so the file cannot be swapped
-    // for a symlink between the lstat above and the read.
-    const readFlags = fs.constants.O_RDONLY | (typeof fs.constants.O_NOFOLLOW === 'number' ? fs.constants.O_NOFOLLOW : 0);
-    let readHandle: fs.promises.FileHandle;
-    try {
-      readHandle = await fs.promises.open(fullPath, readFlags);
-    } catch (err: any) {
-      if (err?.code === 'ELOOP') throw new Error(`Target file ${fullPath} is not a regular file`);
-      throw err;
-    }
     try {
       if (!(await readHandle.stat()).isFile()) {
         throw new Error(`Target file ${fullPath} is not a regular file`);
