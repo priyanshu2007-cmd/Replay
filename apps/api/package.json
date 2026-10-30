@@ -13,7 +13,7 @@
     "test": "node --test-concurrency=1 --test-reporter=spec --import tsx --test src/server.test.ts src/worker.test.ts"
   },
   "dependencies": {
-    "@hono/node-server": "^1.13.8",
+    "@hono/node-server": "^2.1.5",
     "@replay/agents": "workspace:*",
     "@replay/db": "workspace:*",
     "@replay/sandbox": "workspace:*",

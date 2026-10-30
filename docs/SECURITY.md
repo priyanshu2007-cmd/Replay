@@ -97,6 +97,16 @@ marked.
   vulnerabilities patched with workspace overrides (3.4.17 / 8.5.12). VERIFIED
   by audit.
 
+- 2026-10-30 re-audit: `@hono/node-server` moved to ^2.1.3 (GHSA-rmxm-3fg6-px4f affected only
+  `serveStatic`, which Replay does not use; upgraded anyway, API tests 36/36). The zod advisory
+  above is the only remaining `pnpm audit --prod` finding.
+- 2026-10-30 GitHub settings: Dependabot alerts and security updates enabled; secret scanning and
+  push protection enabled. Full-history gitleaks (58 commits): no leaks. `.env` has never been
+  committed. Secret-scanning alerts API returned 0 alerts; admin-level hook scope was not needed.
+- 2026-10-30 CodeQL: all 10 open alerts (insecure temp files, fs races, regex anchor, polynomial
+  ReDoS) fixed in code, not dismissed; the alerts API shows 0 open on commit 86fc466. Regression
+  tests: `packages/sandbox/src/index.test.ts` (mount-path and env-name policy, timing bound).
+
 ## Secrets
 
 - `.env` is gitignored and has never been committed
