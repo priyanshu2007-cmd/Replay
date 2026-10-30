@@ -637,6 +637,28 @@ describe('Replay API Server', () => {
       }
     });
 
+    test('execution mode is persisted provenance: recorded runs say so, everything else is unknown until recorded', async () => {
+      for (let i = 1; i <= 5; i++) {
+        const id = `d000000${i}-0000-4000-8000-00000000000${i}`;
+        const res = await app.request(`/api/runs/${id}`);
+        assert.equal(res.status, 200, id);
+        const body = (await res.json()) as { executionMode: string };
+        assert.equal(body.executionMode, 'recorded_sample_replay', id);
+      }
+      // A non-recorded run must never be reported as live just because it exists.
+      const run = await repo.createRun({ videoKey: 'cart-nan', isSample: true });
+      const before = (await (await app.request(`/api/runs/${run.id}`)).json()) as { executionMode: string };
+      assert.equal(before.executionMode, 'unknown');
+      await repo.updateRun(run.id, { executionMode: 'fixture_assisted' });
+      const mid = (await (await app.request(`/api/runs/${run.id}`)).json()) as { executionMode: string };
+      assert.equal(mid.executionMode, 'fixture_assisted');
+      await repo.updateRun(run.id, { executionMode: 'live' });
+      const after = (await (await app.request(`/api/runs/${run.id}`)).json()) as { executionMode: string };
+      assert.equal(after.executionMode, 'live');
+      const list = (await (await app.request('/api/runs?limit=100')).json()) as { runs: Array<{ id: string; executionMode: string }> };
+      assert.equal(list.runs.find((r) => r.id === run.id)?.executionMode, 'live');
+    });
+
     test('GET /api/runs/:id/video streams sample video with 200 and 206 Range support', async () => {
       const run = await repo.createRun({ videoKey: 'cart-nan', isSample: true });
       const res200 = await app.request(`/api/runs/${run.id}/video`);

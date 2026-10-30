@@ -51,6 +51,7 @@ export const RunSummarySchema = z.object({
   state: RunStateSchema,
   stage: RunStageSchema,
   isSample: z.boolean(),
+  executionMode: z.string().optional(),
   videoKey: z.string(),
   note: z.string().nullable().optional(),
   durationMs: z.number().nullable(),

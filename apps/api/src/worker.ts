@@ -226,6 +226,13 @@ export class Worker {
         artifactsDir: path.resolve(DATA_DIR, `artifacts/runs/${run.id}`),
         onEvent: async (event: RunEvent) => {
           lastEventStage = event.stage;
+          if (event.event_type === 'watch_completed') {
+            // Provenance is known only once the Watcher finished: record what actually ran.
+            const analysis = (event.payload as { video_analysis?: string } | undefined)?.video_analysis;
+            await this.repo.updateRun(run.id, {
+              executionMode: analysis === 'live' ? 'live' : analysis === 'fixture_assisted' ? 'fixture_assisted' : 'unknown',
+            });
+          }
           await this.repo.addEvent(run.id, {
             stage: event.stage,
             agent: event.agent,

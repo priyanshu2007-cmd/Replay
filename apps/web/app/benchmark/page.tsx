@@ -9,6 +9,13 @@ import { listRuns, type RunSummary } from '@/lib/api';
  * Benchmark: every run the API knows about, including failures. Numbers are
  * real or absent; nothing is aggregated that the API does not provide.
  */
+const POPULATIONS = [
+  { mode: 'live', label: 'Live runs' },
+  { mode: 'fixture_assisted', label: 'Live pipeline, fixture-assisted Watcher' },
+  { mode: 'recorded_sample_replay', label: 'Recorded sample replays (not fresh inference)' },
+  { mode: 'unknown', label: 'Provenance not recorded' },
+] as const;
+
 export default function BenchmarkPage() {
   const [runs, setRuns] = useState<RunSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +38,9 @@ export default function BenchmarkPage() {
     <div className="mx-auto max-w-6xl px-4 py-10">
       <h1 className="text-page text-primary">Benchmark</h1>
       <p className="mt-1 text-[14px] text-secondary">
-        Every run, including the ones that failed. No sample is hidden from these numbers.
+        Every run, including the ones that failed, grouped by how it executed. Recorded replays are
+        curated demonstrations of earlier runs, not fresh model inference, and are never combined with
+        live results.
       </p>
 
       {error && (
@@ -55,20 +64,30 @@ export default function BenchmarkPage() {
         </p>
       )}
 
-      {runs !== null && runs.length > 0 && (() => {
-        const reproduced = runs.filter((r) => ['fixed', 'reproduced_only'].includes(r.state)).length;
-        const fixed = runs.filter((r) => r.state === 'fixed').length;
-        const durations = runs.map((r) => r.durationMs).filter((d): d is number => d !== null).sort((a, b) => a - b);
-        const median = durations.length > 0 ? durations[Math.floor(durations.length / 2)]! : null;
-        return (
-          <div className="mt-4 flex flex-wrap gap-6 rounded-m border border-border-subtle bg-panel px-4 py-3 font-mono text-[13px] text-secondary">
-            <span>{runs.length} runs</span>
-            <span>reproduced {Math.round((reproduced / runs.length) * 100)}%</span>
-            <span>fixed {Math.round((fixed / runs.length) * 100)}%</span>
-            {median !== null && <span>median {(median / 1000).toFixed(1)}s</span>}
-          </div>
-        );
-      })()}
+      {runs !== null && runs.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {POPULATIONS.map(({ mode, label }) => {
+            const group = runs.filter((r) => (r.executionMode ?? 'unknown') === mode);
+            if (group.length === 0) return null;
+            const reproduced = group.filter((r) => ['fixed', 'reproduced_only'].includes(r.state)).length;
+            const fixed = group.filter((r) => r.state === 'fixed').length;
+            const durations = group.map((r) => r.durationMs).filter((d): d is number => d !== null).sort((a, b) => a - b);
+            const median = durations.length > 0 ? durations[Math.floor(durations.length / 2)]! : null;
+            return (
+              <div
+                key={mode}
+                className="flex flex-wrap gap-x-6 gap-y-1 rounded-m border border-border-subtle bg-panel px-4 py-3 font-mono text-[13px] text-secondary"
+              >
+                <span className="text-primary">{label}</span>
+                <span>{group.length} runs</span>
+                <span>reproduced {reproduced}/{group.length}</span>
+                <span>fixed {fixed}/{group.length}</span>
+                {median !== null && <span>median {(median / 1000).toFixed(1)}s</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {runs !== null && runs.length > 0 && (
         <div className="mt-6 overflow-x-auto rounded-m border border-border-subtle">
@@ -78,6 +97,7 @@ export default function BenchmarkPage() {
               <tr className="border-b border-border-subtle bg-panel">
                 <th scope="col" className="px-3 py-2 font-mono text-[12px] font-medium text-muted">run</th>
                 <th scope="col" className="px-3 py-2 font-mono text-[12px] font-medium text-muted">sample</th>
+                <th scope="col" className="px-3 py-2 font-mono text-[12px] font-medium text-muted">mode</th>
                 <th scope="col" className="px-3 py-2 font-mono text-[12px] font-medium text-muted">outcome</th>
                 <th scope="col" className="px-3 py-2 font-mono text-[12px] font-medium text-muted">stage reached</th>
                 <th scope="col" className="px-3 py-2 font-mono text-[12px] font-medium text-muted">duration</th>
@@ -93,6 +113,7 @@ export default function BenchmarkPage() {
                     </a>
                   </td>
                   <td className="px-3 py-2 font-mono text-[12px] text-secondary">{r.videoKey}</td>
+                  <td className="px-3 py-2 font-mono text-[12px] text-secondary">{r.executionMode ?? 'unknown'}</td>
                   <td className="px-3 py-2">
                     <StatusPill state={r.state} />
                   </td>

@@ -8,6 +8,8 @@ import { createDb, runs, runEvents, DbClient } from '@replay/db';
 import { eq, asc, desc, lt, and } from 'drizzle-orm';
 import { RECORDED_SAMPLE_BUNDLES } from './recorded-samples.js';
 
+export type ExecutionMode = 'live' | 'fixture_assisted' | 'recorded_sample_replay' | 'unknown';
+
 export interface RunRecord {
   id: string;
   targetId: string;
@@ -16,7 +18,8 @@ export interface RunRecord {
   state: RunState;
   stage: RunStage;
   isSample: boolean;
-  executionMode?: 'live' | 'recorded_sample_replay' | 'fixture_assisted' | null;
+  /** Persisted provenance. null/undefined = unknown; never inferred from ids or state. */
+  executionMode?: ExecutionMode | null;
   workerLock: string | null;
   workerHeartbeat: Date | null;
   bugReport: any | null;
@@ -643,6 +646,7 @@ export class PostgresRunRepository implements RunRepository {
       state: row.state as RunState,
       stage: row.stage as RunStage,
       isSample: Boolean(row.isSample),
+      executionMode: (row.executionMode as ExecutionMode | null) ?? null,
       workerLock: row.workerLock ?? null,
       workerHeartbeat: row.workerHeartbeat ? new Date(row.workerHeartbeat) : null,
       bugReport: row.bugReport ?? null,
@@ -713,6 +717,7 @@ export class PostgresRunRepository implements RunRepository {
 
     if (updates.state !== undefined) setValues.state = updates.state;
     if (updates.stage !== undefined) setValues.stage = updates.stage;
+    if (updates.executionMode !== undefined) setValues.executionMode = updates.executionMode;
     if (updates.workerLock !== undefined) setValues.workerLock = updates.workerLock;
     if (updates.workerHeartbeat !== undefined) setValues.workerHeartbeat = updates.workerHeartbeat;
     if (updates.bugReport !== undefined) setValues.bugReport = updates.bugReport;

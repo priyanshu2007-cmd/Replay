@@ -18,6 +18,8 @@ export const runs = pgTable('runs', {
   state: text('state').notNull().default('queued'), // queued, running, reproduced_only, fixed, unreproduced, failed
   stage: text('stage').notNull().default('ingest'), // ingest, watch, locate, reproduce, verify, fix, report
   isSample: boolean('is_sample').default(false).notNull(),
+  // live | fixture_assisted | recorded_sample_replay. NULL = unknown (rows created before provenance was recorded).
+  executionMode: text('execution_mode'),
   workerLock: text('worker_lock'),
   workerHeartbeat: timestamp('worker_heartbeat', { withTimezone: true }),
   

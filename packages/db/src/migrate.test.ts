@@ -134,3 +134,15 @@ test('real PostgreSQL migration, idempotent demo-shop seed, and FK verification 
     }
   }
 });
+
+test('execution_mode migration is additive, journaled, and mapped in the schema', () => {
+  const sql = fs.readFileSync(path.join(migrationsDir, '0002_run_execution_mode.sql'), 'utf8');
+  assert.match(sql, /ALTER TABLE "runs" ADD COLUMN IF NOT EXISTS "execution_mode" text;/);
+  assert.ok(!/DROP|NOT NULL|UPDATE/i.test(sql), 'must not drop data or backfill: existing rows stay unknown (NULL)');
+  const journal = JSON.parse(fs.readFileSync(path.join(migrationsDir, 'meta', '_journal.json'), 'utf8')) as {
+    entries: Array<{ idx: number; tag: string }>;
+  };
+  assert.deepEqual(journal.entries.map((e) => e.tag).slice(-1), ['0002_run_execution_mode']);
+  assert.equal(journal.entries.at(-1)!.idx, journal.entries.length - 1);
+  assert.equal(runs.executionMode.name, 'execution_mode');
+});

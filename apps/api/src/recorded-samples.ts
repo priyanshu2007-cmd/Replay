@@ -273,6 +273,7 @@ function buildEvents(
 export const RECORDED_SAMPLE_BUNDLES: Record<string, RecordedSampleBundle> = {
   'cart-nan': {
     run: {
+      executionMode: 'recorded_sample_replay',
       id: RECORDED_SAMPLE_RUN_IDS['cart-nan']!,
       targetId: 'demo-shop',
       state: 'fixed',
@@ -405,6 +406,7 @@ test.describe('Reproduction: Cart NaN', () => {
   },
   'double-discount': {
     run: {
+      executionMode: 'recorded_sample_replay',
       id: RECORDED_SAMPLE_RUN_IDS['double-discount']!,
       targetId: 'demo-shop',
       state: 'fixed',
@@ -547,6 +549,7 @@ test.describe('Reproduction: Double Discount Bug', () => {
   },
   'string-sort': {
     run: {
+      executionMode: 'recorded_sample_replay',
       id: RECORDED_SAMPLE_RUN_IDS['string-sort']!,
       targetId: 'demo-shop',
       state: 'fixed',
@@ -684,6 +687,7 @@ test.describe('Reproduction: String Sort Bug', () => {
   },
   'empty-email': {
     run: {
+      executionMode: 'recorded_sample_replay',
       id: RECORDED_SAMPLE_RUN_IDS['empty-email']!,
       targetId: 'demo-shop',
       state: 'fixed',
@@ -822,6 +826,7 @@ test.describe('Reproduction: Empty Email Validation', () => {
   },
   'quantity-reset': {
     run: {
+      executionMode: 'recorded_sample_replay',
       id: RECORDED_SAMPLE_RUN_IDS['quantity-reset']!,
       targetId: 'demo-shop',
       state: 'fixed',

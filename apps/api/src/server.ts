@@ -636,6 +636,7 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
         state: r.state,
         stage: r.stage,
         isSample: r.isSample,
+        executionMode: r.executionMode ?? 'unknown',
         // Opaque key: sample ids only; uploaded absolute paths never leave the server.
         videoKey: isKnownSampleId(r.videoKey) ? r.videoKey : 'upload',
         durationMs: r.durationMs,
@@ -665,7 +666,8 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
       state: run.state,
       stage: run.stage,
       isSample: run.isSample,
-      executionMode: run.executionMode ?? (run.id.startsWith('d0000001') ? 'recorded_sample_replay' : 'live'),
+      // Never inferred from the id or state: a missing value is honestly unknown.
+      executionMode: run.executionMode ?? 'unknown',
       videoKey: isKnownSampleId(run.videoKey) ? run.videoKey : 'upload',
       note: run.isSample ? run.note : null,
       outputs: {
