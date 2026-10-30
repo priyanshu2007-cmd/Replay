@@ -202,6 +202,15 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
 
   const hadFallback = allEvents.some((e) => e.event_type.endsWith('_fixture_fallback'));
 
+  // Reel is lazy-loaded and may mount after this page produced its first events. It announces
+  // itself, and the bumped counter re-runs the dispatch effects below with the latest state.
+  const [mascotSync, setMascotSync] = useState(0);
+  useEffect(() => {
+    const onReady = () => setMascotSync((n) => n + 1);
+    window.addEventListener('replay:mascot-ready', onReady);
+    return () => window.removeEventListener('replay:mascot-ready', onReady);
+  }, []);
+
   // Mascot reactions and live context synchronization.
   const stageKey = currentStage;
   useEffect(() => {
@@ -211,7 +220,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
         detail: { kind: 'stage', stage: stageKey, runId: runId ?? undefined, fallback: hadFallback },
       }),
     );
-  }, [stageKey, runId, hadFallback]);
+  }, [stageKey, runId, hadFallback, mascotSync]);
 
   const stateKey = run?.state ?? null;
   useEffect(() => {
@@ -235,7 +244,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
         },
       }),
     );
-  }, [stateKey, runId, run, errorInfo, hadFallback]);
+  }, [stateKey, runId, run, errorInfo, hadFallback, mascotSync]);
 
   useEffect(() => {
     if (!runId) return;
@@ -291,7 +300,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
         },
       }),
     );
-  }, [runId, allEvents, currentStage, run, hadFallback, errorInfo]);
+  }, [runId, allEvents, currentStage, run, hadFallback, errorInfo, mascotSync]);
 
   const retry = useCallback(async () => {
     if (!runId || rerunning) return;

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 // The API runs on its own port; the page under test is the web server.
 const API = 'http://localhost:3001';
@@ -234,57 +234,12 @@ test.describe('Replay web', () => {
     await expect(mascot).toBeVisible();
   });
 
-  test('mascot enforces stage order, terminal state priority, and refuses false fix celebration', async ({ request, page }) => {
-    const listRes = await request.get(`${API}/api/runs?limit=1`);
-    const listData = (await listRes.json()) as { runs: Array<{ id: string }> };
-    let runId = listData.runs[0]?.id;
-    if (!runId) {
-      const created = await request.post(`${API}/api/runs`, {
-        data: { sampleId: 'cart-nan' },
-        headers: { 'Content-Type': 'application/json' },
-      });
-      runId = ((await created.json()) as { id: string }).id;
-    }
-
+  test('Reel help dialog and Q&A work on a run workspace', async ({ page }) => {
+    // Canonical recorded run: fixed id, state fixed, diff and full history, independent of the DB.
+    const runId = 'd0000001-0000-4000-8000-000000000001';
     await page.goto(`/runs/${runId}`);
     const mascot = page.getByRole('button', { name: /Reel, the Replay mascot/ });
     await expect(mascot).toBeVisible({ timeout: 15000 });
-
-    // Dispatch out-of-order stage events and false-fix state event
-    await page.evaluate(() => {
-      window.dispatchEvent(
-        new CustomEvent('replay:mascot', {
-          detail: { kind: 'stage', stage: 'verify', runId: 'test-order-run' },
-        }),
-      );
-    });
-    await expect(mascot).toHaveAttribute('data-animation', 'curious');
-
-    // Out-of-order earlier stage ('locate' < 'verify') must be ignored
-    await page.evaluate(() => {
-      window.dispatchEvent(
-        new CustomEvent('replay:mascot', {
-          detail: { kind: 'stage', stage: 'locate', runId: 'test-order-run' },
-        }),
-      );
-    });
-    await expect(mascot).toHaveAttribute('data-animation', 'curious');
-
-    // False fix claim (state='fixed' with reproAfterFixPassed=false) must downgrade to 'confused', NEVER 'celebrate'
-    await page.evaluate(() => {
-      window.dispatchEvent(
-        new CustomEvent('replay:mascot', {
-          detail: {
-            kind: 'state',
-            state: 'fixed',
-            runId: 'test-order-run',
-            reproAfterFixPassed: false,
-            baselineRegressionPassed: true,
-          },
-        }),
-      );
-    });
-    await expect(mascot).toHaveAttribute('data-animation', 'confused');
 
     // Open Reel help on a run workspace and check Agent activity summary + Open relevant evidence
     await page.getByRole('button', { name: 'Open Reel help' }).click();
@@ -292,8 +247,13 @@ test.describe('Replay web', () => {
     await expect(helpDialog).toContainText('Agent activity summary');
     await expect(helpDialog).toContainText('Watcher');
     await expect(helpDialog).toContainText('Fixer');
-    await helpDialog.getByRole('button', { name: 'Open relevant evidence' }).click();
-    await expect(page.getByRole('tab', { name: 'Diff' })).toHaveAttribute('data-state', 'active');
+    // Reel only knows the run state once the page has loaded it and sent its context, so retry
+    // the click until that precondition holds instead of assuming it already does.
+    await expect(page.getByText('FIXED', { exact: true }).first()).toBeVisible({ timeout: 15000 });
+    await expect(async () => {
+      await helpDialog.getByRole('button', { name: 'Open relevant evidence' }).click();
+      await expect(page.getByRole('tab', { name: 'Diff' })).toHaveAttribute('data-state', 'active', { timeout: 1500 });
+    }).toPass({ timeout: 15000 });
 
     // Ask Reel natural questions on the run workspace
     const askInput = helpDialog.getByRole('textbox', { name: 'Ask Reel a question' });
@@ -305,6 +265,103 @@ test.describe('Replay web', () => {
     await askInput.fill('Did the fix pass the tests?');
     await helpDialog.getByRole('button', { name: 'Ask' }).click();
     await expect(helpDialog.getByRole('region')).toContainText(/reproduction test|baseline/i);
+  });
+
+  // Isolated Reel state machine: the run page 404s for controlled `ctrl-*` ids, so no backend
+  // run, worker or model call can emit competing events.
+  test.describe('Reel state machine', () => {
+    const emit = (page: Page, detail: Record<string, unknown>) =>
+      page.evaluate((d) => window.dispatchEvent(new CustomEvent('replay:mascot', { detail: d })), detail);
+    const goClient = async (page: Page, id: string) => {
+      await page.evaluate((i) => (window as unknown as { next: { router: { push(u: string): void } } }).next.router.push(`/runs/${i}`), id);
+      await page.waitForURL(`**/runs/${id}`);
+    };
+    const open = async (page: Page, id: string) => {
+      await page.route('**/api/runs/ctrl-**', (route) =>
+        route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not found"}' }),
+      );
+      await page.goto(`/runs/${id}`);
+      const mascot = page.getByRole('button', { name: /Reel, the Replay mascot/ });
+      await expect(mascot).toBeVisible({ timeout: 15000 });
+      return mascot;
+    };
+    const stage = (runId: string, s: string) => ({ kind: 'stage', stage: s, runId });
+    const state = (runId: string, st: string, extra: Record<string, unknown> = {}) => ({ kind: 'state', state: st, runId, ...extra });
+
+    test('verify stage plays curious', async ({ page }) => {
+      const mascot = await open(page, 'ctrl-a');
+      await emit(page, stage('ctrl-a', 'verify'));
+      await expect(mascot).toHaveAttribute('data-animation', 'curious');
+    });
+
+    test('an earlier stage after a later one is ignored', async ({ page }) => {
+      const mascot = await open(page, 'ctrl-a');
+      await emit(page, stage('ctrl-a', 'verify'));
+      await emit(page, stage('ctrl-a', 'locate'));
+      await expect(mascot).toHaveAttribute('data-animation', 'curious');
+    });
+
+    test('a fully verified fix celebrates', async ({ page }) => {
+      const mascot = await open(page, 'ctrl-a');
+      await emit(page, state('ctrl-a', 'fixed', { reproAfterFixPassed: true, baselineRegressionPassed: true }));
+      await expect(mascot).toHaveAttribute('data-animation', 'celebrate');
+    });
+
+    test('a failed reproduction gate never celebrates', async ({ page }) => {
+      const mascot = await open(page, 'ctrl-a');
+      await emit(page, state('ctrl-a', 'fixed', { reproAfterFixPassed: false, baselineRegressionPassed: true }));
+      await expect(mascot).toHaveAttribute('data-animation', 'confused');
+    });
+
+    test('a failed baseline gate never celebrates', async ({ page }) => {
+      const mascot = await open(page, 'ctrl-a');
+      await emit(page, state('ctrl-a', 'fixed', { reproAfterFixPassed: true, baselineRegressionPassed: false }));
+      await expect(mascot).toHaveAttribute('data-animation', 'confused');
+    });
+
+    test('terminal failed state wins over later stages and plays confused', async ({ page }) => {
+      const mascot = await open(page, 'ctrl-a');
+      await emit(page, state('ctrl-a', 'failed'));
+      await emit(page, stage('ctrl-a', 'verify'));
+      await expect(mascot).toHaveAttribute('data-animation', 'confused');
+    });
+
+    test('a new run resets the previous terminal animation and cooldown', async ({ page }) => {
+      const mascot = await open(page, 'ctrl-a');
+      await emit(page, state('ctrl-a', 'failed'));
+      await expect(mascot).toHaveAttribute('data-animation', 'confused');
+      await goClient(page, 'ctrl-b');
+      await expect(mascot).toHaveAttribute('data-animation', 'idle');
+      await emit(page, stage('ctrl-b', 'verify'));
+      await expect(mascot).toHaveAttribute('data-animation', 'curious');
+    });
+
+    test('events from a previous run cannot change the current run', async ({ page }) => {
+      const mascot = await open(page, 'ctrl-a');
+      await goClient(page, 'ctrl-b');
+      await emit(page, stage('ctrl-b', 'verify'));
+      await emit(page, state('ctrl-a', 'failed'));
+      await emit(page, stage('ctrl-a', 'fix'));
+      await expect(mascot).toHaveAttribute('data-animation', 'curious');
+    });
+
+    test('rapid run transitions do not leak state between runs', async ({ page }) => {
+      const mascot = await open(page, 'ctrl-a');
+      await emit(page, state('ctrl-a', 'failed'));
+      await goClient(page, 'ctrl-b');
+      await emit(page, stage('ctrl-b', 'fix'));
+      await goClient(page, 'ctrl-c');
+      await expect(mascot).toHaveAttribute('data-animation', 'idle');
+      await emit(page, stage('ctrl-c', 'locate'));
+      await expect(mascot).toHaveAttribute('data-animation', 'searching');
+    });
+
+    test('reduced motion still enforces the false-fix guard', async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      const mascot = await open(page, 'ctrl-a');
+      await emit(page, state('ctrl-a', 'fixed', { reproAfterFixPassed: false, baselineRegressionPassed: true }));
+      await expect(mascot).toHaveAttribute('data-animation', 'confused');
+    });
   });
 
   test('sample video assets, upload helper text, and Reel homepage/how guidance work end-to-end', async ({ page }) => {

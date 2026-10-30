@@ -82,6 +82,11 @@ export default function Mascot() {
   const maxStageOrderRef = useRef<number>(-1);
   const terminalLockedRef = useRef<boolean>(false);
   const lastEventKeyRef = useRef<string>('');
+  const lastStateKeyRef = useRef<string>('');
+  // The run shown by the page is the only run Reel may react to. Assigned during render so it is
+  // current before the page's own effects dispatch events for a newly opened run.
+  const pageRunIdRef = useRef<string | undefined>(undefined);
+  pageRunIdRef.current = /^\/runs\/([^/?#]+)/.exec(pathname)?.[1];
   const inactivityTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const tipTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -117,7 +122,9 @@ export default function Mascot() {
       currentRunIdRef.current = undefined;
       maxStageOrderRef.current = -1;
       terminalLockedRef.current = false;
+      priorityUntil.current = 0;
       lastEventKeyRef.current = '';
+      lastStateKeyRef.current = '';
       setRunStage(null);
       setRunState(null);
       setRunStateRaw(null);
@@ -204,11 +211,20 @@ export default function Mascot() {
         return;
       }
 
-      if (detail.runId && detail.runId !== currentRunIdRef.current) {
-        currentRunIdRef.current = detail.runId;
-        maxStageOrderRef.current = -1;
-        terminalLockedRef.current = false;
-        lastEventKeyRef.current = '';
+      if (detail.runId) {
+        // Events for a run the page is not showing (foreign or stale) must not move Reel.
+        const shownRunId = pageRunIdRef.current;
+        if (shownRunId && detail.runId !== shownRunId) return;
+        if (detail.runId !== currentRunIdRef.current) {
+          const switchingRuns = currentRunIdRef.current !== undefined;
+          currentRunIdRef.current = detail.runId;
+          maxStageOrderRef.current = -1;
+          terminalLockedRef.current = false;
+          priorityUntil.current = 0; // a previous run's terminal cooldown must not block this run
+          lastEventKeyRef.current = '';
+          lastStateKeyRef.current = '';
+          if (switchingRuns) play('idle', 'mascot');
+        }
       }
 
       if (detail.kind === 'context') {
@@ -255,8 +271,8 @@ export default function Mascot() {
           detail.state === 'fixed' && !gatesVerified ? 'reproduced_only' : detail.state;
 
         const eventKey = `state:${detail.runId ?? ''}:${effectiveState}`;
-        if (eventKey === lastEventKeyRef.current) return;
-        lastEventKeyRef.current = eventKey;
+        if (eventKey === lastStateKeyRef.current) return;
+        lastStateKeyRef.current = eventKey;
 
         setRunState(effectiveState);
         setRunStateRaw(effectiveState);
@@ -271,6 +287,8 @@ export default function Mascot() {
       }
     }
     window.addEventListener('replay:mascot', onMascotEvent);
+    // Ask the page to resend its latest state: it may have emitted before this listener existed.
+    window.dispatchEvent(new Event('replay:mascot-ready'));
     return () => window.removeEventListener('replay:mascot', onMascotEvent);
   }, [play, showTip]);
 

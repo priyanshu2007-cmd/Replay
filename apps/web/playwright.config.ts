@@ -28,7 +28,9 @@ export default defineConfig({
       url: 'http://localhost:3001/api/health',
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
-      env: { ...process.env, REPLAY_RATE_LIMIT_MAX: '50' },
+      // Inline worker off: e2e never runs the model pipeline, so it needs no provider key and a
+      // queued run cannot fail in the background with a missing-key error.
+      env: { ...process.env, REPLAY_RATE_LIMIT_MAX: '50', REPLAY_INLINE_WORKER: '0' },
     },
   ],
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
