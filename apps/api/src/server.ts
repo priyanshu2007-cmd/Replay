@@ -808,55 +808,45 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
       );
     if (!videoPath) return notFound();
 
-    // One open, then fstat/read on the same descriptor: no check-then-use race. Upload paths are
-    // server-created and containment-checked above.
-    let fd: number;
+    // A single read with no preceding existence/size check: nothing to race. Upload paths are
+    // server-created and containment-checked above; uploads are capped at 50 MB.
+    let data: Buffer;
     try {
-      fd = fs.openSync(videoPath, 'r');
+      data = fs.readFileSync(videoPath);
     } catch {
       return notFound();
     }
-    try {
-      const total = fs.fstatSync(fd).size;
-      const readSlice = (start: number, end: number) => {
-        const chunk = Buffer.alloc(end - start + 1);
-        const n = fs.readSync(fd, chunk, 0, chunk.length, start);
-        return chunk.subarray(0, n);
-      };
-      const range = c.req.header('range');
-      if (range) {
-        const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
-        if (match) {
-          const start = match[1] ? parseInt(match[1], 10) : 0;
-          const end = match[2] ? Math.min(parseInt(match[2], 10), total - 1) : total - 1;
-          if (start >= 0 && start <= end && end < total) {
-            const chunk = readSlice(start, end);
-            return new Response(chunk, {
-              status: 206,
-              headers: {
-                'Content-Type': contentType,
-                'Content-Length': String(chunk.length),
-                'Content-Range': `bytes ${start}-${end}/${total}`,
-                'Accept-Ranges': 'bytes',
-                'Cache-Control': 'public, max-age=3600',
-              },
-            });
-          }
+    const total = data.length;
+    const range = c.req.header('range');
+    if (range) {
+      const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+      if (match) {
+        const start = match[1] ? parseInt(match[1], 10) : 0;
+        const end = match[2] ? Math.min(parseInt(match[2], 10), total - 1) : total - 1;
+        if (start >= 0 && start <= end && end < total) {
+          const chunk = data.subarray(start, end + 1);
+          return new Response(chunk, {
+            status: 206,
+            headers: {
+              'Content-Type': contentType,
+              'Content-Length': String(chunk.length),
+              'Content-Range': `bytes ${start}-${end}/${total}`,
+              'Accept-Ranges': 'bytes',
+              'Cache-Control': 'public, max-age=3600',
+            },
+          });
         }
       }
-      const buf = total > 0 ? readSlice(0, total - 1) : Buffer.alloc(0);
-      return new Response(buf, {
-        status: 200,
-        headers: {
-          'Content-Type': contentType,
-          'Content-Length': String(total),
-          'Accept-Ranges': 'bytes',
-          'Cache-Control': 'public, max-age=3600',
-        },
-      });
-    } finally {
-      fs.closeSync(fd);
     }
+    return new Response(data, {
+      status: 200,
+      headers: {
+        'Content-Type': contentType,
+        'Content-Length': String(total),
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=3600',
+      },
+    });
   });
 
   // Polling fallback for the events stream (used when SSE is unavailable).
