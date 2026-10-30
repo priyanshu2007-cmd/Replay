@@ -435,7 +435,24 @@ export async function applyPatchToDirectory(
     if (!lstat.isFile()) {
       throw new Error(`Target file ${fullPath} is not a regular file`);
     }
-    originalContent = await fs.promises.readFile(fullPath, 'utf8');
+    // Open once with O_NOFOLLOW and read through the same descriptor, so the file cannot be swapped
+    // for a symlink between the lstat above and the read.
+    const readFlags = fs.constants.O_RDONLY | (typeof fs.constants.O_NOFOLLOW === 'number' ? fs.constants.O_NOFOLLOW : 0);
+    let readHandle: fs.promises.FileHandle;
+    try {
+      readHandle = await fs.promises.open(fullPath, readFlags);
+    } catch (err: any) {
+      if (err?.code === 'ELOOP') throw new Error(`Target file ${fullPath} is not a regular file`);
+      throw err;
+    }
+    try {
+      if (!(await readHandle.stat()).isFile()) {
+        throw new Error(`Target file ${fullPath} is not a regular file`);
+      }
+      originalContent = await readHandle.readFile('utf8');
+    } finally {
+      await readHandle.close();
+    }
   }
 
   let newContent = originalContent;
@@ -535,14 +552,18 @@ export async function applyPatchToDirectory(
   }
 
   const revalidatedPath = await resolveSafeWorkspacePath(workDir, output.target_file);
-  const preWriteLstat = await fs.promises.lstat(revalidatedPath).catch((err: any) => (err?.code === 'ENOENT' ? null : Promise.reject(err)));
-  if (preWriteLstat?.isSymbolicLink()) {
-    throw new Error(`Rejected symlink target at write boundary: ${output.target_file}`);
-  }
-
   const noFollowFlag = typeof fs.constants.O_NOFOLLOW === 'number' ? fs.constants.O_NOFOLLOW : 0;
   const openFlags = fs.constants.O_WRONLY | fs.constants.O_TRUNC | (isNewFile ? fs.constants.O_CREAT | fs.constants.O_EXCL : 0) | noFollowFlag;
-  const fh = await fs.promises.open(revalidatedPath, openFlags, 0o644);
+  let fh: fs.promises.FileHandle;
+  try {
+    fh = await fs.promises.open(revalidatedPath, openFlags, 0o644);
+  } catch (err: any) {
+    // O_NOFOLLOW (existing file) and O_EXCL (new file) refuse a symlink planted at the write boundary.
+    if (err?.code === 'ELOOP' || err?.code === 'EEXIST') {
+      throw new Error(`Rejected symlink target at write boundary: ${output.target_file}`);
+    }
+    throw err;
+  }
   try {
     await fh.writeFile(newContent, 'utf8');
   } finally {

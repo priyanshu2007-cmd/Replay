@@ -200,12 +200,14 @@ test('all 5 sample recordings exist, have valid WebM headers, and map 1:1 to exp
 
   for (const id of expectedIds) {
     const videoPath = path.join(videosDir, `${id}.webm`);
-    const stat = fs.statSync(videoPath);
-    assert.ok(stat.size > 10_000, `${id}.webm should be non-empty`);
     const header = Buffer.alloc(4);
     const fd = fs.openSync(videoPath, 'r');
-    fs.readSync(fd, header, 0, 4, 0);
-    fs.closeSync(fd);
+    try {
+      assert.ok(fs.fstatSync(fd).size > 10_000, `${id}.webm should be non-empty`);
+      fs.readSync(fd, header, 0, 4, 0);
+    } finally {
+      fs.closeSync(fd);
+    }
     assert.equal(header.toString('hex'), '1a45dfa3', `${id}.webm must have EBML/WebM magic header`);
 
     const fixturePath = path.join(samplesDir, id, 'expected.json');

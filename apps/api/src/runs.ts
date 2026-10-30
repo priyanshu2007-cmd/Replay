@@ -281,17 +281,15 @@ export class MemoryRunRepository implements RunRepository {
   private saveToFile(): void {
     if (!this.persistPath) return;
     try {
-      const dir = path.dirname(this.persistPath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
+      fs.mkdirSync(path.dirname(this.persistPath), { recursive: true });
       const data = {
         runs: Array.from(this.runs.values()),
         events: Object.fromEntries(this.events.entries()),
         rateLimits: Object.fromEntries(this.rateLimits.entries()),
       };
       const tmpPath = `${this.persistPath}.${process.pid}.${randomUUID()}.tmp`;
-      fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf8');
+      // Unpredictable name, exclusive create, owner-only: safe even if persistPath sits in a shared dir.
+      fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), { encoding: 'utf8', flag: 'wx', mode: 0o600 });
       fs.renameSync(tmpPath, this.persistPath);
     } catch {
       // Best-effort cache save

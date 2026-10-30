@@ -68,8 +68,21 @@ function getBaseSandboxEnv(): Record<string, string> {
   };
 }
 
-const FORBIDDEN_ENV_KEY_PATTERN =
-  /^(NEBIUS|NVIDIA|OPENAI|ANTHROPIC|SUPABASE|DATABASE|POSTGRES|PG_|AWS_|VERCEL|GITHUB_|REDIS|PRIVATE|SECRET)|(_KEY|_TOKEN|_SECRET|_PASSWORD|DATABASE_URL|SERVICE_ROLE|BEARER|CREDENTIAL)/i;
+// Exact string checks (no regex alternation): a name is forbidden if it starts with a secret-bearing
+// prefix or contains a credential-like fragment anywhere.
+const FORBIDDEN_ENV_PREFIXES = [
+  'NEBIUS', 'NVIDIA', 'OPENAI', 'ANTHROPIC', 'SUPABASE', 'DATABASE', 'POSTGRES', 'PG_', 'AWS_',
+  'VERCEL', 'GITHUB_', 'REDIS', 'PRIVATE', 'SECRET',
+];
+const FORBIDDEN_ENV_FRAGMENTS = [
+  '_KEY', '_TOKEN', '_SECRET', '_PASSWORD', 'DATABASE_URL', 'SERVICE_ROLE', 'BEARER', 'CREDENTIAL',
+];
+const MAX_ENV_KEY_LENGTH = 128;
+
+function isForbiddenEnvKey(key: string): boolean {
+  const k = key.toUpperCase();
+  return FORBIDDEN_ENV_PREFIXES.some((p) => k.startsWith(p)) || FORBIDDEN_ENV_FRAGMENTS.some((f) => k.includes(f));
+}
 
 const ALLOWED_EXTRA_ENV_KEY_PATTERN =
   /^(PLAYWRIGHT_[A-Z0-9_]+|DEMO_SHOP_[A-Z0-9_]+|SANDBOX_[A-Z0-9_]+|NODE_ENV|PORT|HOST|HOSTNAME|TZ|CI|NO_COLOR|FORCE_COLOR|DEBUG|HOME|TMPDIR|PATH|LANG)$/;
@@ -82,7 +95,7 @@ export function sanitizeSandboxEnv(extraEnv: Record<string, string> = {}): Recor
   const sanitized: Record<string, string> = { ...getBaseSandboxEnv() };
   for (const [key, value] of Object.entries(extraEnv)) {
     if (typeof value !== 'string') continue;
-    if (FORBIDDEN_ENV_KEY_PATTERN.test(key)) continue;
+    if (key.length > MAX_ENV_KEY_LENGTH || isForbiddenEnvKey(key)) continue;
     if (!ALLOWED_EXTRA_ENV_KEY_PATTERN.test(key)) continue;
     sanitized[key] = value;
   }
@@ -297,14 +310,20 @@ export interface SandboxExecutionResult {
   timedOut: boolean;
 }
 
-const FORBIDDEN_MOUNT_PATTERNS = [
-  /docker\.sock/i,
-  /(^|\/)\.env(\..+)?$/i,
-  /(^|\/)\.ssh(\/|$)/i,
-  /(^|\/)\.aws(\/|$)/i,
-  /(^|\/)\.git(\/|$)/i,
-  /^\/(etc|root|proc|sys|dev|var\/run)(\/|$)/,
-];
+const FORBIDDEN_MOUNT_ROOTS = ['etc', 'root', 'proc', 'sys', 'dev', 'var/run'];
+const MAX_MOUNT_PATH_LENGTH = 4096;
+
+/** Linear-time check (no backtracking regex) for host/container paths a sandbox must never mount. */
+export function isForbiddenMountPath(p: string): boolean {
+  if (p.length > MAX_MOUNT_PATH_LENGTH) return true;
+  const lower = p.toLowerCase();
+  if (lower.includes('docker.sock')) return true;
+  const segments = lower.split('/');
+  const last = segments[segments.length - 1] ?? '';
+  if (last === '.env' || (last.startsWith('.env.') && last.length > 5)) return true;
+  if (segments.some((seg) => seg === '.ssh' || seg === '.aws' || seg === '.git')) return true;
+  return FORBIDDEN_MOUNT_ROOTS.some((root) => p === `/${root}` || p.startsWith(`/${root}/`));
+}
 
 function validateBindMount(mount: { hostPath: string; containerPath: string; readOnly?: boolean }): void {
   if (!mount.hostPath || !path.isAbsolute(mount.hostPath) || mount.hostPath === '/') {
@@ -316,10 +335,8 @@ function validateBindMount(mount: { hostPath: string; containerPath: string; rea
   if (mount.hostPath.includes('\0') || mount.containerPath.includes('\0') || mount.hostPath.includes(':')) {
     throw new SandboxUnavailableError(`Rejected malformed bind mount path: ${mount.hostPath}`);
   }
-  for (const pat of FORBIDDEN_MOUNT_PATTERNS) {
-    if (pat.test(mount.hostPath) || pat.test(mount.containerPath)) {
-      throw new SandboxUnavailableError(`Rejected forbidden bind mount target: ${mount.hostPath}`);
-    }
+  if (isForbiddenMountPath(mount.hostPath) || isForbiddenMountPath(mount.containerPath)) {
+    throw new SandboxUnavailableError(`Rejected forbidden bind mount target: ${mount.hostPath}`);
   }
 }
 

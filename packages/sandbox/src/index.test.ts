@@ -7,6 +7,7 @@ import {
   DockerSandbox,
   IsolatedWorkspaceSandbox,
   SandboxUnavailableError,
+  isForbiddenMountPath,
   sanitizeSandboxEnv,
 } from './index.js';
 
@@ -273,4 +274,32 @@ test('sanitizeSandboxEnv strips credentials and preserves safe test variables', 
   assert.equal(out.DEMO_SHOP_PORT, '5179');
   assert.equal(out.PLAYWRIGHT_TEST_MATCH, '**/tests/repro/**');
   assert.equal(out.SANDBOX_TEST, '1');
+});
+
+test('mount path policy keeps its verdicts and stays linear on pathological input', () => {
+  for (const bad of ['/var/run/docker.sock', '/home/u/.env', '/app/.env.local', '/home/u/.ssh/id', '/home/u/.AWS', '/repo/.git', '/etc', '/etc/passwd', '/proc/1', '/var/run/x']) {
+    assert.equal(isForbiddenMountPath(bad), true, bad);
+  }
+  for (const ok of ['/work/app', '/work/.envrc', '/work/.env.', '/work/gitops', '/var/runner', '/tmp/replay-ws']) {
+    assert.equal(isForbiddenMountPath(ok), false, ok);
+  }
+  const pathological = `/${'.env.'.repeat(200_000)}x`;
+  const started = performance.now();
+  assert.equal(isForbiddenMountPath(pathological), true); // over the length bound, rejected fast
+  assert.equal(isForbiddenMountPath(`/a/${'x'.repeat(3000)}`), false);
+  assert.ok(performance.now() - started < 50, 'must not backtrack');
+});
+
+test('env sanitizer matches names exactly: credential-like names are dropped, allowlisted ones kept', () => {
+  const out = sanitizeSandboxEnv({
+    SANDBOX_TEST: '1', DEMO_SHOP_PORT: '5179', PLAYWRIGHT_TEST_MATCH: 'x', CI: '1',
+    NEBIUS_API_KEY: 'k', MY_API_KEY: 'k', github_token: 't', X_SERVICE_ROLE: 's', DATABASE_URL: 'd',
+    ['A'.repeat(500)]: 'long', UNLISTED: 'u',
+  });
+  assert.equal(out.SANDBOX_TEST, '1');
+  assert.equal(out.DEMO_SHOP_PORT, '5179');
+  assert.equal(out.CI, '1');
+  for (const k of ['NEBIUS_API_KEY', 'MY_API_KEY', 'github_token', 'X_SERVICE_ROLE', 'DATABASE_URL', 'UNLISTED', 'A'.repeat(500)]) {
+    assert.equal(k in out, false, k);
+  }
 });

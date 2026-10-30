@@ -478,7 +478,8 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
           }, 400);
         }
 
-        fs.writeFileSync(filePath, buffer);
+        // Exclusive create, owner-only: the upload name is unpredictable but never overwrite or share it.
+        fs.writeFileSync(filePath, buffer, { flag: 'wx', mode: 0o600 });
 
         let run;
         try {
@@ -794,53 +795,68 @@ export function createServer(options?: { repository?: RunRepository; repoRoot?: 
     } else if (!run.isSample && typeof run.videoKey === 'string') {
       const uploadsRoot = path.resolve(DATA_DIR, 'artifacts/uploads');
       const candidate = path.resolve(DATA_DIR, 'artifacts', run.videoKey);
-      if (candidate.startsWith(uploadsRoot + path.sep) && fs.existsSync(candidate)) {
+      if (candidate.startsWith(uploadsRoot + path.sep)) {
         videoPath = candidate;
         if (candidate.endsWith('.mp4')) contentType = 'video/mp4';
       }
     }
 
-    if (!videoPath || !fs.existsSync(videoPath)) {
-      return c.json(
+    const notFound = () =>
+      c.json(
         { error: 'Recording not found', message: 'Video recording is not available on disk for this run.' },
         404,
       );
-    }
+    if (!videoPath) return notFound();
 
-    const stat = fs.statSync(videoPath);
-    const total = stat.size;
-    const range = c.req.header('range');
-    if (range) {
-      const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
-      if (match) {
-        const start = match[1] ? parseInt(match[1], 10) : 0;
-        const end = match[2] ? Math.min(parseInt(match[2], 10), total - 1) : total - 1;
-        if (start >= 0 && start <= end && end < total) {
-          const chunk = fs.readFileSync(videoPath).subarray(start, end + 1);
-          return new Response(chunk, {
-            status: 206,
-            headers: {
-              'Content-Type': contentType,
-              'Content-Length': String(chunk.length),
-              'Content-Range': `bytes ${start}-${end}/${total}`,
-              'Accept-Ranges': 'bytes',
-              'Cache-Control': 'public, max-age=3600',
-            },
-          });
+    // One open, then fstat/read on the same descriptor: no check-then-use race, and a symlink
+    // swapped in for an upload is refused by O_NOFOLLOW.
+    let fd: number;
+    try {
+      fd = fs.openSync(videoPath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+    } catch {
+      return notFound();
+    }
+    try {
+      const total = fs.fstatSync(fd).size;
+      const readSlice = (start: number, end: number) => {
+        const chunk = Buffer.alloc(end - start + 1);
+        const n = fs.readSync(fd, chunk, 0, chunk.length, start);
+        return chunk.subarray(0, n);
+      };
+      const range = c.req.header('range');
+      if (range) {
+        const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+        if (match) {
+          const start = match[1] ? parseInt(match[1], 10) : 0;
+          const end = match[2] ? Math.min(parseInt(match[2], 10), total - 1) : total - 1;
+          if (start >= 0 && start <= end && end < total) {
+            const chunk = readSlice(start, end);
+            return new Response(chunk, {
+              status: 206,
+              headers: {
+                'Content-Type': contentType,
+                'Content-Length': String(chunk.length),
+                'Content-Range': `bytes ${start}-${end}/${total}`,
+                'Accept-Ranges': 'bytes',
+                'Cache-Control': 'public, max-age=3600',
+              },
+            });
+          }
         }
       }
+      const buf = total > 0 ? readSlice(0, total - 1) : Buffer.alloc(0);
+      return new Response(buf, {
+        status: 200,
+        headers: {
+          'Content-Type': contentType,
+          'Content-Length': String(total),
+          'Accept-Ranges': 'bytes',
+          'Cache-Control': 'public, max-age=3600',
+        },
+      });
+    } finally {
+      fs.closeSync(fd);
     }
-
-    const buf = fs.readFileSync(videoPath);
-    return new Response(buf, {
-      status: 200,
-      headers: {
-        'Content-Type': contentType,
-        'Content-Length': String(total),
-        'Accept-Ranges': 'bytes',
-        'Cache-Control': 'public, max-age=3600',
-      },
-    });
   });
 
   // Polling fallback for the events stream (used when SSE is unavailable).
