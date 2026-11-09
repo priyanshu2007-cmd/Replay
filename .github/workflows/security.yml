@@ -52,7 +52,7 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: github/codeql-action/init@3306ba4df796b6b5059316f3af8bdea1e2138c9b # main, resolved via git ls-remote
+      - uses: github/codeql-action/init@fbfa9f37476c0024508d051f3c34fcca3366b0e2 # main, resolved via git ls-remote
         with:
           languages: javascript-typescript
           queries: security-extended
