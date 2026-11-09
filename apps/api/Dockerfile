@@ -2,7 +2,7 @@
 # Build from the repository root:
 #   docker build -f apps/api/Dockerfile -t replay-api .
 # The Playwright image version must match @playwright/test in targets/demo-shop.
-FROM mcr.microsoft.com/playwright:v1.50.1-noble AS base
+FROM mcr.microsoft.com/playwright:v1.65.0-noble AS base
 # The image's bundled corepack predates npm's registry key rotation and fails
 # signature verification ("Cannot find matching keyid") — upgrade it first.
 RUN npm install -g corepack@latest && corepack enable
